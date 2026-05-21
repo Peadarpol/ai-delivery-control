@@ -12,4 +12,68 @@
 |            |                   | is operational and producing quality labelled outcomes.       | P7 |
 | 2026-05-21 | Claude (security audit, PR #126 CI) | pip-audit suppression flags exist in two places (`.pre-commit-config.yaml` AND `.github/workflows/ci.yml`). Discovered when CI failed on PR #126 after local pre-commit was fixed — the `--ignore-vuln` flags were not mirrored to the CI step. | Consider extracting shared args to a `pip-audit.toml` config if the suppression list grows beyond 5 entries, making the single source of truth unambiguous. For now, any suppression added to one file must be added to the other in the same commit. | Security / CI Sync | P6 |
 | 2026-05-21 | T1-F README | README lacks introductory pain point mapping for developers new to agentic workflows. | Add "What it prevents" section to README.md detailing 4 concrete pain points: wrong repo commits, ungoverned AI changes, context loss between sessions, stale architectural rules. Each maps to a specific framework capability. | Documentation | 📅 Backlog — T1-F series |
-
+| 2026-05-21 | T1-A-upgrade | bootstrap/upgrade.py — Design specification:        |
+|            |              |                                                      |
+|            |              | PURPOSE: Safely update an existing AI Delivery       |
+|            |              | Control installation to a newer framework version    |
+|            |              | without overwriting developer customisations.        |
+|            |              |                                                      |
+|            |              | FILE CLASSIFICATION (see bootstrap/manifest.json):   |
+|            |              | - framework_owned: always overwrite on upgrade       |
+|            |              |   (.agent/scripts/, .agent/workflows/,               |
+|            |              |    .agent/skills/, .agent/governance.md,             |
+|            |              |    .agent/AGENTS.md, src/scripts/ai_review.py)       |
+|            |              | - project_owned: never touch                         |
+|            |              |   (.agent/config.yaml, skill_ownership.yaml,         |
+|            |              |    review_context_project.md, CLAUDE.md,             |
+|            |              |    GEMINI.md, .cursorrules)                          |
+|            |              | - migrate_on_upgrade: additive changes only          |
+|            |              |   (.agent/config.yaml — new fields added,            |
+|            |              |    existing values preserved)                        |
+|            |              |                                                      |
+|            |              | CONFLICT DETECTION:                                  |
+|            |              | Before overwriting any framework_owned file,         |
+|            |              | compare SHA-256 of installed file against            |
+|            |              | bootstrap/checksums/{version}.json baseline.         |
+|            |              | If mismatch: developer has customised the file.      |
+|            |              | Preserve developer version, save framework           |
+|            |              | version as {filename}.framework-v{version}.          |
+|            |              | Surface in the pre-upgrade report.                   |
+|            |              |                                                      |
+|            |              | SKILL/WORKFLOW CONFLICTS:                            |
+|            |              | If developer has a skill or workflow with same       |
+|            |              | filename as a framework skill/workflow:              |
+|            |              | - Preserve developer version as active               |
+|            |              | - Save framework version as                          |
+|            |              |   {filename}.framework-v{version}                    |
+|            |              | - Print advisory to developer                        |
+|            |              |                                                      |
+|            |              | PRE-OPERATION REPORT (required before any writes):   |
+|            |              | Always print a categorised summary showing:          |
+|            |              | - OVERWRITE: framework files to be replaced          |
+|            |              | - SKIP: project-owned files being preserved          |
+|            |              | - MIGRATE: config fields being added                 |
+|            |              | - CONFLICTS: files needing manual resolution         |
+|            |              | - NEW: files being added for first time              |
+|            |              | Then prompt: "Proceed? [y/N]"                        |
+|            |              |                                                      |
+|            |              | CLI FLAGS:                                           |
+|            |              | --dry-run: print report, make no changes             |
+|            |              | --force: skip confirmation prompt (CI use)           |
+|            |              | --diff: show line-level diff for CONFLICT files      |
+|            |              |                                                      |
+|            |              | FRESH INSTALL BEHAVIOUR:                             |
+|            |              | Same pre-operation report applies. If .agent/,       |
+|            |              | CLAUDE.md, or existing skills are detected,          |
+|            |              | inventory them and apply the same conflict           |
+|            |              | detection logic before writing anything.             |
+|            |              |                                                      |
+|            |              | MIGRATIONS:                                          |
+|            |              | Version transition scripts live in                   |
+|            |              | bootstrap/migrations/{from}_to_{to}.py               |
+|            |              | Each reads existing config, adds new fields          |
+|            |              | with defaults, preserves existing values.            |
+|            |              | Upgrade script chains migrations from                |
+|            |              | project's framework.version to current.              |
+|            |              | Pattern identical to Alembic upgrade chain.          |
+|            |              | | T1-A series |

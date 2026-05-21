@@ -220,3 +220,36 @@ agent_limits:
   max_test_retries: 3            # After 3 identical failures → STOP and escalate
   warn_session_minutes: 120      # Alert user at 2h mark
   max_session_minutes: 240       # Hard stop at 4h mark
+
+# Architecture & Clean Architecture Boundaries
+# Define your project's layer boundaries and forbidden patterns here.
+architecture:
+  layers:
+    - name: domain
+      path: "[PROJECT_SRC_PATH]/domain"
+      forbidden_imports:
+        - "[PROJECT_SRC_PATH].infrastructure"
+        - "[PROJECT_SRC_PATH].presentation"
+    - name: application
+      path: "[PROJECT_SRC_PATH]/application"
+      forbidden_imports:
+        - "[PROJECT_SRC_PATH].infrastructure"
+        - "[PROJECT_SRC_PATH].presentation"
+    - name: infrastructure
+      path: "[PROJECT_SRC_PATH]/infrastructure"
+      forbidden_imports:
+        - "[PROJECT_SRC_PATH].presentation"
+
+  forbidden_patterns: []    # add project-specific patterns here
+  aggregate_roots: []       # add your aggregate root base classes here
+  interface_segregation:
+    infra_classes: []       # add infrastructure class names to detect
+    in_paths: []
+  conditional_isolation_filter:
+    in_paths: []            # paths where isolation filter checks apply
+  coupling:
+    exempt_files: []
+    thresholds:
+      default:
+        threshold: 30
+
