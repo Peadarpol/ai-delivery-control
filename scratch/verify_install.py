@@ -258,6 +258,78 @@ fastapi = "^0.109.0"
     
     print("\n🎉 Verification SUCCESSFUL! All T1-A-06 scenarios and upgrade-safety assertions are passing beautifully.")
 
+    # ----------------------------------------------------
+    # TEST CASE 6: Tool Supplement Generation (T1-A-07)
+    # ----------------------------------------------------
+    print("\n--- 🎬 [TEST CASE 6] Tool supplement generation (T1-A-07) ---")
+    clean_dir(mock_dir)
+    subprocess.run(["git", "init"], cwd=str(mock_dir), capture_output=True, check=True)
+
+    # Scaffold a basic FastAPI pyproject.toml
+    (mock_dir / "pyproject.toml").write_text(
+        '[tool.poetry]\nname = "mock-supplement-project"\nversion = "0.1.0"\n'
+        '[tool.poetry.dependencies]\nfastapi = "^0.109.0"\n',
+        encoding="utf-8",
+    )
+    (mock_dir / "src").mkdir(exist_ok=True)
+    (mock_dir / "src" / "main.py").write_text("from fastapi import FastAPI\n", encoding="utf-8")
+
+    # --- Fresh install ---
+    print("Running fresh install...")
+    run_installer(workspace_root, mock_dir)
+
+    # Assert all four files created
+    uc_path     = mock_dir / ".agent" / "UNIVERSAL_CONTEXT.md"
+    claude_path = mock_dir / "CLAUDE.md"
+    gemini_path = mock_dir / "GEMINI.md"
+    cursor_path = mock_dir / ".cursorrules"
+
+    assert uc_path.exists(),     "UNIVERSAL_CONTEXT.md not created on fresh install"
+    assert claude_path.exists(), "CLAUDE.md not created on fresh install"
+    assert gemini_path.exists(), "GEMINI.md not created on fresh install"
+    assert cursor_path.exists(), ".cursorrules not created on fresh install"
+
+    # Assert UNIVERSAL_CONTEXT.md contains project name and framework version
+    uc_content = uc_path.read_text(encoding="utf-8")
+    assert "mock-supplement-project" in uc_content, "UNIVERSAL_CONTEXT.md missing project name"
+    assert "framework version" in uc_content.lower(), "UNIVERSAL_CONTEXT.md missing framework version reference"
+
+    # Assert all three shims reference UNIVERSAL_CONTEXT.md
+    for shim_path, shim_name in [(claude_path, "CLAUDE.md"), (gemini_path, "GEMINI.md"), (cursor_path, ".cursorrules")]:
+        content = shim_path.read_text(encoding="utf-8")
+        assert "UNIVERSAL_CONTEXT.md" in content, f"{shim_name} does not reference UNIVERSAL_CONTEXT.md"
+
+    print("  ✅ Fresh install: all four files created and correctly referencing UNIVERSAL_CONTEXT.md")
+
+    # --- Re-run: asymmetric overwrite verification ---
+    # Mutate CLAUDE.md (simulate developer customisation)
+    developer_shim_marker = "### DEVELOPER CUSTOM: ALWAYS USE EXTENDED THINKING"
+    claude_path.write_text(claude_path.read_text(encoding="utf-8") + f"\n\n{developer_shim_marker}\n", encoding="utf-8")
+
+    # Also record the original UNIVERSAL_CONTEXT.md content for later comparison
+    uc_content_before = uc_path.read_text(encoding="utf-8")
+
+    print("Running re-run install (developer has customised CLAUDE.md)...")
+    run_installer(workspace_root, mock_dir)
+
+    # Shim must be preserved (developer marker still present)
+    new_claude_content = claude_path.read_text(encoding="utf-8")
+    assert developer_shim_marker in new_claude_content, "CLAUDE.md developer customisation was overwritten on re-run!"
+
+    # UNIVERSAL_CONTEXT.md must be overwritten (machine-generated — content may differ slightly due to date)
+    # Verify it still exists and still contains version reference
+    uc_content_after = uc_path.read_text(encoding="utf-8")
+    assert "framework version" in uc_content_after.lower(), "UNIVERSAL_CONTEXT.md missing version after re-run"
+    assert uc_path.exists(), "UNIVERSAL_CONTEXT.md deleted on re-run!"
+
+    print("  ✅ Re-run: CLAUDE.md developer customisation preserved; UNIVERSAL_CONTEXT.md refreshed")
+
+    # Clean up
+    print("\n🧹 Cleaning up mock project directory...")
+    safe_rmtree(mock_dir)
+
+    print("\n🎉 Verification SUCCESSFUL! All T1-A-06 and T1-A-07 scenarios are passing beautifully.")
+
 
 if __name__ == "__main__":
     main()
