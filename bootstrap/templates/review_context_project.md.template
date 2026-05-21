@@ -1,0 +1,155 @@
+# Project Architecture Guidelines — AI Review Context
+# Version: 1.0 (Template)
+
+<!--
+  CANONICAL INVARIANTS SOURCE
+  ===========================
+  This file is the single source of truth for the project's architectural invariants.
+  It is injected verbatim into the AI review prompt on every commit.
+
+  To update an invariant: update THIS FILE first. Then update any downstream reference.
+-->
+
+> This file is injected into the AI reviewer's prompt to provide project-specific
+> context that a diff-only review would miss.
+
+---
+
+## [PATTERN:CLEAN-ARCH] Architecture Pattern: Clean Architecture + DDD
+<!-- SECTION:clean_arch -->
+
+```
+Presentation (API/UI) → Application (Services) → Domain (Entities/Protocols)
+                                    ↓
+                          Infrastructure (Repos/DB/External)
+```
+
+**Layer rules — flag violations HIGH severity:**
+- Domain layer has ZERO external dependencies — no presentation framework or external DB-specific framework imports
+- Application services must NOT import from the infrastructure layer directly; use DI via interfaces
+- Repositories/Adapters are the only code that touches database sessions/connections
+- Presentation layer/Routers must NOT call database sessions or transaction commits directly
+
+---
+
+## [RULE:UOW-INTEGRITY] Transactional Integrity: Unit of Work Pattern
+<!-- SECTION:transactional_integrity -->
+
+**Critical rules — flag any violation HIGH severity:**
+
+### Rule 1 — Services MUST call `self.uow.commit()` explicitly inside `with self.uow:`
+
+The absence of an explicit `commit()` is the bug, not the presence of one. A missing `commit()` means silent data loss — nothing is written and no exception is raised.
+
+```python
+# CORRECT
+def create_entity(self, data: EntityCreate) -> Entity:
+    with self.uow:
+        entity = self.uow.entities.add(Entity(**data.model_dump()))
+        self.uow.commit()   # ← required; without this, nothing is persisted
+    return entity
+```
+
+### Rule 2 — Repositories must NEVER call `db.commit()` or `session.commit()`
+
+Repositories call `flush()` only (when an ID is needed immediately). A repository that commits bypasses the Unit of Work and can cause double-commits or premature flushes.
+
+### Rule 3 — `[CALLER-UOW-REQUIRED]` methods have no own UoW block by design
+
+Some service methods are annotated `[CALLER-UOW-REQUIRED]`. They deliberately have no `with self.uow:` block because they are designed to be called inside a caller-owned transaction.
+
+### Rule 4 — Event publishing goes OUTSIDE `with self.uow:`, after commit
+
+Events published inside the block will fire even if the transaction later rolls back.
+
+```python
+# CORRECT
+with self.uow:
+    ...
+    self.uow.commit()
+self.bus.publish(EntityCreatedEvent(...))   # ← after the block closes
+```
+
+---
+
+## [RULE:MULTI-TENANCY] Tenant Isolation Pattern (Multi-Tenancy)
+<!-- SECTION:tenant_isolation -->
+
+**Critical rules — flag any violation HIGH severity (cross-tenant data leak):**
+
+### Rule 1 — `_apply_tenant_filter(stmt)` is the only correct guard
+
+It is fail-closed: raises `ValueError` if `tenant_id` is `None`, preventing accidental cross-tenant queries. Every query on a tenant-scoped repository must call it.
+
+### Rule 2 — New tenant-scoped repositories must inherit `TenantAwareRepository`
+
+If a new entity has a `tenant_id` column, its repository must inherit from `TenantAwareRepository` and call `_apply_tenant_filter()` on every query.
+
+---
+
+## [RULE:RBAC-HIERARCHY] RBAC Role Hierarchy
+<!-- SECTION:rbac -->
+
+```
+SYSTEM_ADMIN > MANAGER > STAFF > USER
+```
+
+- `SYSTEM_ADMIN`: short-circuits all permission checks; global platform access
+- `MANAGER` / `STAFF`: scoped to their assigned boundaries
+- `USER`: self-service only
+
+**New mutating endpoints must use standard permission checks**, not raw role-string comparisons.
+
+---
+
+## [RULE:MASS-ASSIGNMENT] Mass Assignment Protection
+<!-- SECTION:mass_assignment -->
+
+All input schemas (`*Create`, `*Update` request bodies) must set:
+
+```python
+model_config = {"extra": "forbid"}
+```
+
+A new input schema missing this allows property injection via the API — MEDIUM severity.
+
+---
+
+## [SENSOR:DIFF-AUDIT] Micro-Check Prompts
+<!-- SECTION:micro_checks -->
+
+When the staged diff contains any of the following patterns, check the corresponding requirement.
+
+| If the diff adds or changes...                                    | Then check...                                                                                                                                                                              | Default severity |
+|-------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------|
+| A new outbound HTTP call (`requests.*`, `httpx.*`, `urllib.*`)    | Does it specify an explicit `timeout=` parameter (both connect and read)?                                                                                                                  | MEDIUM           |
+| A new `logger.error(...)` inside an `except` block               | Does it include `exc_info=True`?                                                                                                                                                           | LOW              |
+| A new background job or scheduler task that inserts records       | Does it set the multi-tenant context explicitly at the start of each tenant-scoped loop iteration?                                                                                         | HIGH             |
+| A new `Mapped[dict]` / `JSON` column in database models           | Is there a corresponding validation schema added in the same diff?                                                                                                                         | MEDIUM           |
+| A new `*Create` or `*Update` schema                               | Does it forbid extra fields (`{"extra": "forbid"}`)?                                                                                                                                       | MEDIUM           |
+| A new query method on a repository targeting tenant-scoped data   | Does it call tenant filter guards (`_apply_tenant_filter(stmt)`)?                                                                                                                          | HIGH             |
+| A new call site of a method annotated `[CALLER-UOW-REQUIRED]`   | Is the call site inside a transaction block owned by the caller?                                                                                                                           | HIGH             |
+| A service method that uses a Unit of Work context manager        | Does it call commit explicitly on the success path?                                                                                                                                        | HIGH             |
+| A new `retry` loop or exception-and-retry pattern               | Does it use exponential backoff with jitter rather than a fixed sleep?                                                                                                                    | LOW              |
+
+---
+
+## [RULE:MIGRATION-SAFETY] Migration Conventions
+<!-- SECTION:migrations -->
+
+- Migrations MUST be idempotent (use `if_exists`/`if_not_exists` guards)
+- Drops MUST respect FK dependency order (drop referencing tables first)
+- Every migration MUST have a working rollback path
+- `NOT NULL` column additions to populated tables require a default value or split migration
+- Never modify a migration that has been deployed — create a new one
+
+---
+
+## [SPEC:COMMIT-CONVENTION] Commit Message Convention
+
+```
+[AREA]: Brief description
+
+Intent: What this change is trying to achieve
+Risk: What could break
+```

@@ -1,0 +1,127 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run mypy [PROJECT_SRC_PATH]/
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.2
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml"]
+        additional_dependencies: ["bandit[toml]"]
+        exclude: ^tests/|^[PROJECT_SRC_PATH]/scripts/|^.agent/
+
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.7.2
+    hooks:
+      - id: pip-audit
+        args: [
+          # Add any required CVE suppressions here
+        ]
+        additional_dependencies: ["pip>=26.0", "idna>=3.15"]
+
+  # ── Secret Scanning ─────────────────────────────────────────────────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: architecture-quality
+        name: Exception Standards
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run pytest --noconftest tests/quality/test_exception_standards.py
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: architecture-checks
+        name: Clean Architecture Checks
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/skills/senior-architect/scripts/architecture_checks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        types: [python]
+      - id: skills-hygiene
+        name: "Agent Skills Hygiene Scan"
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_skills_hygiene.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # ── Agent Behaviour & Regression Gates (pre-push) ───────────────────────────
+  - repo: local
+    hooks:
+      - id: behaviour-checks
+        name: "Agent Behaviour Audit"
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/evals/behaviour_checks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+        verbose: true
+
+      - id: regression-check
+        name: "Golden Dataset Regression"
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/evals/regression_runner.py --verify-only
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+        verbose: true
+
+  - repo: local
+    hooks:
+      - id: governance-audit
+        name: "Governance Audit Log"
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/governance_check.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [post-commit]
+        verbose: true
+
+      - id: session-heartbeat
+        name: "Record commit to session"
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/init_session.py --post-commit
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [post-commit]
+
+  # ── AI Adversarial Review Gate ──────────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: ai-adversarial-review
+        name: "AI Adversarial Review (Claude Sonnet)"
+        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python [PROJECT_SRC_PATH]/scripts/ai_review.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [commit-msg]
+        verbose: true

@@ -1,0 +1,6 @@
+id,skill,description,input_file,expected_outcome_pattern
+SK-API-01,api-design,Verify strict RBAC on new mutating endpoint,src/presentation/api/routers/members.py,require_permission
+SK-DB-01,database-design,Verify BranchAwareRepository inheritance on new scoped table,src/infrastructure/database/repositories/member_repository.py,BranchAwareRepository
+SK-DEBUG-01,debugging,Identify silent data loss due to missing uow.commit(),src/application/services/member_service.py,self.uow.commit
+SK-ARCH-01,senior-architect,Verify layer violation in domain schema,src/domain/schemas/member_schemas.py,!src.infrastructure
+SK-A11Y-01,ux,Verify contrast ratio on dashboard widgets,src/presentation/ui/dashboard.py,color:

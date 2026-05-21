@@ -1,0 +1,598 @@
+import argparse
+import json
+import os
+import subprocess
+import sys
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+
+# Ensure UTF-8 stdout/stderr on Windows
+if sys.platform == "win32":
+    import io
+
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+
+STATE_DIR = Path(".agent/state")
+SESSION_FILE = STATE_DIR / "session.json"
+LEDGER_FILE = STATE_DIR / "session_ledger.jsonl"
+
+
+def parse_iso_datetime(dt_str: str) -> datetime:
+    """Parse ISO 8601 datetimes safely, supporting timezone offsets, and make offset-naive."""
+    if dt_str.endswith("Z"):
+        dt_str = dt_str[:-1] + "+00:00"
+    dt = datetime.fromisoformat(dt_str)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
+    return dt
+
+
+def get_commits_after(start_time_str: str) -> list[dict]:
+    """Get commits made after the specified start_time using git."""
+    try:
+        result = subprocess.run(
+            ["git", "log", f"--after={start_time_str}", "--pretty=format:%H|%cI|%s"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+
+        commits = []
+        for line in result.stdout.strip().splitlines():
+            if "|" in line:
+                sha, date_str, msg = line.split("|", 2)
+                commits.append({"sha": sha, "date": date_str, "message": msg})
+        return commits
+    except Exception:
+        return []
+
+
+def infer_and_close_previous_session() -> tuple[str | None, str | None]:
+    """Retrospectively close the previous session and log its outcome to the ledger."""
+    if not SESSION_FILE.exists():
+        return None, None
+
+    try:
+        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            prev_data = json.load(f)
+    except Exception:
+        return None, None
+
+    if prev_data.get("status") != "ACTIVE":
+        return None, None
+
+    prev_id = prev_data.get("session_id", "unknown")
+    prev_start = prev_data.get("start_time")
+    prev_agent = prev_data.get("agent", "Agent")
+
+    outcome = "abandoned"
+    source = "inferred"
+    note = "Session closed with no commits."
+    action_str = "No active commits made. Session closed."
+
+    # Support outcome_override in session.json
+    if "outcome_override" in prev_data:
+        outcome = prev_data["outcome_override"]
+        source = prev_data.get("outcome_override_source", "agent_override")
+        note = prev_data.get("outcome_override_note", "Closed via explicit override.")
+    else:
+        # 1. Check for escalation
+        is_escalated = False
+        # A. Check for HALT file
+        if Path(".agent/state/HALT").exists():
+            is_escalated = True
+            note = "Session halted due to active HALT file."
+        # B. Check for halt_event or critical severity in harness_events.jsonl
+        EVENTS_FILE = STATE_DIR / "harness_events.jsonl"
+        if not is_escalated and EVENTS_FILE.exists():
+            try:
+                start_dt = parse_iso_datetime(prev_start)
+                lines = EVENTS_FILE.read_text(encoding="utf-8").splitlines()
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    evt = json.loads(line)
+                    evt_time = parse_iso_datetime(evt.get("timestamp_utc", ""))
+                    if evt_time > start_dt:
+                        if (
+                            evt.get("event_type") == "halt_event"
+                            or evt.get("severity") == "critical"
+                        ):
+                            is_escalated = True
+                            note = f"Session halted due to critical event: {evt.get('payload', {}).get('detail', 'Unknown error')}"
+                            break
+            except Exception:
+                pass
+
+        if is_escalated:
+            outcome = "escalated"
+            action_str = "Session halted due to escalation/critical failure."
+        else:
+            # 2. Check for commits made
+            commits = get_commits_after(prev_start)
+            if commits:
+                action_str = f"[COMMIT]: {commits[0]['message']}"
+
+                # Check for FAIL verdicts in .ai-review-log.jsonl
+                has_fail = False
+                REVIEW_LOG_FILE = Path(".ai-review-log.jsonl")
+                if REVIEW_LOG_FILE.exists():
+                    try:
+                        start_dt = parse_iso_datetime(prev_start)
+                        lines = REVIEW_LOG_FILE.read_text(encoding="utf-8").splitlines()
+                        for line in lines:
+                            if not line.strip():
+                                continue
+                            log = json.loads(line)
+                            log_time = parse_iso_datetime(log.get("timestamp", ""))
+                            if log_time > start_dt and log.get("verdict") == "FAIL":
+                                has_fail = True
+                                break
+                    except Exception:
+                        pass
+
+                # Check for open tasks in active_context.md
+                has_open_tasks = False
+                CONTEXT_FILE = STATE_DIR / "active_context.md"
+                if CONTEXT_FILE.exists():
+                    try:
+                        content = CONTEXT_FILE.read_text(encoding="utf-8")
+                        if "- [ ]" in content:
+                            has_open_tasks = True
+                    except Exception:
+                        pass
+
+                if not has_fail and not has_open_tasks:
+                    outcome = "success"
+                    note = "All committed changes completed with no pending open tasks."
+                else:
+                    outcome = "partial"
+                    note = f"Changes committed but open tasks or review failures remain. (FAIL reviews: {has_fail}, open tasks: {has_open_tasks})"
+            else:
+                # 3. No commits and not escalated => abandoned
+                outcome = "abandoned"
+                note = "Session closed with no commits."
+                action_str = "No active commits made. Session abandoned."
+
+    # Format date for ledger: prev_start as YYYY-MM-DD HH:MM
+    try:
+        dt = parse_iso_datetime(prev_start)
+        date_str = dt.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Log to session_ledger.jsonl
+    ledger_entry = {
+        "session_id": prev_id,
+        "date": date_str,
+        "action": action_str,
+        "startup_checked": True,
+        "agent": prev_agent,
+        "outcome": outcome,
+        "outcome_source": source,
+        "outcome_note": note,
+        "harness_version": "2.0",
+    }
+
+    try:
+        with open(LEDGER_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(ledger_entry) + "\n")
+    except Exception:
+        pass
+
+    # Update session.json status
+    prev_data["status"] = "COMPLETED"
+    prev_data["outcome"] = outcome
+    prev_data["outcome_source"] = source
+    prev_data["outcome_note"] = note
+    try:
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(prev_data, f, indent=4)
+    except Exception:
+        pass
+
+    return outcome, note
+
+
+def load_hot_tier(ledger_path: Path = LEDGER_FILE, n: int = 3) -> list[dict]:
+    """Load the n most recent session records for hot-tier context injection."""
+    try:
+        lines = ledger_path.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines[-n:] if line.strip()]
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def print_hot_tier(records: list[dict]) -> None:
+    if not records:
+        print("[HOT-TIER] No recent session records found.")
+        return
+    print(f"[HOT-TIER] Last {len(records)} session(s):")
+    for r in records:
+        outcome = r.get("outcome") or "null"
+        checked = "Y" if r.get("startup_checked") else "-"
+        print(
+            f"  {checked} {r['date'][:10]}  {r['session_id'][:12]}  {outcome:10}  {r['action'][:80]}"
+        )
+
+
+def orient_agent(prev_outcome: str | None, prev_note: str | None) -> None:
+    """Print high-visibility orientation alerts at startup based on the previous session's outcome."""
+    if not prev_outcome:
+        return
+
+    # Use standard GFM Alert style for console and logs
+    print("\n" + "=" * 80)
+    if prev_outcome == "success":
+        print("> [!NOTE]")
+        print(f"> PREVIOUS SESSION SUCCESS: {prev_note}")
+    elif prev_outcome == "partial":
+        print("> [!IMPORTANT]")
+        print(f"> PREVIOUS SESSION PARTIAL: {prev_note}")
+        print("> Please resolve open tasks and review warnings before proceeding.")
+    elif prev_outcome == "abandoned":
+        print("> [!WARNING]")
+        print(f"> PREVIOUS SESSION ABANDONED: {prev_note}")
+        print("> Ensure that git commits are structured and verified.")
+    elif prev_outcome == "escalated":
+        print("> [!CAUTION]")
+        print(f"> PREVIOUS SESSION ESCALATED: {prev_note}")
+        print(
+            "> CRITICAL WARNING: A previous session encountered a halting condition or critical event."
+        )
+    print("=" * 80 + "\n")
+
+
+def initialize_session(agent_name: str = "Harness") -> None:
+    """Initializes or updates the current session state."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    session_id = str(uuid.uuid4())
+    start_time = datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
+
+    session_data = {
+        "session_id": session_id,
+        "start_time": start_time,
+        "last_activity": start_time,
+        "status": "ACTIVE",
+        "agent": agent_name,
+    }
+
+    with open(SESSION_FILE, "w", encoding="utf-8") as f:
+        json.dump(session_data, f, indent=4)
+
+    print(f"[INIT] Session {session_id} initialized.")
+
+
+def record_post_commit_heartbeat() -> None:
+    """Record commit heartbeat to current session and log event."""
+    if not SESSION_FILE.exists():
+        print("[HEARTBEAT] No session.json found. Creating a minimal session.")
+        initialize_session(agent_name="git_hook")
+
+    try:
+        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            session_data = json.load(f)
+    except Exception as e:
+        print(f"[HEARTBEAT] Error loading session: {e}")
+        return
+
+    now_str = datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
+    session_data["last_activity"] = now_str
+
+    try:
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, indent=4)
+    except Exception as e:
+        print(f"[HEARTBEAT] Error writing session: {e}")
+
+    EVENTS_FILE = STATE_DIR / "harness_events.jsonl"
+    try:
+        sha_res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        sha = sha_res.stdout.strip() if sha_res.returncode == 0 else "unknown"
+
+        msg_res = subprocess.run(
+            ["git", "log", "-1", "--pretty=%s"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        msg = (
+            msg_res.stdout.strip()
+            if msg_res.returncode == 0
+            else "unknown commit message"
+        )
+
+        record = {
+            "schema_version": "1.0",
+            "event_type": "commit_made",
+            "timestamp_utc": now_str,
+            "session_id": session_data.get("session_id"),
+            "commit_sha": sha,
+            "agent": "git_hook",
+            "severity": "info",
+            "payload": {"msg": f"Commit detected via post-commit heartbeat: {msg}"},
+        }
+
+        with open(EVENTS_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+
+        print(
+            f"[HEARTBEAT] Updated session {session_data.get('session_id')[:8]} activity. Logged commit."
+        )
+    except Exception as e:
+        print(f"[HEARTBEAT] Error writing harness event: {e}")
+
+
+def maybe_run_dream_phase(prev_outcome: str | None) -> None:
+    """Evaluate thresholds and cooldowns, then maybe execute the dream phase distillation."""
+    DREAM_STATE_FILE = STATE_DIR / "dream_phase_state.json"
+    last_run_utc = "1970-01-01T00:00:00Z"
+
+    if DREAM_STATE_FILE.exists():
+        try:
+            with open(DREAM_STATE_FILE, "r", encoding="utf-8") as f:
+                state_data = json.load(f)
+                last_run_utc = state_data.get("last_run_utc", last_run_utc)
+        except Exception:
+            pass
+
+    try:
+        last_run_dt = parse_iso_datetime(last_run_utc)
+    except Exception:
+        last_run_dt = datetime.min
+
+    # Check for bypass conditions
+    bypass = False
+    if prev_outcome == "escalated":
+        bypass = True
+        print(
+            "[DREAM] Critical bypass: previous session escalated. Triggering dream phase..."
+        )
+    else:
+        # Check harness_events.jsonl for critical events since last_run_dt
+        EVENTS_FILE = STATE_DIR / "harness_events.jsonl"
+        if EVENTS_FILE.exists():
+            try:
+                lines = EVENTS_FILE.read_text(encoding="utf-8").splitlines()
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    evt = json.loads(line)
+                    evt_time = parse_iso_datetime(evt.get("timestamp_utc", ""))
+                    if evt_time > last_run_dt:
+                        if (
+                            evt.get("severity") == "critical"
+                            or evt.get("event_type") == "halt_event"
+                        ):
+                            bypass = True
+                            print(
+                                f"[DREAM] Critical bypass: event '{evt.get('event_type')}' with severity '{evt.get('severity')}' detected since last run. Triggering dream phase..."
+                            )
+                            break
+            except Exception:
+                pass
+
+    if not bypass:
+        # 1. 7-day cooldown guard
+        now = datetime.now(UTC).replace(tzinfo=None)
+        if (now - last_run_dt).days < 7:
+            # Cooldown active, skip quietly
+            return
+
+        # 2. Session ledger thresholds
+        min_sessions = 15
+        min_span_days = 14
+
+        if not LEDGER_FILE.exists():
+            return
+
+        try:
+            ledger_lines = [
+                json.loads(line)
+                for line in LEDGER_FILE.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except Exception:
+            return
+
+        if len(ledger_lines) < min_sessions:
+            return
+
+        dates = []
+        for r in ledger_lines:
+            date_str = r.get("date", "")
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+                dates.append(dt)
+            except Exception:
+                pass
+
+        if not dates:
+            return
+
+        span_days = (max(dates) - min(dates)).days
+        if span_days < min_span_days:
+            return
+
+    # Execute dream phase compiler
+    try:
+        print("[DREAM] Running Dream Phase Distillation Engine...")
+        result = subprocess.run(
+            [sys.executable, ".agent/scripts/distill_dream.py"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if result.returncode == 0:
+            stdout_lines = result.stdout.strip().splitlines()
+            if stdout_lines:
+                print(f"[DREAM] {stdout_lines[0]}")
+            else:
+                print("[DREAM] Distillation complete.")
+        else:
+            print(f"[DREAM] Error running distillation: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"[DREAM] Distillation failed to execute: {e}")
+
+    # Update dream_phase_state.json
+    now_str = datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
+    try:
+        with open(DREAM_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"last_run_utc": now_str}, f, indent=4)
+    except Exception:
+        pass
+
+
+def maybe_run_wiki_compile() -> None:
+    """Evaluate thresholds and execute the wiki compiler if needed."""
+    WIKI_STATE_FILE = STATE_DIR / "wiki_compile_state.json"
+    last_run_utc = "1970-01-01T00:00:00Z"
+
+    if WIKI_STATE_FILE.exists():
+        try:
+            with open(WIKI_STATE_FILE, "r", encoding="utf-8") as f:
+                state_data = json.load(f)
+                last_run_utc = state_data.get("last_run_utc", last_run_utc)
+        except Exception:
+            pass
+
+    try:
+        last_run_dt = parse_iso_datetime(last_run_utc)
+    except Exception:
+        last_run_dt = datetime.min
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    if (now - last_run_dt).days < 7:
+        # Cooldown active, skip quietly
+        return
+
+    try:
+        result = subprocess.run(
+            [sys.executable, ".agent/scripts/wiki_compile.py"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if result.returncode == 0:
+            stdout_lines = result.stdout.strip().splitlines()
+            if stdout_lines:
+                for line in stdout_lines:
+                    print(f"{line}")
+        else:
+            print(f"[WIKI] Error running compilation: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"[WIKI] Compilation failed to execute: {e}")
+
+
+def maybe_run_wiki_lint() -> None:
+    """Evaluate thresholds and execute the local wiki linter if needed."""
+    WIKI_LINT_STATE_FILE = STATE_DIR / "wiki_lint_state.json"
+    last_run_utc = "1970-01-01T00:00:00Z"
+
+    if WIKI_LINT_STATE_FILE.exists():
+        try:
+            with open(WIKI_LINT_STATE_FILE, "r", encoding="utf-8") as f:
+                state_data = json.load(f)
+                last_run_utc = state_data.get("last_run_utc", last_run_utc)
+        except Exception:
+            pass
+
+    try:
+        last_run_dt = parse_iso_datetime(last_run_utc)
+    except Exception:
+        last_run_dt = datetime.min
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    if (now - last_run_dt).days < 14:
+        # Cooldown active (14-day default for lint since it is less time-sensitive than compile), skip quietly
+        return
+
+    try:
+        result = subprocess.run(
+            [sys.executable, ".agent/scripts/wiki_lint.py"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if result.returncode == 0:
+            stdout_lines = result.stdout.strip().splitlines()
+            if stdout_lines:
+                for line in stdout_lines:
+                    print(f"{line}")
+            # Update state file
+            now_str = datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
+            with open(WIKI_LINT_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump({"last_run_utc": now_str}, f, indent=4)
+        else:
+            print(f"[WIKI LINT] Error running lint pass: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"[WIKI LINT] Linter failed to execute: {e}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Agent session initializer")
+    parser.add_argument(
+        "--hot-tier",
+        action="store_true",
+        help="Print the last 3 session records (hot-tier context) instead of initializing",
+    )
+    parser.add_argument(
+        "--hot-tier-n",
+        type=int,
+        default=3,
+        metavar="N",
+        help="Number of recent sessions to load for hot-tier (default: 3)",
+    )
+    parser.add_argument(
+        "--post-commit",
+        action="store_true",
+        help="Update session last activity and record commit heartbeat",
+    )
+    parser.add_argument(
+        "--agent",
+        type=str,
+        default=None,
+        help="Name of the agent running this session",
+    )
+    args = parser.parse_args()
+
+    if args.hot_tier:
+        records = load_hot_tier(n=args.hot_tier_n)
+        print_hot_tier(records)
+    elif args.post_commit:
+        record_post_commit_heartbeat()
+    else:
+        # Retrospective close of previous session
+        prev_outcome, prev_note = infer_and_close_previous_session()
+
+        # Print orientation alert if previous session was closed
+        if prev_outcome:
+            orient_agent(prev_outcome, prev_note)
+
+        # Determine agent name and initialize new session
+        agent_name = args.agent or os.environ.get("AGENT_ID") or "Harness"
+        initialize_session(agent_name=agent_name)
+
+        # Maybe run dream phase distillation
+        maybe_run_dream_phase(prev_outcome)
+
+        # Maybe run wiki compile
+        maybe_run_wiki_compile()
+
+        # Maybe run wiki lint
+        maybe_run_wiki_lint()
+
+
+if __name__ == "__main__":
+    main()

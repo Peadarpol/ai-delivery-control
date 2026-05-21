@@ -1,0 +1,28 @@
+# 🚀 [PROJECT_NAME] Mission Control
+
+> Auto-loaded by Gemini CLI at session start.
+> **Shared rules (startup, workflow-first, prohibitions, session close) live in `.agent/AGENTS.md` — read that first.**
+> This file adds Gemini/Antigravity-specific behaviour only.
+
+---
+
+## Read First
+
+Before anything else, read `.agent/AGENTS.md` (inside .agent/ directory). It contains the mandatory session startup
+protocol, workflow-first rules, absolute prohibitions, escalation triggers, and session close
+requirements that apply to all agents in this project.
+
+---
+
+## Gemini/Antigravity-Specific Environment
+
+- **OS**: Windows 11 — use PowerShell syntax for shell commands (`Get-ChildItem`, not `ls`).
+- **Package manager**: [PROJECT_PACKAGE_MANAGER] (e.g. `poetry run <cmd>` / `poetry add <pkg>`)
+- **Layer rules**: When navigating to a specific layer, read the matching `.cursor/rules/*.mdc` file if available.
+- **Full rules**: `.agent/governance.md`. Commands & paths: `.agent/config.yaml`.
+
+---
+
+## Pre-commit Gates (wired — do not bypass)
+
+`black` → `ruff` → `mypy` → `bandit` → `pip-audit` → secret scan → architecture checks → AI adversarial review (commit-msg stage)

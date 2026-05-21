@@ -1,0 +1,222 @@
+# Agentic Workflow Configuration Template
+# This file acts as the translation layer between universal process logic and local project details.
+# [PROJECT_NAME_PLACEHOLDER]
+
+project:
+  name: "[PROJECT_NAME]"
+  version: "[PROJECT_VERSION]"
+  type: "[PROJECT_TYPE]"
+
+tech_stack:
+  language: "[PROJECT_LANGUAGE]"
+  core_framework: "[PROJECT_CORE_FRAMEWORK]"
+  frontend_framework: "[PROJECT_FRONTEND_FRAMEWORK]"
+  package_manager: "[PROJECT_PACKAGE_MANAGER]"
+  db_engine: "[PROJECT_DB_ENGINE]"
+  db_migration_tool: "[PROJECT_DB_MIGRATION_TOOL]"
+  test_framework: "[PROJECT_TEST_FRAMEWORK]"
+  ui_test_tool: "[PROJECT_UI_TEST_TOOL]"
+  linter: "[PROJECT_LINTER]"
+  formatter: "[PROJECT_FORMATTER]"
+  uat_test_password: "[PROJECT_UAT_TEST_PASSWORD]"
+  url_local: "http://localhost:8501"
+  url_kiosk: "http://localhost:8502"
+  url_backend_local: "http://localhost:8000"
+  language_version: "[PROJECT_LANGUAGE_VERSION]"
+  tech_stack_language_version: "[PROJECT_LANGUAGE_VERSION]"
+  env_test: "test"
+  env_staging: "staging"
+  env_prod: "prod"
+  aws_region: "us-east-1"
+  docs_req_prefix: "FR"
+  docs_nfr_prefix: "NFR"
+  docs_br_prefix: "BR"
+  docs_auth_req_prefix: "FR-AUTH"
+  docs_sec_req_prefix: "NFR-SEC"
+  docs_dev_req_prefix: "NFR-DEV"
+  docs_dba_req_prefix: "DBA"
+  db_name: "[PROJECT_DB_NAME]"
+  app_name: "[PROJECT_APP_NAME]"
+  app_name_green: "[PROJECT_APP_NAME]-green"
+  app_name_blue: "[PROJECT_APP_NAME]-blue"
+  tf_state_bucket: "[PROJECT_TF_STATE_BUCKET]"
+  tf_state_lock_table: "[PROJECT_TF_STATE_LOCK_TABLE]"
+  url_app_prod: "https://[PROJECT_APP_NAME].example.com"
+  url_app_staging: "http://staging.[PROJECT_APP_NAME].example.com"
+  github_owner: "[PROJECT_GITHUB_OWNER]"
+  github_repo: "[PROJECT_GITHUB_OWNER]/[PROJECT_GITHUB_REPO]"
+  github_reviewer: "[PROJECT_GITHUB_REVIEWER]"
+  github_project_id: "[PROJECT_GITHUB_PROJECT_ID]"
+  github_field_status_id: "[PROJECT_GITHUB_FIELD_STATUS_ID]"
+  github_status_backlog: "[PROJECT_GITHUB_STATUS_BACKLOG]"
+  github_status_sprint: "[PROJECT_GITHUB_STATUS_SPRINT]"
+  github_status_in_progress: "[PROJECT_GITHUB_STATUS_IN_PROGRESS]"
+  github_status_review_tech: "[PROJECT_GITHUB_STATUS_REVIEW_TECH]"
+  github_status_review_stakeholder: "[PROJECT_GITHUB_STATUS_REVIEW_STAKEHOLDER]"
+  github_status_done: "[PROJECT_GITHUB_STATUS_DONE]"
+  github_discussions_url: "https://github.com/[PROJECT_GITHUB_OWNER]/[PROJECT_GITHUB_REPO]/discussions"
+  docker_image: "[PROJECT_DOCKER_IMAGE]:latest"
+  docker_image_base: "[PROJECT_DOCKER_IMAGE]"
+
+# Model Tiering Configuration
+model_routing:
+  wiki_compile_provider: ollama
+  local_model: gemma4:26b
+  local_base_url: http://localhost:11434
+  cloud_provider: anthropic
+  cloud_model: claude-sonnet-4-20250514
+  local_tasks:
+    - wiki_compile
+    - knowledge_lint
+    - dream_phase
+    - route_classify
+    - adr_extract
+
+# Universal Capabilities Map
+# Workflows should refer to these keys to avoid hardcoding paths/commands
+capabilities:
+  # Database
+  db:
+    migrate: "[DB_MIGRATION_COMMAND_PLACEHOLDER]"
+    rollback: "[DB_ROLLBACK_COMMAND_PLACEHOLDER]"
+    generate_migration: "[DB_GENERATE_MIGRATION_COMMAND_PLACEHOLDER]"
+    seed: "[DB_SEED_COMMAND_PLACEHOLDER]"
+    check_status: "[DB_STATUS_COMMAND_PLACEHOLDER]"
+    dump: "pg_dump"
+    restore: "pg_restore"
+    create: "createdb"
+    drop: "dropdb"
+
+  # Testing
+  test:
+    run_all: "[TEST_RUN_ALL_COMMAND_PLACEHOLDER]"
+    run_unit: "[TEST_RUN_UNIT_COMMAND_PLACEHOLDER]"
+    run_integration: "[TEST_RUN_INTEGRATION_COMMAND_PLACEHOLDER]"
+    run_ui: "[TEST_RUN_UI_COMMAND_PLACEHOLDER]"
+    run_bdd: "[TEST_RUN_BDD_COMMAND_PLACEHOLDER]"
+    coverage: "[TEST_COVERAGE_COMMAND_PLACEHOLDER]"
+    mutation: "[TEST_MUTATION_COMMAND_PLACEHOLDER]"
+    type_check: "[TEST_TYPE_CHECK_COMMAND_PLACEHOLDER]"
+
+  # Quality
+  lint:
+    check: "[LINT_CHECK_COMMAND_PLACEHOLDER]"
+    fix: "[LINT_FIX_COMMAND_PLACEHOLDER]"
+    format: "[LINT_FORMAT_COMMAND_PLACEHOLDER]"
+
+  # Security
+  security:
+    scan_sast: "[SECURITY_SCAN_SAST_COMMAND_PLACEHOLDER]"
+    scan_deps: "[SECURITY_SCAN_DEPS_COMMAND_PLACEHOLDER]"
+
+  # Performance
+  perf:
+    profile_cprofile: "python -m cProfile"
+    profile_pyinstrument: "python -m pyinstrument"
+    profile_flamegraph: "py-spy record"
+    memory_profile: "python -m memory_profiler"
+    load_test_k6: "k6 run"
+    load_test_locust: "locust"
+
+  # DevOps
+  devops:
+    kubectl_logs: "kubectl logs"
+    kubectl_get: "kubectl get"
+    kubectl_describe: "kubectl describe"
+    aws_lb_modify: "aws elbv2 modify-listener"
+    aws_lb_describe: "aws elbv2 describe-target-health"
+    aws_ecs_update: "aws ecs update-service"
+  docker:
+    ps: "docker ps"
+    compose_ps: "docker-compose ps"
+    build: "docker build"
+    up: "docker-compose up -d"
+
+  # GitHub
+  github:
+    issue_manager: "python scripts/github/issue_manager.py"
+    issue_list: "gh issue list"
+    issue_create: "gh issue create"
+    issue_close: "gh issue close"
+    run_list: "gh run list"
+
+  # Documentation
+  docs:
+    linkcheck: "linkchecker"
+    lint: "markdownlint '**/*.md' --ignore node_modules"
+    spellcheck: "vale"
+
+  # Execution
+  run:
+    backend: "[RUN_BACKEND_COMMAND_PLACEHOLDER]"
+    frontend: "[RUN_FRONTEND_COMMAND_PLACEHOLDER]"
+
+# Standard Project Paths
+paths:
+  source_root: "[PROJECT_SRC_PATH]"
+  domain: "[PROJECT_SRC_PATH]/domain"
+  infrastructure: "[PROJECT_SRC_PATH]/infrastructure"
+  presentation: "[PROJECT_SRC_PATH]/presentation"
+  entrypoint: "[PROJECT_ENTRYPOINT_PLACEHOLDER]"
+  test_root: "tests"
+  test_results: "tests/results"
+  docs: "docs"
+  path_business_rules: "docs/decisions/business_rules.md"
+  path_project_plan: "docs/planning/Project_Plan.md"
+  path_roadmap: "docs/planning/PROJECT_ROADMAP.md"
+  path_tech_spec: "docs/technical/Technical_Specification.md"
+  path_github_ops: ".github/GITHUB_OPERATIONS.md"
+  path_cicd_setup: "docs/ci-cd/CICD_Setup_Guide.md"
+  path_cicd_spec: "docs/ci-cd/CICD_Specification.md"
+  architectural_principles: "docs/architecture/PRINCIPLES.md"
+  infrastructure_manifests: "infrastructure"
+  scripts: "scripts"
+  github_workflows: ".github/workflows"
+
+# Domain-Specific Context (Injected into Agent Mindsets)
+domain_constraints:
+  # [DOMAIN_CONSTRAINTS_PLACEHOLDER]
+  - "Tenant Isolation (Every operational table MUST have isolation scope)"
+  - "RBAC: Admin, Staff, User roles"
+  - "Strict Soft-Deletes required for auditing"
+
+# Operational Maintenance Notes (Loaded into Agent Memory)
+maintenance:
+  docker_base_image:
+    description: "Dockerfiles use pinned SHA256 digests for supply-chain security (OpenSSF Scorecard)"
+    files:
+      - "infrastructure/docker/Dockerfile"
+    update_procedure: |
+      When updating the base image (e.g. for security patches):
+      1. Run: docker pull [BASE_IMAGE]
+      2. Copy the 'Digest: sha256:...' from the output
+      3. Update Dockerfile: FROM [BASE_IMAGE]@sha256:<new_digest>
+    current_tag: "[BASE_IMAGE_TAG]"
+    pinning_reason: "Prevents supply-chain attacks via tag hijacking"
+
+  github_actions:
+    description: "All GitHub Actions are pinned to SHA digests (not version tags)"
+    files:
+      - ".github/workflows/ci.yml"
+    update_procedure: |
+      When manually updating, always pin to the full SHA commit digest with the version in a comment:
+        uses: actions/checkout@<sha>  # v6.0.2
+
+  security_policy:
+    file: "SECURITY.md"
+    reporting_channel: "GitHub Private Vulnerability Reporting"
+
+# Memory retention policy
+memory:
+  retention:
+    session_ledger_retention_days: 90
+    harness_events_retention_days: 365
+    review_log_retention_days: 90
+    dream_proposals_reviewed_retention_days: 365
+
+# Agent Operational Limits (enforced by scripts/circuit_breaker.py)
+agent_limits:
+  max_files_per_commit: 15       # More than this → force user review
+  max_test_retries: 3            # After 3 identical failures → STOP and escalate
+  warn_session_minutes: 120      # Alert user at 2h mark
+  max_session_minutes: 240       # Hard stop at 4h mark

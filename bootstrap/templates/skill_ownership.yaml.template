@@ -1,0 +1,48 @@
+# Skill Ownership Map Template
+# Maps skills to keywords, event types, or check types for dream phase pattern routing.
+
+skills:
+  testing-patterns:
+    keywords:
+      - "pytest"
+      - "assert"
+      - "mock"
+      - "FakeUnitOfWork"
+    check_types:
+      - "test_failure"
+    event_types:
+      - "test_run_failed"
+
+  security-audit:
+    keywords:
+      - "security"
+      - "vulnerability"
+      - "OWASP"
+      - "auth"
+      - "permission"
+    check_types:
+      - "security_violation"
+    event_types:
+      - "security_audit_failed"
+
+  code-review:
+    keywords:
+      - "refactor"
+      - "clean code"
+      - "lint"
+      - "style"
+    check_types:
+      - "lint_failure"
+    event_types:
+      - "code_review_failed"
+
+  senior-architect:
+    keywords:
+      - "layer"
+      - "architecture"
+      - "dependency"
+      - "coupling"
+    check_types:
+      - "architecture_violation"
+    event_types:
+      - "architecture_check_failed"

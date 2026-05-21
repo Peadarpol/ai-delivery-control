@@ -1,0 +1,35 @@
+# Golden Dataset — Known Failure Scenarios
+# Each entry is a past production failure that MUST remain caught by tests.
+# Add new entries after every incident post-mortem.
+# Run: python .agent/evals/regression_runner.py
+
+entries:
+  - id: GD-001
+    source: "incident-2026-03-15-entitlement-boundary"
+    description: "Visit limit not enforced when visits_remaining == 0"
+    trigger: "POST /check-ins with valid member whose entitlement has 0 remaining visits"
+    expected_outcome: "403 Forbidden — EntitlementExhausted"
+    test_reference: "tests/integration/test_entitlement_hardening.py::test_visit_limit_enforced"
+    severity: HIGH
+    date_added: "2026-03-16"
+    added_by: "post-mortem"
+
+  - id: GD-002
+    source: "incident-2026-03-25-temporal-boundary"
+    description: "Temporal boundary off-by-one: entitlement expired at midnight but check-in allowed at 00:00:01"
+    trigger: "POST /check-ins at 00:00:01 on expiry date"
+    expected_outcome: "403 Forbidden — EntitlementExpired"
+    test_reference: "tests/integration/test_entitlement_hardening.py::test_temporal_boundary_future_contract"
+    severity: HIGH
+    date_added: "2026-03-26"
+    added_by: "post-mortem"
+
+  - id: GD-003
+    source: "incident-2026-04-03-sqlite-stale-cache"
+    description: "SQLite stale session: member status change not visible in same transaction"
+    trigger: "Update member status then immediately query in test"
+    expected_outcome: "Fresh session returns updated status"
+    test_reference: "tests/integration/test_entitlement_hardening.py::test_status_restoration_recovery"
+    severity: MEDIUM
+    date_added: "2026-04-04"
+    added_by: "post-mortem"

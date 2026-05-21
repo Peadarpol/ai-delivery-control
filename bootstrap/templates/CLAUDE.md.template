@@ -1,0 +1,62 @@
+# CLAUDE.md — Claude Code Supplement
+# [PROJECT_NAME_PLACEHOLDER]
+
+> Auto-loaded by Claude Code at session start.
+> **Shared rules (startup, workflow-first, prohibitions, session close) live in `.agent/AGENTS.md` — read that first.**
+> This file adds Claude Code-specific behaviour only.
+
+---
+
+## Read First
+
+Before anything else, read `.agent/AGENTS.md` (inside .agent/ directory). It contains the mandatory session startup
+protocol, workflow-first rules, absolute prohibitions, escalation triggers, and session close
+requirements that apply to all agents in this project.
+
+---
+
+## Claude Code-Specific Environment
+
+- **Shell**: Use the `Bash` tool for file ops and git. Use the `PowerShell` tool only when a
+  Windows-specific command requires it.
+- **Paths in shell**: backslashes. Paths in Python code: forward slashes.
+- **Package manager**: [PROJECT_PACKAGE_MANAGER] (e.g. `poetry run <cmd>` / `poetry add <pkg>`)
+- **Test commands** (authoritative source: `.agent/config.yaml`):
+  - All: [TEST_RUN_ALL_COMMAND_PLACEHOLDER]
+- **Search**: Use the `Grep` tool — bash `grep` is unreliable on Windows.
+- **Full rules**: `.agent/governance.md`.
+
+---
+
+## Pre-commit Gates (wired — do not bypass without documented justification)
+
+`black` → `ruff` → `mypy` → `bandit` → `pip-audit` → secret scan → architecture checks → **AI adversarial review**
+
+The AI review runs at `commit-msg` stage and has access to the commit message.
+Override only with `SKIP_AI_REVIEW=1` when the specific finding is a verified false positive.
+**Never use `--no-verify`.**
+
+---
+
+## Session Lifecycle (Claude Code-specific)
+
+**Session start**: `python .agent/scripts/init_session.py` is mandatory — already in AGENTS.md §startup.
+It infers the previous session's outcome, prints a summary of any pending dream proposals, and
+triggers the dream phase if ≥ 7 days have elapsed since last run and data thresholds are met.
+
+**Optional Stop hook**: `.claude/settings.json` supports a native Stop hook that writes the session
+outcome immediately rather than waiting for retrospective inference at the next startup. Add to
+`.claude/settings.json`:
+```json
+{
+  "hooks": {
+    "Stop": [{"command": "python .agent/scripts/init_session.py --stop-hook"}]
+  }
+}
+```
+When present, `outcome_source` is written as `"hook"` (more accurate than `"inferred"`).
+When absent, retrospective inference at the next session start is the fallback — no data loss.
+
+**Abrupt session end**: If the session ends at context limit or crashes, update
+`.agent/state/active_context.md` with current state as the minimum so the next session has a
+starting point.
