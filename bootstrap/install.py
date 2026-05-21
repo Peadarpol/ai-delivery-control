@@ -63,6 +63,7 @@ class Installer:
         self.package_manager = "poetry"
         self.test_framework = "pytest"
         self.src_path = "src"
+        self.stack_pack = None
 
     def log(self, symbol: str, msg: str):
         print(f"{symbol} {msg}")
@@ -194,6 +195,24 @@ class Installer:
         except Exception as e:
             self.log_verbose(f"Failed to detect git remote origin repo name: {e}")
 
+        # 7. Stack pack detection based on dependencies
+        self.stack_pack = None
+        if has_pyproject:
+            try:
+                content = pyproject_path.read_text(encoding="utf-8").lower()
+                if "fastapi" in content:
+                    self.stack_pack = "python-fastapi"
+            except Exception as e:
+                self.log_verbose(f"Failed to check for stack pack in pyproject.toml: {e}")
+        
+        if has_package_json and not self.stack_pack:
+            try:
+                content = package_json_path.read_text(encoding="utf-8").lower()
+                if "express" in content:
+                    self.stack_pack = "node-express"
+            except Exception as e:
+                self.log_verbose(f"Failed to check for stack pack in package.json: {e}")
+
         self.log(SYMBOL_SUCCESS, f"Detected Stack: Language={self.language}, PM={self.package_manager}, Test={self.test_framework}")
         self.log(SYMBOL_INFO, f"Scaffolding Metadata: Project={self.project_name} (v{self.project_version}), SrcRoot={self.src_path}/, Repo={self.detected_repo_name}")
 
@@ -204,8 +223,15 @@ class Installer:
         target_agent = self.project_path / ".agent"
         target_agent.mkdir(exist_ok=True)
         
-        # Directories to copy from framework's .agent
-        agent_dirs_to_copy = ["scripts", "workflows", "skills", "evals"]
+        # Track skills that already existed in target to prevent overwriting during upgrades/re-runs
+        target_skills = target_agent / "skills"
+        existed_skills = set()
+        if target_skills.exists():
+            existed_skills = {item.name for item in target_skills.iterdir() if item.is_dir()}
+            self.log_verbose(f"Existing skills in target: {existed_skills}")
+        
+        # Directories to copy from framework's .agent (excluding skills which is copied flat and non-destructively)
+        agent_dirs_to_copy = ["scripts", "workflows", "evals"]
         for d in agent_dirs_to_copy:
             src_dir = self.framework_path / ".agent" / d
             dest_dir = target_agent / d
@@ -215,6 +241,41 @@ class Installer:
                     shutil.rmtree(dest_dir)
                 shutil.copytree(src_dir, dest_dir)
                 
+        # Non-destructive flat skill copying
+        if not target_skills.exists():
+            target_skills.mkdir(parents=True, exist_ok=True)
+        
+        # Copy universal skills — skip if skill dir already existed in target
+        src_universal_skills = self.framework_path / ".agent" / "skills" / "universal"
+        if src_universal_skills.exists() and src_universal_skills.is_dir():
+            self.log_verbose(f"Copying universal skills from {src_universal_skills} to {target_skills}")
+            for item in src_universal_skills.iterdir():
+                if item.is_dir():
+                    dest = target_skills / item.name
+                    if item.name in existed_skills:
+                        self.log(SYMBOL_INFO, f"Skill '{item.name}' already exists — skipping (use upgrade.py to update)")
+                    else:
+                        if dest.exists():
+                            shutil.rmtree(dest)
+                        shutil.copytree(item, dest)
+
+        # Copy stack pack if detected — overwrite universal legacy only if not existed_skills from previous run
+        if self.stack_pack:
+            src_stack_pack = self.framework_path / ".agent" / "skills" / "stack-packs" / self.stack_pack
+            if src_stack_pack.exists() and src_stack_pack.is_dir():
+                dest = target_skills / self.stack_pack
+                if self.stack_pack in existed_skills:
+                    self.log(SYMBOL_INFO, f"Stack-pack skill '{self.stack_pack}' already exists — skipping (use upgrade.py to update)")
+                else:
+                    self.log(SYMBOL_SUCCESS, f"Detected matching stack pack: '{self.stack_pack}'. Installing...")
+                    if dest.exists():
+                        shutil.rmtree(dest)
+                    shutil.copytree(src_stack_pack, dest)
+            else:
+                self.log(SYMBOL_WARN, f"Stack pack '{self.stack_pack}' detected but not found in framework sources.")
+        else:
+            self.log(SYMBOL_INFO, "No matching stack pack detected for target tech stack. Skipping stack pack installation.")
+
         # Individual files to copy from framework's .agent
         agent_files_to_copy = ["governance.md", "AGENTS.md"]
         for f in agent_files_to_copy:
