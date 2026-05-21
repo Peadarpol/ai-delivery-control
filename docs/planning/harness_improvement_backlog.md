@@ -77,3 +77,32 @@
 |            |              | project's framework.version to current.              |
 |            |              | Pattern identical to Alembic upgrade chain.          |
 |            |              | | T1-A series |
+| 2026-05-21 | T1-F skill discovery | Skill discovery guidance — three-part design:        |
+|            |                      |                                                      |
+|            |                      | 1. POST-INSTALL OUTPUT (install.py): After           |
+|            |                      |    successful installation, print skill discovery    |
+|            |                      |    prompt pointing to agentskills.io,                |
+|            |                      |    github.com/topics/agent-skills, and               |
+|            |                      |    docs/skills.md (curated list by stack).           |
+|            |                      |    Show regardless of whether a stack pack was       |
+|            |                      |    matched — ecosystem awareness is always useful.   |
+|            |                      |                                                      |
+|            |                      | 2. DREAM PHASE EXTENSION (distill_dream.py):         |
+|            |                      |    When a capability gap appears in 3+ sessions      |
+|            |                      |    without a governing skill, generate a SKILL       |
+|            |                      |    DISCOVERY PROPOSAL (not a skill diff) pointing    |
+|            |                      |    to community sources before suggesting authoring  |
+|            |                      |    from scratch. Include session count and date      |
+|            |                      |    range as evidence. Pattern: same as __open.md     |
+|            |                      |    proposals but with action: search, not apply.     |
+|            |                      |                                                      |
+|            |                      | 3. DOCS/SKILLS.MD (T1-F series): Curated list of    |
+|            |                      |    recommended community skills by stack. Becomes    |
+|            |                      |    anchor content on professional site alongside     |
+|            |                      |    the framework itself.                             |
+|            |                      |                                                      |
+|            |                      | NOTE: No standing instruction in AGENTS.md —        |
+|            |                      | mid-session suggestions are noise. Discovery is     |
+|            |                      | surfaced at install time (once) and by the dream    |
+|            |                      | phase (when evidence justifies it).                 |
+|            |                      | | T1-F series |
