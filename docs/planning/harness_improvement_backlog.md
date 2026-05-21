@@ -11,3 +11,5 @@
 |            |                   | trajectory generation." Not actionable until dream phase      |
 |            |                   | is operational and producing quality labelled outcomes.       | P7 |
 | 2026-05-21 | Claude (security audit, PR #126 CI) | pip-audit suppression flags exist in two places (`.pre-commit-config.yaml` AND `.github/workflows/ci.yml`). Discovered when CI failed on PR #126 after local pre-commit was fixed — the `--ignore-vuln` flags were not mirrored to the CI step. | Consider extracting shared args to a `pip-audit.toml` config if the suppression list grows beyond 5 entries, making the single source of truth unambiguous. For now, any suppression added to one file must be added to the other in the same commit. | Security / CI Sync | P6 |
+| 2026-05-21 | T1-F README | README lacks introductory pain point mapping for developers new to agentic workflows. | Add "What it prevents" section to README.md detailing 4 concrete pain points: wrong repo commits, ungoverned AI changes, context loss between sessions, stale architectural rules. Each maps to a specific framework capability. | Documentation | 📅 Backlog — T1-F series |
+
