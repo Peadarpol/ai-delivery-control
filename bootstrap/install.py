@@ -223,12 +223,8 @@ class Installer:
         target_agent = self.project_path / ".agent"
         target_agent.mkdir(exist_ok=True)
         
-        # Track skills that already existed in target to prevent overwriting during upgrades/re-runs
+        # Track target skills directory
         target_skills = target_agent / "skills"
-        existed_skills = set()
-        if target_skills.exists():
-            existed_skills = {item.name for item in target_skills.iterdir() if item.is_dir()}
-            self.log_verbose(f"Existing skills in target: {existed_skills}")
         
         # Directories to copy from framework's .agent (excluding skills which is copied flat and non-destructively)
         agent_dirs_to_copy = ["scripts", "workflows", "evals"]
@@ -240,36 +236,37 @@ class Installer:
                 if dest_dir.exists():
                     shutil.rmtree(dest_dir)
                 shutil.copytree(src_dir, dest_dir)
-                
+        
         # Non-destructive flat skill copying
         if not target_skills.exists():
             target_skills.mkdir(parents=True, exist_ok=True)
         
-        # Copy universal skills — skip if skill dir already existed in target
+        # Copy universal skills — skip if skill dir already exists in target
         src_universal_skills = self.framework_path / ".agent" / "skills" / "universal"
         if src_universal_skills.exists() and src_universal_skills.is_dir():
             self.log_verbose(f"Copying universal skills from {src_universal_skills} to {target_skills}")
             for item in src_universal_skills.iterdir():
                 if item.is_dir():
+                    # If stack pack is detected and matches this skill, skip so the stack pack copier installs it
+                    if self.stack_pack and item.name == self.stack_pack:
+                        self.log_verbose(f"Skipping legacy universal '{item.name}' copy because stack pack is detected.")
+                        continue
+                    
                     dest = target_skills / item.name
-                    if item.name in existed_skills:
+                    if dest.exists():
                         self.log(SYMBOL_INFO, f"Skill '{item.name}' already exists — skipping (use upgrade.py to update)")
                     else:
-                        if dest.exists():
-                            shutil.rmtree(dest)
                         shutil.copytree(item, dest)
 
-        # Copy stack pack if detected — overwrite universal legacy only if not existed_skills from previous run
+        # Copy stack pack if detected — skip if skill dir already exists in target
         if self.stack_pack:
             src_stack_pack = self.framework_path / ".agent" / "skills" / "stack-packs" / self.stack_pack
             if src_stack_pack.exists() and src_stack_pack.is_dir():
                 dest = target_skills / self.stack_pack
-                if self.stack_pack in existed_skills:
+                if dest.exists():
                     self.log(SYMBOL_INFO, f"Stack-pack skill '{self.stack_pack}' already exists — skipping (use upgrade.py to update)")
                 else:
                     self.log(SYMBOL_SUCCESS, f"Detected matching stack pack: '{self.stack_pack}'. Installing...")
-                    if dest.exists():
-                        shutil.rmtree(dest)
                     shutil.copytree(src_stack_pack, dest)
             else:
                 self.log(SYMBOL_WARN, f"Stack pack '{self.stack_pack}' detected but not found in framework sources.")

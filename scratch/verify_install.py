@@ -197,6 +197,13 @@ fastapi = "^0.109.0"
     custom_skill_marker = "My special custom developer skill that must be preserved."
     custom_skill_md.write_text(custom_skill_marker, encoding="utf-8")
     
+    # 3. Developer edits the python-fastapi stack-pack skill
+    fastapi_skill_md = skills_dir / "python-fastapi" / "SKILL.md"
+    original_fastapi_content = fastapi_skill_md.read_text(encoding="utf-8")
+    fastapi_edit_marker = "### ⚠️ DEVELOPER FASTAPI RULE: FORBID ALL UNTYPED DEPENDENCIES"
+    customized_fastapi_content = original_fastapi_content + f"\n\n{fastapi_edit_marker}\n"
+    fastapi_skill_md.write_text(customized_fastapi_content, encoding="utf-8")
+    
     # Re-run install
     print("Running second install (re-run / upgrade)...")
     run_installer(workspace_root, mock_dir)
@@ -208,6 +215,10 @@ fastapi = "^0.109.0"
     # Assert edits to existing universal skill are preserved
     new_review_content = review_skill_md.read_text(encoding="utf-8")
     assert developer_edit_marker in new_review_content, "Developer's custom edits to an existing skill were overwritten!"
+    
+    # Assert edits to python-fastapi stack-pack are preserved
+    new_fastapi_content = fastapi_skill_md.read_text(encoding="utf-8")
+    assert fastapi_edit_marker in new_fastapi_content, "Developer's custom edits to the stack-pack skill were overwritten!"
     
     # Assert other universal files and stack-packs still exist
     assert (skills_dir / "python-fastapi").exists()
