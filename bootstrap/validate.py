@@ -189,6 +189,22 @@ class Validator:
             return False, f"Missing required core files: {', '.join(missing)}"
         return True, "Core governance files verified."
 
+    def validate_repo_guard(self) -> Tuple[bool, str]:
+        """Confirm check_repo.py is present and EXPECTED_REPO is customized for the target project."""
+        script = self.project_path / ".agent" / "scripts" / "check_repo.py"
+        if not script.exists():
+            return False, "check_repo.py missing from .agent/scripts/"
+        try:
+            content = script.read_text(encoding="utf-8")
+        except Exception as e:
+            return False, f"Failed to read check_repo.py: {e}"
+
+        is_framework = self.project_path.resolve().name.lower() == "ai-delivery-control"
+        if not is_framework and 'EXPECTED_REPO = "ai-delivery-control"' in content:
+            return False, "EXPECTED_REPO still set to framework default — install.py did not inject the correct repo name"
+
+        return True, "Repository guard script present and configured"
+
     def validate_configs(self) -> Tuple[bool, str]:
         """Verify YAML parseability of configurations."""
         config_path = self.project_path / ".agent" / "config.yaml"
@@ -292,6 +308,7 @@ class Validator:
         self.run_check("Required CLI Tools", self.validate_tools)
         self.run_check("Harness Core Directory Layout", self.validate_directories)
         self.run_check("Harness Core Files", self.validate_core_files)
+        self.run_check("Repository Guard (P-14)", self.validate_repo_guard)
         self.run_check("Harness Configurations Validity", self.validate_configs)
         self.run_check("Pre-commit Git Hook Layout", self.validate_precommit_setup)
         self.run_check("AI Review Gate Setup", self.validate_ai_review_wiring)

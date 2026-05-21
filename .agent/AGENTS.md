@@ -24,6 +24,11 @@ This file is injected into every AI review. Governance rules in this file and in
 
 ## 1. Session Startup (mandatory — before touching any code)
 
+## Step 0 — Verify Active Repository (mandatory)
+Run `python .agent/scripts/check_repo.py` before reading any files
+or taking any actions. If the check fails, stop the session immediately
+and switch to the correct project in your IDE.
+
 0. Run: `python .agent/scripts/check_halt.py`. If exit code 2: STOP. Do not proceed. Read the `.agent/state/HALT` file contents and report to the user.
    Run: `python .agent/scripts/init_session.py` to establish session traceability.
 1. Run `git log --oneline -5` and `git branch` — establish ground truth on branch and recent work.
@@ -90,7 +95,8 @@ Before any task involving code changes across more than one file or layer:
 | P-11 | Commit or push without completing local verification first — **CI is not a substitute for local verification. If you cannot verify locally, stop and say so. Do not commit and push hoping CI will catch it.** |
 | P-12 | Use `git add .` or `git add -A` — always stage named files only |
 | P-13 | Stage agent-generated files or log files (`AGENTS.md`, `harness_events.jsonl`, `session_ledger.jsonl`, `dream_phase_state.json`, brain files, session logs, etc.) in git commits |
-| P-14 | Direct commits to deployment/devops branches for CI/CD fixes: Create a short-lived branch, merge to devops, then merge back to active feature branch |
+| P-14 | Perform any git add, commit, merge, or push without verifying the active repository matches the intended project. |
+| P-15 | Direct commits to deployment/devops branches for CI/CD fixes: Create a short-lived branch, merge to devops, then merge back to active feature branch |
 
 Full rationale in `.agent/governance.md` §3.
 

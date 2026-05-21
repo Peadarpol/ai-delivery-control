@@ -177,8 +177,25 @@ class Installer:
             except Exception as e:
                 self.log_verbose(f"Failed to read metadata from package.json: {e}")
 
+        # 6. Detect repo name from git remote URL
+        self.detected_repo_name = self.project_name # Fallback
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                cwd=str(self.project_path)
+            )
+            if result.returncode == 0:
+                url = result.stdout.strip()
+                repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
+                if repo_name:
+                    self.detected_repo_name = repo_name
+        except Exception as e:
+            self.log_verbose(f"Failed to detect git remote origin repo name: {e}")
+
         self.log(SYMBOL_SUCCESS, f"Detected Stack: Language={self.language}, PM={self.package_manager}, Test={self.test_framework}")
-        self.log(SYMBOL_INFO, f"Scaffolding Metadata: Project={self.project_name} (v{self.project_version}), SrcRoot={self.src_path}/")
+        self.log(SYMBOL_INFO, f"Scaffolding Metadata: Project={self.project_name} (v{self.project_version}), SrcRoot={self.src_path}/, Repo={self.detected_repo_name}")
 
     def copy_framework_files(self):
         """Phase 3: Exclude .agent/state/ entirely and copy only specific folders."""
@@ -206,6 +223,20 @@ class Installer:
             if src_file.exists() and src_file.is_file():
                 self.log_verbose(f"Copying file: {src_file} -> {dest_file}")
                 shutil.copy2(src_file, dest_file)
+
+        # Seed correct repo name in check_repo.py
+        check_repo_path = target_agent / "scripts" / "check_repo.py"
+        if check_repo_path.exists():
+            self.log_verbose(f"Seeding repo name '{self.detected_repo_name}' in {check_repo_path}")
+            try:
+                content = check_repo_path.read_text(encoding="utf-8")
+                content = content.replace(
+                    'EXPECTED_REPO = "ai-delivery-control"',
+                    f'EXPECTED_REPO = "{self.detected_repo_name}"'
+                )
+                check_repo_path.write_text(content, encoding="utf-8")
+            except Exception as e:
+                self.log_verbose(f"Failed to seed repo name in check_repo.py: {e}")
                 
         # Copy src/scripts/ai_review.py to project scripts folder
         scripts_dest_dir = self.project_path / self.src_path / "scripts"

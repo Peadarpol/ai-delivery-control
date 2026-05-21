@@ -67,7 +67,8 @@ The following actions are **unconditionally forbidden** unless the user explicit
 | P-11 | Create or modify `task.json` (Phase 4 of `/pm`) | Process consistency |
 | P-12 | Use `--no-verify` on any commit containing source code or agent scripts | Bypasses all harness gates; use `SKIP_AI_REVIEW=1` for AI-only false positives |
 | P-13 | Stage agent-generated log files (`harness_events.jsonl`, `session_ledger.jsonl`, `dream_phase_state.json`, etc.) in git commits | Pollutes commit history; these are local-only state files, not source artefacts |
-| P-14 | Direct commits to `devops` for CI/CD fixes | Create a `fix/` branch, merge to `devops`, then merge `devops` back to the active feature branch to prevent divergence |
+| P-14 | Perform any git add, commit, merge, or push without verifying the active repository matches the intended project. | Run `python .agent/scripts/check_repo.py` first. STOP immediately if the check fails — you are in the wrong project. |
+| P-15 | Direct commits to `devops` for CI/CD fixes | Create a `fix/` branch, merge to `devops`, then merge `devops` back to the active feature branch to prevent divergence |
 
 ---
 
