@@ -1,0 +1,13 @@
+# Harness Improvement Backlog
+
+| Date | Observed by | Observation | Suggested change | Pillar | Status |
+|------|-------------|-------------|-----------------|--------|--------|
+| 2026-05-16 | Antigravity | `scheduler.shutdown()` is called with `wait=False` in production to avoid blocking. If the event loop closes too fast, it raises a `RuntimeError` (previously swallowed, now surfaced as `warning`). This leaves background tasks in a zombie state (`asyncio_0` leak). | Monitor production logs for "SaaS: Scheduler shutdown RuntimeError". If frequent, reconsider `wait=True` in production or refine the shutdown sequence in `startup.py`. | Stability / Lifecycle | ✅ Backlog / Canary 2026-05-16 |
+| 2026-05-18 | Claude (T1-I-00b diagnostic) | `circuit_breaker.py` has no automatic enforcement — voluntary only. Gate exists in `governance.md` (line 119) as a "SHOULD run before committing" manual agent step but is not wired into the session or commit lifecycle. An agent that skips it faces no consequence from the harness. Pre-commit is the wrong hook stage (circuit breaker checks session-level limits, not commit-level limits). Correct wiring: check at session start in `init_session.py`; record final metrics at session close via Stop hook. | Resolve as part of T1-C-01 (passive session lifecycle hooks) — check limits at session start, record metrics at session close. Not a standalone item. | Governance / Enforcement | 📅 Backlog — resolve with T1-C-01 |
+| 2026-05-18 | Hermes comparison | Long-horizon: once T1-D-03 (dream phase) produces 6+ months  |
+|            |                   | of labelled session data, evaluate exporting harness          |
+|            |                   | trajectories in ShareGPT format for fine-tuning a            |
+|            |                   | codebase-specialist model. Hermes calls this "batch           |
+|            |                   | trajectory generation." Not actionable until dream phase      |
+|            |                   | is operational and producing quality labelled outcomes.       | P7 |
+| 2026-05-21 | Claude (security audit, PR #126 CI) | pip-audit suppression flags exist in two places (`.pre-commit-config.yaml` AND `.github/workflows/ci.yml`). Discovered when CI failed on PR #126 after local pre-commit was fixed — the `--ignore-vuln` flags were not mirrored to the CI step. | Consider extracting shared args to a `pip-audit.toml` config if the suppression list grows beyond 5 entries, making the single source of truth unambiguous. For now, any suppression added to one file must be added to the other in the same commit. | Security / CI Sync | P6 |
