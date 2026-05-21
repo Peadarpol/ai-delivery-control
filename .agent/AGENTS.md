@@ -177,3 +177,8 @@ When a CI/CD pipeline fails after a push:
 5. Delete the fix branch
 
 **Exception**: Trivial one-line typo fixes may be made directly with a warning acknowledged in the commit message: `[direct-devops: trivial]`
+
+### 8.5 Branching Conventions
+
+All framework work must develop on dedicated feature branches before merging via Pull Request:
+  `feat/framework-{item-id}-{short-description} → PR → main`

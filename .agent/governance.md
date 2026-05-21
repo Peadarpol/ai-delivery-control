@@ -69,6 +69,7 @@ The following actions are **unconditionally forbidden** unless the user explicit
 | P-13 | Stage agent-generated log files (`harness_events.jsonl`, `session_ledger.jsonl`, `dream_phase_state.json`, etc.) in git commits | Pollutes commit history; these are local-only state files, not source artefacts |
 | P-14 | Perform any git add, commit, merge, or push without verifying the active repository matches the intended project. | Run `python .agent/scripts/check_repo.py` first. STOP immediately if the check fails — you are in the wrong project. |
 | P-15 | Direct commits to `devops` for CI/CD fixes | Create a `fix/` branch, merge to `devops`, then merge `devops` back to the active feature branch to prevent divergence |
+| P-16 | Direct commits to `main` or improper branch naming for framework work | All framework work must develop on dedicated feature branches before merging via Pull Request: `feat/framework-{item-id}-{short-description} → PR → main` |
 
 ---
 
