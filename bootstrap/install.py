@@ -372,6 +372,8 @@ class Installer:
             "[PROJECT_NAME]": self.project_name,
             "[PROJECT_NAME_PLACEHOLDER]": self.project_name,
             "[PROJECT_VERSION]": self.project_version,
+            "[FRAMEWORK_VERSION]": framework_version,
+            "[INSTALL_DATE]": today_date,
             "[PROJECT_LANGUAGE]": self.language,
             "[PROJECT_PACKAGE_MANAGER]": self.package_manager,
             "[PROJECT_TEST_FRAMEWORK]": self.test_framework,
@@ -427,24 +429,37 @@ class Installer:
                     
             dest_path.write_text(content, encoding="utf-8")
 
-        # 1. Scaffold CLAUDE.md and GEMINI.md in project root
-        render_template("CLAUDE.md.template", self.project_path / "CLAUDE.md")
-        render_template("GEMINI.md.template", self.project_path / "GEMINI.md")
+        # 1. Generate .agent/UNIVERSAL_CONTEXT.md — always overwrite (machine-generated, version-stamped)
+        universal_context_dest = self.project_path / ".agent" / "UNIVERSAL_CONTEXT.md"
+        render_template("UNIVERSAL_CONTEXT.md.template", universal_context_dest)
+        self.log(SYMBOL_SUCCESS, "Generated .agent/UNIVERSAL_CONTEXT.md (framework version stamped)")
+
+        # 2. Generate tool shims — skip if developer has already customised them
+        for shim_template, shim_dest_rel in [
+            ("CLAUDE.md.template",   "CLAUDE.md"),
+            ("GEMINI.md.template",   "GEMINI.md"),
+            ("cursorrules.template", ".cursorrules"),
+        ]:
+            shim_dest = self.project_path / shim_dest_rel
+            if shim_dest.exists():
+                self.log(SYMBOL_INFO, f"{shim_dest_rel} already exists — skipping (preserve developer customisations)")
+            else:
+                render_template(shim_template, shim_dest)
         
-        # 2. Scaffold review_context_project.md co-located with ai_review.py
+        # 3. Scaffold review_context_project.md co-located with ai_review.py
         project_context_path = self.project_path / self.src_path / "scripts" / "review_context_project.md"
         if not project_context_path.exists():
             render_template("review_context_project.md.template", project_context_path)
         else:
             self.log_verbose("review_context_project.md already exists, skipping scaffolding to preserve developer edits.")
         
-        # 3. Scaffold skill_ownership.yaml
+        # 4. Scaffold skill_ownership.yaml
         render_template(
             "skill_ownership.yaml.template",
             self.project_path / ".agent" / "config" / "skill_ownership.yaml",
         )
         
-        # 4. Scaffold config.yaml
+        # 5. Scaffold config.yaml
         # Inject the parsed framework metadata section directly
         config_extra = {
             "# [PROJECT_NAME_PLACEHOLDER]": framework_yaml_block,
@@ -452,7 +467,7 @@ class Installer:
         }
         render_template("config.yaml.template", self.project_path / ".agent" / "config.yaml", config_extra)
         
-        # 5. Scaffold pre-commit config (handling backups and cross-platform stripping)
+        # 6. Scaffold pre-commit config (handling backups and cross-platform stripping)
         precommit_dest = self.project_path / ".pre-commit-config.yaml"
         if precommit_dest.exists():
             backup_path = self.project_path / ".pre-commit-config.yaml.bak"

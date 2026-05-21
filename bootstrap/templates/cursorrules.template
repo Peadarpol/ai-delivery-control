@@ -1,0 +1,25 @@
+# .cursorrules — Cursor AI Supplement
+# [PROJECT_NAME_PLACEHOLDER]
+
+# Auto-loaded by Cursor at session start.
+# All governance rules, startup protocol, and session close requirements live in
+# .agent/UNIVERSAL_CONTEXT.md and .agent/AGENTS.md — read those first.
+# This file adds Cursor-specific behaviour only.
+
+---
+
+## Read First
+
+Before anything else, read:
+1. `.agent/UNIVERSAL_CONTEXT.md` — project identity, harness version, key file locations
+2. `.agent/AGENTS.md` — mandatory session startup protocol, workflow-first rules,
+   absolute prohibitions (P-01 through P-14), escalation triggers, and session close requirements
+
+---
+
+## Cursor-Specific Environment
+
+- **Package manager**: [PROJECT_PACKAGE_MANAGER]
+- **Test command**: [TEST_RUN_ALL_COMMAND_PLACEHOLDER]
+- **Layer rules**: Architecture and layer-specific rules live in `.cursor/rules/*.mdc` files.
+  When working within a specific layer, read the matching MDC rule file first.

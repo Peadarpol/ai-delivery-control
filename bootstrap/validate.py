@@ -304,6 +304,19 @@ class Validator:
             
         return True, f"AI Adversarial Review Gate wired at {ai_review_file.relative_to(self.project_path)}"
 
+    def validate_universal_context(self) -> Tuple[bool, str]:
+        """Confirm .agent/UNIVERSAL_CONTEXT.md exists and contains a framework version reference."""
+        uc_path = self.project_path / ".agent" / "UNIVERSAL_CONTEXT.md"
+        if not uc_path.exists() or not uc_path.is_file():
+            return False, "Missing .agent/UNIVERSAL_CONTEXT.md — run install.py to generate"
+        try:
+            content = uc_path.read_text(encoding="utf-8")
+        except Exception as e:
+            return False, f"Failed to read UNIVERSAL_CONTEXT.md: {e}"
+        if "framework version" not in content.lower():
+            return False, "UNIVERSAL_CONTEXT.md exists but is missing a framework version reference"
+        return True, "UNIVERSAL_CONTEXT.md present and contains framework version"
+
     def run_all(self) -> int:
         print(f"\n==================================================")
         print(f"🔍 AI Delivery Control — Environment legibility check")
@@ -314,6 +327,7 @@ class Validator:
         self.run_check("Harness Core Directory Layout", self.validate_directories)
         self.run_check("Harness Core Files", self.validate_core_files)
         self.run_check("Repository Guard (P-14)", self.validate_repo_guard)
+        self.run_check("Universal Context File", self.validate_universal_context)
         self.run_check("Harness Configurations Validity", self.validate_configs)
         self.run_check("Pre-commit Git Hook Layout", self.validate_precommit_setup)
         self.run_check("AI Review Gate Setup", self.validate_ai_review_wiring)

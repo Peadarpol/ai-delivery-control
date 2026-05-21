@@ -45,11 +45,12 @@ A major risk of backlog evolution is "isolated feature drift"—building individ
 *   **How it works**: A `skill_ownership.yaml` routing map (`T1-D-00`) seeds five skills with the keyword/event/check-type patterns that link recurring failures to actionable skill files — a pure YAML config with no code dependencies, prerequisite to all downstream chain items. Retrospective outcome inference (`T1-C-01`) runs at every session start via `init_session.py`, classifying the prior session as `success`, `partial`, `abandoned`, or `escalated` from objective signals (HALT file, commits, open tasks, FAIL review verdicts), storing a three-field outcome record `{outcome, outcome_source, outcome_note}`. This is **fully agent-agnostic** — it works on Claude Code, Gemini/GymBase, Codex, Cursor, and open-source agents equally; the Claude Code Stop hook is an optional enhancement layer that writes `outcome_source: "hook"` but is not required for chain operation. A post-commit heartbeat (pre-commit framework `post-commit` stage) provides a true agent-agnostic activity signal. Outcome-aware startup orientation (`T1-I-03`) uses the outcome record to prime the new session's attention. The dream phase compiler (`T1-D-03`) runs at session start when data thresholds are met (≥10 sessions, ≥14 days span, 7-day cooldown), distilling patterns from `harness_events.jsonl` and `.ai-review-log.jsonl` into skill diff proposals. A critical-severity OR-branch bypasses frequency thresholds so rare-but-critical events always generate proposals. Contradiction detection is integrated into the same pass (`T1-I-05`), producing `__contradiction.md` cards that are never auto-archived.
 *   **The Synergy**: Individually, hooks are just logging, and the dream phase is a speculative compiler. Together — with routing, platform-agnostic inference, session-start scheduling, and integrated contradiction checks — they form a **complete, closed-loop self-improvement flywheel** operable across all agent platforms without modifying core chain logic.
 
-### C. The Portability Chain
+### C. The Portability Chain ✅ Complete (T1-A-01 through T1-A-07, main branch 2026-05-21)
 > **T1-A-01 (Standalone Repo) ➔ T1-A-02 (Install Script) ➔ T1-A-04 (Config Checks) ➔ T1-A-05 (Split Context) ➔ T1-H-04 (Auto-Context Setup)**
 
 *   **How it works**: Separating the generic framework from Gym App into a standalone repository (`T1-A-01`) is backed by a `bootstrap/install.py` script (`T1-A-02`). Declarative AST boundaries in `.agent/config.yaml` (`T1-A-04`) allow language-agnostic layers, while split universal/project context profiles (`T1-A-05`) remove configuration drift. The install-time generator (`T1-H-04`) bootstraps the project's context dynamically from structural facts rather than manual authoring.
 *   **The Synergy**: These items solve the "blank-page onboarding" problem, reducing setup time from days to under 10 minutes, making the framework immediately usable in any repository or tech stack.
+*   **Delivered**: T1-A-01 through T1-A-07 shipped across 7 PRs on the `feat/framework-t1-a0*` branch series. The framework can now be installed on any project in under 10 minutes, governs its own development on a feature branch, has a public repository, and produces clean tool supplements (CLAUDE.md, GEMINI.md, .cursorrules) pointing at a single `.agent/UNIVERSAL_CONTEXT.md` canonical source. T1-H-04 (auto-context from repo map) remains deferred pending T1-H-01 (PageRank map).
 
 ### D. The Efficient Memory Chain ✅ Complete (PR #125)
 > **T1-I-00a (Staleness Foundation) ➔ T1-I-04 (Staleness Detection) ➔ T1-I-01 (Memory Tiering) ➔ T1-I-06 (Retention Policy)**
@@ -105,6 +106,22 @@ Delivered in PR #125, merged to `devops` 2026-05-18:
 
 Note: `T1-D-01` (SQLite state indexing) was deferred by CONSTRAINT-01 — SQLite is in `.gitignore`; queryable state requires a design decision on persistence strategy before implementation.
 
+### Chain A — Portability Chain (Complete ✅)
+
+Delivered across 7 PRs merged to `main` by 2026-05-21:
+
+| Target ID | Core Feature | Status |
+|-----------|--------------|--------|
+| **T1-A-01** | **Standalone harness repository** | ✅ Complete |
+| **T1-A-02** | **Bootstrap install script** (`bootstrap/install.py`) | ✅ Complete |
+| **T1-A-03** | **Environment validation script** (`bootstrap/validate.py`) | ✅ Complete |
+| **T1-A-04** | **Config-driven architecture checks** | ✅ Complete |
+| **T1-A-05** | **Two-layer review_context.md** | ✅ Complete |
+| **T1-A-06** | **Universal + stack-pack skills** | ✅ Complete |
+| **T1-A-07** | **Tool supplement generation** (CLAUDE.md, GEMINI.md, .cursorrules shims) | ✅ Complete |
+
+The framework now installs on any project in under 10 minutes, governs its own development on a feature branch, has a public repository at https://github.com/Peadarpol/ai-delivery-control, and produces clean tool supplements pointing at `.agent/UNIVERSAL_CONTEXT.md` as the single canonical context source. T1-H-04 (auto-context from repo map) remains deferred pending T1-H-01.
+
 ### Chain B — Self-Improvement Loop (Specced, pending implementation)
 
 Full spec committed to `AISDLC_HARNESS_BACKLOG.md` on `fix/sqlite-reference-cleanup` branch. Implementation sequence:
@@ -122,5 +139,4 @@ Chain B requires ≥10 sessions of data before the dream phase fires. T1-D-00 an
 
 | Chain | Key Items | Status |
 |-------|-----------|--------|
-| **A — Portability** | T1-A-01 (standalone repo), T1-A-02 (install script), T1-A-04 (config checks), T1-A-05 (split context) | 📅 Deferred post-Chain B |
 | **C — Structural Understanding** | T1-H-01 (PageRank map), T1-H-02 (ADR annotations), T1-G-01 (diff routing), T1-G-03 (typed verdict) | 📅 Deferred post-Chain B |

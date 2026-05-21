@@ -12,17 +12,17 @@
 ## Tier 1 — Solo Multi-Project
 *Prerequisite: none. Implements on top of the existing Gym App harness.*
 
-### T1-A: Harness Extraction & Portability
+### T1-A: Harness Extraction & Portability ✅ Complete (2026-05-21)
 
-| ID | Item | Description | Effort |
-|----|------|-------------|--------|
-| T1-A-01 | **Standalone harness repository** | Extract the framework layer from Gym App into its own repository. Gym App becomes the first "project using the harness." Separates generic framework from project-specific config. | Medium |
-| T1-A-02 | **Bootstrap install script** | `bootstrap/install.py` — detects tech stack, copies framework files into target project, scaffolds project config from templates, wires pre-commit hooks, runs validation. Target: under 10 minutes from zero to working harness. | Medium |
-| T1-A-03 | **Environment validation script** | `bootstrap/validate.py` — confirms all required tools are installed, pre-commit hooks are wired, validate.py scripts pass, regression runner returns clean. Run at install time and on-demand. | Low |
-| T1-A-04 | **Config-driven architecture checks** | Replace hardcoded Python/Clean Architecture rules in `architecture_checks.py` with a config-driven rule set read from `.agent/config.yaml`. Any project can define its own layer boundaries and forbidden patterns without code changes. | Medium |
-| T1-A-05 | **Two-layer review_context.md** | Split `review_context.md` into a universal base layer (framework-owned, generic invariants) and a project layer (user-maintained, project-specific patterns). `ai_review.py` loads and concatenates both. New users get working AI review immediately; it improves as they fill in project context. | Low |
-| T1-A-06 | **Universal + stack-pack skills** | Split skills into universal (language-agnostic: systematic-debugging, code-review, security-audit, architect, dba) and stack packs (python-fastapi, python-django, node-express). Install script deploys universal skills always, stack pack based on detected tech. | Medium |
-| T1-A-07 | **Tool supplement generation** | Install script generates `CLAUDE.md`, `GEMINI.md`, `.cursorrules` from templates rather than requiring manual creation. Each is a thin shim pointing at `.agent/UNIVERSAL_CONTEXT.md`. | Low |
+| ID | Item | Description | Effort | Status |
+|----|------|-------------|--------|--------|
+| T1-A-01 | **Standalone harness repository** | Extract the framework layer from Gym App into its own repository. Gym App becomes the first "project using the harness." Separates generic framework from project-specific config. | Medium | ✅ |
+| T1-A-02 | **Bootstrap install script** | `bootstrap/install.py` — detects tech stack, copies framework files into target project, scaffolds project config from templates, wires pre-commit hooks, runs validation. Target: under 10 minutes from zero to working harness. | Medium | ✅ |
+| T1-A-03 | **Environment validation script** | `bootstrap/validate.py` — confirms all required tools are installed, pre-commit hooks are wired, validate.py scripts pass, regression runner returns clean. Run at install time and on-demand. | Low | ✅ |
+| T1-A-04 | **Config-driven architecture checks** | Replace hardcoded Python/Clean Architecture rules in `architecture_checks.py` with a config-driven rule set read from `.agent/config.yaml`. Any project can define its own layer boundaries and forbidden patterns without code changes. | Medium | ✅ |
+| T1-A-05 | **Two-layer review_context.md** | Split `review_context.md` into a universal base layer (framework-owned, generic invariants) and a project layer (user-maintained, project-specific patterns). `ai_review.py` loads and concatenates both. New users get working AI review immediately; it improves as they fill in project context. | Low | ✅ |
+| T1-A-06 | **Universal + stack-pack skills** | Split skills into universal (language-agnostic: systematic-debugging, code-review, security-audit, architect, dba) and stack packs (python-fastapi, python-django, node-express). Install script deploys universal skills always, stack pack based on detected tech. | Medium | ✅ |
+| T1-A-07 | **Tool supplement generation** | Install script generates `CLAUDE.md`, `GEMINI.md`, `.cursorrules` from templates rather than requiring manual creation. Each is a thin shim pointing at `.agent/UNIVERSAL_CONTEXT.md`. | Low | ✅ |
 
 ---
 
@@ -315,4 +315,4 @@ Gemma4 compilation is zero marginal cost.
 **Note on Chain B sequencing (Self-Improvement Loop)**: T1-D-00 (skill_ownership.yaml) is a pure-config prerequisite with no code dependencies — write it first, before any Chain B code. T1-C-01 and T1-I-03 deliver immediately once T1-I-01 (session_ledger.jsonl, already done) is in place. T1-D-03 + T1-I-05 (distill_dream.py, integrated contradiction check) should be written and tested manually with `--dry-run` first; promote to the weekly `harness-drift.yml` schedule only after a clean dry-run confirms thresholds produce meaningful proposals (target: at least 15 sessions spanning 14+ days). T1-I-06 update (dream_proposals/ retention) is a small addition to the already-implemented cleanup script — deliver in the same PR as T1-D-03. Quarterly review checklist should reference `dream_proposals/` review at **monthly** cadence as the working expectation; quarterly is the backstop. Human reviewer renames accepted/rejected proposals to `__reviewed`; `retention_cleanup.py` archives `__reviewed` files older than 365 days automatically.
 
 
-*Last Updated: 2026-05-18*
+*Last Updated: 2026-05-21 — T1-A series complete*
