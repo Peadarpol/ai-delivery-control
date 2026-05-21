@@ -74,13 +74,13 @@
 
 ### T1-F: Documentation & Shareability
 
-| ID | Item | Description | Effort |
-|----|------|-------------|--------|
-| T1-F-01 | **Getting-started guide** | `docs/getting-started.md` — install to first AI review gate firing in under 10 minutes. Written for someone who didn't build the harness. | Low |
-| T1-F-02 | **Configuration reference** | `docs/configuration.md` — every config.yaml field documented with type, default, and example. | Low |
-| T1-F-03 | **Customisation guide** | `docs/customisation.md` — how to add project-specific invariants to review_context.md, create custom skills, configure architecture checks. | Low |
-| T1-F-04 | **Refined AISDLC bootloader** | Update the bootloader document (written for a friend's fresh install) to reference the new standalone harness repository. The bootloader becomes the agent-readable setup guide for the framework. | Low |
-| T1-F-05 | **Harness README** | Repository-level README with: what this is, 5-minute install, the "8 interruptions → 3 checkpoints" value proposition, link to docs. | Low |
+| ID | Item | Description | Effort | Status |
+|----|------|-------------|--------|--------|
+| T1-F-01 | **Getting-started guide** | `docs/getting-started.md` — install to first AI review gate firing in under 10 minutes. Written for someone who didn't build the harness. | Low | ✅ |
+| T1-F-02 | **Configuration reference** | `docs/configuration.md` — every config.yaml field documented with type, default, and example. | Low | ✅ |
+| T1-F-03 | **Customisation guide** | `docs/customisation.md` — how to add project-specific invariants to review_context.md, create custom skills, configure architecture checks. | Low | ✅ |
+| T1-F-04 | **Refined AISDLC bootloader** | Update the bootloader document (written for a friend's fresh install) to reference the new standalone harness repository. The bootloader becomes the agent-readable setup guide for the framework. | Low | ✅ (`docs/aisdlc-bootloader.md`) |
+| T1-F-05 | **Harness README** | Repository-level README with: what this is, 5-minute install, the "8 interruptions → 3 checkpoints" value proposition, link to docs. | Low | ✅ (delivered in T1-A-07) |
 
 ---
 
