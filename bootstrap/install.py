@@ -248,6 +248,13 @@ class Installer:
             self.log_verbose(f"Copying AI review script: {src_ai_review} -> {dest_ai_review}")
             shutil.copy2(src_ai_review, dest_ai_review)
             
+        # Copy src/scripts/review_context_universal.md to project scripts folder
+        src_universal = self.framework_path / "src" / "scripts" / "review_context_universal.md"
+        dest_universal = scripts_dest_dir / "review_context_universal.md"
+        if src_universal.exists():
+            self.log_verbose(f"Copying Universal context layer: {src_universal} -> {dest_universal}")
+            shutil.copy2(src_universal, dest_universal)
+            
         # Create empty dynamic state directories
         empty_dirs = [
             target_agent / "state",
@@ -366,11 +373,12 @@ class Installer:
         render_template("CLAUDE.md.template", self.project_path / "CLAUDE.md")
         render_template("GEMINI.md.template", self.project_path / "GEMINI.md")
         
-        # 2. Scaffold review_context.md co-located with ai_review.py
-        render_template(
-            "review_context_project.md.template",
-            self.project_path / self.src_path / "scripts" / "review_context.md",
-        )
+        # 2. Scaffold review_context_project.md co-located with ai_review.py
+        project_context_path = self.project_path / self.src_path / "scripts" / "review_context_project.md"
+        if not project_context_path.exists():
+            render_template("review_context_project.md.template", project_context_path)
+        else:
+            self.log_verbose("review_context_project.md already exists, skipping scaffolding to preserve developer edits.")
         
         # 3. Scaffold skill_ownership.yaml
         render_template(
@@ -509,7 +517,7 @@ class Installer:
             print(f"  Please review and manually merge your existing hooks with the new harness hooks.")
         print(f"\n{SYMBOL_INFO} Next steps:")
         print(f"  1. Review your newly scaffolded configurations in .agent/config.yaml")
-        print(f"  2. Add project-specific architectural principles to {self.src_path}/scripts/review_context.md")
+        print(f"  2. Add project-specific architectural principles to {self.src_path}/scripts/review_context_project.md")
         print(f"  3. Set ANTHROPIC_API_KEY environment variable to activate the Claude adversarial review gate.")
         print(f"==================================================\n")
 

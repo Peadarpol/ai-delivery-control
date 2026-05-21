@@ -283,7 +283,8 @@ def _find_project_root() -> Path:
 
 
 PROJECT_ROOT = _find_project_root()
-CONTEXT_FILE = SCRIPT_DIR / "review_context.md"
+UNIVERSAL_CONTEXT_FILE = SCRIPT_DIR / "review_context_universal.md"
+PROJECT_CONTEXT_FILE = SCRIPT_DIR / "review_context_project.md"
 CONFIG_FILE = PROJECT_ROOT / ".ai-review-config.json"
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
@@ -561,19 +562,41 @@ def _strip_wiki_headers(content: str) -> str:
 def load_review_context(diff: str = "") -> str:
     """
     Load project architecture guidelines for the review prompt.
-    If a diff is provided, selectively injects relevant sections to reduce context rot (PA-02).
+    Loads universal context always, and project context if present.
+    If a diff is provided, selectively injects relevant sections (PA-02).
     """
-    if not CONTEXT_FILE.exists():
-        return ""
+    if not UNIVERSAL_CONTEXT_FILE.exists():
+        print(f"Error: Universal review context file is missing at {UNIVERSAL_CONTEXT_FILE}. Installation may be corrupt.", file=sys.stderr)
+        sys.exit(1)
 
+    # 1. Load Universal Context
     try:
-        content = CONTEXT_FILE.read_text(encoding="utf-8")
-        if not diff:
-            return content
-        return _select_context_sections(diff, content)
-    except OSError:
-        pass
-    return ""
+        universal_content = UNIVERSAL_CONTEXT_FILE.read_text(encoding="utf-8")
+        print(f"[REVIEW] Loaded universal context from {UNIVERSAL_CONTEXT_FILE.name}")
+    except Exception as e:
+        print(f"Error: Failed to read universal context file: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 2. Load Project Context
+    project_content = ""
+    if PROJECT_CONTEXT_FILE.exists() and PROJECT_CONTEXT_FILE.is_file():
+        try:
+            project_content = PROJECT_CONTEXT_FILE.read_text(encoding="utf-8")
+            print(f"[REVIEW] Loaded project context from {PROJECT_CONTEXT_FILE.name}")
+        except Exception as e:
+            print(f"Warning: Failed to read project context file: {e}", file=sys.stderr)
+            pass
+    else:
+        print(f"[REVIEW] Project context absent — proceeding with universal guidelines only")
+
+    # 3. Concatenate layers (project content after universal content)
+    combined = universal_content
+    if project_content.strip():
+        combined += "\n\n" + project_content
+
+    if not diff:
+        return combined
+    return _select_context_sections(diff, combined)
 
 
 def _select_context_sections(diff: str, context_text: str) -> str:
