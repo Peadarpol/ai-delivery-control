@@ -180,3 +180,10 @@
 |            |                 |    to enforce the rule-count limit at authoring time,  |
 |            |                 |    not just at audit time.                             |
 |            |                 | | T1-B series |
+| 2026-05-21 | validate.py | Warning for absent review_context_project.md fires    |
+|            | legacy name | on projects that predate the two-layer split and use  |
+|            |             | the legacy review_context.md filename. validate.py    |
+|            |             | should check for both filenames and suppress the      |
+|            |             | warning if either exists. Low priority — cosmetic.    |
+|            |             | | T1-A series |
+
