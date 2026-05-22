@@ -106,3 +106,77 @@
 |            |                      | surfaced at install time (once) and by the dream    |
 |            |                      | phase (when evidence justifies it).                 |
 |            |                      | | T1-F series |
+| 2026-05-21 | T1-B governance | Restructure governance.md into Always/Ask First/Never  |
+|            | restructure     | three-category framework (source: Osmani O'Reilly,     |
+|            |                 | Feb 2026 — "curse of instructions" research).          |
+|            |                 |                                                        |
+|            |                 | RATIONALE: Research shows agents follow the first few  |
+|            |                 | rules and overlook the rest when presented with a flat |
+|            |                 | numbered list. A three-category decision framework     |
+|            |                 | gives agents a mental model they can apply to novel    |
+|            |                 | situations, not just a lookup table.                   |
+|            |                 |                                                        |
+|            |                 | IMPLEMENTATION:                                        |
+|            |                 | Keep P-01 through P-14 as the canonical numbered       |
+|            |                 | reference (immutable audit trail). Add a new           |
+|            |                 | operational section above the prohibition table:       |
+|            |                 |                                                        |
+|            |                 | ALWAYS (do without asking):                            |
+|            |                 | - Run check_repo.py before any git operation           |
+|            |                 | - Run tests before commits                             |
+|            |                 | - Write tests before implementation code               |
+|            |                 | - Follow active workflow from start state              |
+|            |                 |                                                        |
+|            |                 | ASK FIRST (escalate to human):                         |
+|            |                 | - Database schema changes                              |
+|            |                 | - Adding or removing dependencies                      |
+|            |                 | - Modifying auth, RBAC, or security code               |
+|            |                 | - Commits touching more than 5 files                   |
+|            |                 | - Anything that contradicts a rule in domain_rules.md  |
+|            |                 |                                                        |
+|            |                 | NEVER (absolute prohibition, maps to P-series):        |
+|            |                 | - Merge to main/master without CI approval (P-01)      |
+|            |                 | - Delete migration files (P-02)                        |
+|            |                 | - Disable or weaken test assertions (P-03)             |
+|            |                 | - Commit secrets or API keys (P-06)                    |
+|            |                 | - Use git commit --no-verify (P-11)                    |
+|            |                 | - [full P-series remains authoritative]                |
+|            |                 |                                                        |
+|            |                 | Update AGENTS.md and aisdlc-bootloader.md to reference |
+|            |                 | the three-category framing as the operational layer.   |
+|            |                 | | T1-B series |
+| 2026-05-21 | T1-B skill      | Add "curse of instructions" principle to skill quality |
+|            | authoring       | bar and T1-B-06 audit criteria (source: Osmani         |
+|            | principle       | O'Reilly Feb 2026 — GitHub analysis of 2,500+ agent    |
+|            |                 | config files; confirmed by GPT-4/Claude research).     |
+|            |                 |                                                        |
+|            |                 | RATIONALE: When agents are presented with many rules   |
+|            |                 | simultaneously, they comply with the first few and     |
+|            |                 | overlook the rest. A skill with 5 well-enforced rules  |
+|            |                 | produces better agent behaviour than a skill with 20.  |
+|            |                 | This is not a length concern — it is a rule-count      |
+|            |                 | concern. A skill can be 80 lines and still be          |
+|            |                 | over-specified if it contains 15 rules.                |
+|            |                 |                                                        |
+|            |                 | IMPLEMENTATION:                                        |
+|            |                 | 1. Add to docs/customisation.md under skill authoring: |
+|            |                 |    "Prefer 3-5 high-consequence rules over 10-20       |
+|            |                 |    comprehensive ones. Agents follow the first few     |
+|            |                 |    rules and overlook the rest (curse of instructions  |
+|            |                 |    — Osmani, 2026). Every rule you add dilutes the     |
+|            |                 |    ones above it."                                     |
+|            |                 |                                                        |
+|            |                 | 2. Add to docs/aisdlc-bootloader.md skill quality bar  |
+|            |                 |    table: new row — Rule count | ≤5 high-consequence   |
+|            |                 |    rules per skill | Why: curse of instructions         |
+|            |                 |                                                        |
+|            |                 | 3. Update T1-B-06 audit criteria to check rule count   |
+|            |                 |    in addition to line count. A skill with >7 distinct |
+|            |                 |    MUST/NEVER/ALWAYS rules is flagged AMBER regardless  |
+|            |                 |    of line count. Add this check to verify_install.py  |
+|            |                 |    skill metadata validation.                          |
+|            |                 |                                                        |
+|            |                 | 4. Update /create-skill workflow (T1-B-05) template    |
+|            |                 |    to enforce the rule-count limit at authoring time,  |
+|            |                 |    not just at audit time.                             |
+|            |                 | | T1-B series |
