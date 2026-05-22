@@ -23,3 +23,7 @@ env/
 
 # Mock testing scratch directory
 scratch/
+
+# Hypothesis and IDE local configs
+.hypothesis/
+.claude/

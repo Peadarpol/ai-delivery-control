@@ -15,6 +15,10 @@ Install the AI Delivery Control harness into any project in under 10 minutes.
 
 The harness has no Python dependencies beyond the standard library.
 
+### Stack Coverage & Manual Extension
+
+The framework ships with out-of-the-box templates and invariant checks optimized for **Python (FastAPI)** and **Node.js (Express)**. Projects utilizing other stacks (e.g., Go, Rust, Java, or Ruby) are fully supported via the core universal skills, but require manual customization of architecture boundaries in `.agent/config.yaml` and stack-specific guidelines under `.agent/skills/`.
+
 ---
 
 ## 1. Clone the harness
