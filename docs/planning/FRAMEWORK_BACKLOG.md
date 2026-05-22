@@ -206,16 +206,16 @@ does not currently provide.*
 installation against GymBase RFC-003 delivery (2026-05-22).
 These bugs were discovered during live feature delivery under the framework.*
 
-| ID | Item | Description | Effort | Priority |
-|----|------|-------------|--------|----------|
-| BUG-01 | **commit-msg hook not installed by bootstrap** | `bootstrap/install.py` runs `pre-commit install` but does not run `pre-commit install --hook-type commit-msg`. The AI adversarial review gate is configured at `stages: [commit-msg]` but this hook stage is never wired automatically. The entire RFC-003 session ran without gate coverage because this step was missing. Fix: add `subprocess.run(["pre-commit", "install", "--hook-type", "commit-msg"], ...)` to Phase 5 (Git Hook Wiring) in `install.py`. Also add to `bootstrap/validate.py`: check `.git/hooks/commit-msg` exists alongside `pre-commit` and `pre-push` checks. | Low | CRITICAL |
-| BUG-02 | **validate.py does not check commit-msg hook** | `bootstrap/validate.py` checks for `pre-commit` and `pre-push` hooks in `.git/hooks/` but not `commit-msg`. Reported ✅ "Pre-commit wired" while the gate hook was completely absent. Fix: add `commit-msg` to the hook layout check. | Low | HIGH |
-| BUG-03 | **Gate reads staged diff at commit-msg stage — empty on amend** | The gate script reads `git diff --staged` to get the diff for review. At `commit-msg` stage during `git commit --amend`, the staged area is empty (nothing newly staged), producing an empty diff. The pre-flight shortcut classifies empty diffs as trivial and returns PASS_FAST in ~1.5s without any API call. The RFC-003 amend commit got a PASS_FAST verdict on an empty diff — the actual 1686-line RFC-003 diff was never reviewed. Fix: at `commit-msg` stage, detect amend context and read `git diff HEAD~1 HEAD` (the commit being created) rather than `git diff --staged`. | Medium | HIGH |
+| ID | Item | Description | Effort | Priority | Status |
+|----|------|-------------|--------|----------|--------|
+| BUG-01 | **commit-msg hook not installed by bootstrap** | `bootstrap/install.py` runs `pre-commit install` but does not run `pre-commit install --hook-type commit-msg`. The AI adversarial review gate is configured at `stages: [commit-msg]` but this hook stage is never wired automatically. The entire RFC-003 session ran without gate coverage because this step was missing. Fix: add `subprocess.run(["pre-commit", "install", "--hook-type", "commit-msg"], ...)` to Phase 5 (Git Hook Wiring) in `install.py`. Also add to `bootstrap/validate.py`: check `.git/hooks/commit-msg` exists alongside `pre-commit` and `pre-push` checks. | Low | CRITICAL | ✅ Already present since initial commit (19683c2). GymBase gap was environment-specific. |
+| BUG-02 | **validate.py does not check commit-msg hook** | `bootstrap/validate.py` checks for `pre-commit` and `pre-push` hooks in `.git/hooks/` but not `commit-msg`. Reported ✅ "Pre-commit wired" while the gate hook was completely absent. Fix: add `commit-msg` to the hook layout check. | Low | HIGH | ✅ Already present since initial commit. |
+| BUG-03 | **Gate reads staged diff at commit-msg stage — empty on amend** | The gate script reads `git diff --staged` to get the diff for review. At `commit-msg` stage during `git commit --amend`, the staged area is empty (nothing newly staged), producing an empty diff. The pre-flight shortcut classifies empty diffs as trivial and returns PASS_FAST in ~1.5s without any API call. The RFC-003 amend commit got a PASS_FAST verdict on an empty diff — the actual 1686-line RFC-003 diff was never reviewed. Fix: at `commit-msg` stage, detect amend context and read `git diff HEAD~1 HEAD` (the commit being created) rather than `git diff --staged`. | Medium | HIGH | ✅ Fixed in v1.1.0 (SE-01/SE-02 guards: ORIG_HEAD detection, empty tree fallback for single-commit repos). |
 | BUG-04 | **PASS and PASS_FAST verdicts not written to log** | All 4 entries in GymBase `.ai-review-log.jsonl` are FAIL verdicts. PASS and PASS_FAST verdicts are either not being written or writing to a different path. A gate that only logs failures produces an incomplete and misleading audit trail — the framework appears to block everything when it actually passes most commits silently. Fix: ensure all verdict types (PASS, PASS_FAST, WARN, FAIL, FAIL_OPEN) write to `.ai-review-log.jsonl`. Verify the log write path is relative to the project root, not the script directory. | Low | HIGH |
 | BUG-05 | **ADR domain names not mapping to capability names** | Context snapshot shows `adr_domains=['branch_isolation']` (detected) but policy notes show "Skipped check: BRANCH_ISOLATION (no matching path or ADR)". The domain name `branch_isolation` (from `# ADRs:` annotation) is not being mapped to the capability name `BRANCH_ISOLATION` in the routing logic. Case or naming convention mismatch in `RouteDecision.build_route_decision()`. Fix: normalise comparison — either uppercase both sides or maintain a canonical mapping dict from domain names to capability names. | Low | HIGH |
-| BUG-06 | **Gate calibration too aggressive — all verdicts are FAIL** | All 4 logged GymBase gate verdicts are FAIL. All 3 logged ai-delivery-control gate verdicts are FAIL. A gate that returns FAIL on every commit loses developer trust and gets bypassed (which is what happened in the RFC-003 session). FAIL should require at least one HIGH severity finding. MEDIUM findings → WARN. LOW findings → informational only. Review the system prompt — the "assume wrong until proven otherwise" framing may be generating too many HIGH findings on legitimate code. | Medium | HIGH |
+| BUG-06 | **Gate calibration too aggressive — all verdicts are FAIL** | All 4 logged GymBase gate verdicts are FAIL. All 3 logged ai-delivery-control gate verdicts are FAIL. A gate that returns FAIL on every commit loses developer trust and gets bypassed (which is what happened in the RFC-003 session). FAIL should require at least one HIGH severity finding. MEDIUM findings → WARN. LOW findings → informational only. Review the system prompt — the "assume wrong until proven otherwise" framing may be generating too many HIGH findings on legitimate code. | Medium | HIGH | ✅ Fixed in v1.1.0 (proportionate calibration, false-positive guard, citation requirement for FAIL). |
 | BUG-07 | **Session heartbeat "files modified" failure on amend** | The `session-heartbeat` post-commit hook modifies `session.json` during the post-commit phase. Pre-commit detects the file modification, flags it as a hook auto-fix, and rolls back the change ("Stashed changes conflicted with hook auto-fixes... Rolling back fixes..."). The heartbeat update is lost. Fix: configure the heartbeat hook with `pass_filenames: false` and ensure it writes to a gitignored state file that pre-commit doesn't track. | Low | MEDIUM |
-| BUG-08 | **`governance_check.py` uses deprecated `datetime.utcnow()`** | Warning surfaced during RFC-003 amend: `DeprecationWarning: datetime.datetime.utcnow() is deprecated`. Replace with `datetime.datetime.now(datetime.UTC)` throughout governance_check.py. | Low | LOW |
+| BUG-08 | **`governance_check.py` uses deprecated `datetime.utcnow()`** | Warning surfaced during RFC-003 amend: `DeprecationWarning: datetime.datetime.utcnow() is deprecated`. Replace with `datetime.datetime.now(datetime.UTC)` throughout governance_check.py. | Low | LOW | ✅ Fixed in Sprint 0. |
 
 ---
 
@@ -408,18 +408,18 @@ Complete all before any LinkedIn post or external sharing.
 
 ### v1.1.0 Sprint — Demonstrably Working
 Priority order:
-1. BUG-01 — commit-msg hook not installed (CRITICAL, install.py fix)
-2. BUG-02 — validate.py missing commit-msg check (HIGH, 30 min)
-3. BUG-03 — empty diff on amend at commit-msg stage (HIGH, gate fix)
+1. BUG-01 — commit-msg hook not installed ✅ (already present since initial commit 19683c2)
+2. BUG-02 — validate.py missing commit-msg check ✅ (already present since initial commit)
+3. BUG-03 — empty diff on amend at commit-msg stage ✅ (fixed: ORIG_HEAD guard + empty tree fallback)
 4. BUG-04 — PASS verdicts not logged (HIGH, logging fix)
 5. BUG-05 — ADR domain → capability name mismatch (HIGH, routing fix)
-6. BUG-06 — gate calibration too aggressive (HIGH, system prompt tuning)
-7. T1-E-02 — LLMProvider ABC, moved from v1.3.0 (provider portability)
-8. T1-L-06 — production scope statement (30 min documentation)
-9. T1-L-09 — framework self-test suite (testing the gate itself)
+6. BUG-06 — gate calibration too aggressive ✅ (fixed: proportionate calibration, false-positive guard)
+7. T1-E-02 — LLMProvider ABC ✅ (delivered: providers.py — Anthropic/OpenAI/Ollama, zero new deps)
+8. T1-L-06 — production scope statement ✅ (Sprint 0)
+9. T1-L-09 — framework self-test suite ✅ (delivered: tests/ — 60 tests, all passing)
 10. T1-M-01 — agent operations guide (documentation)
 11. T1-M-02 — spec writing guide (documentation)
-12. T1-M-05 — stack coverage acknowledgment (documentation)
+12. T1-M-05 — stack coverage acknowledgment ✅ (Sprint 0)
 
 ### v1.2.0 Sprint — Outer Loop
 T1-L-01 (spec quality gate)
@@ -445,4 +445,4 @@ Medium: T1-B-04/05/06/07, T1-I-02, T1-J-03/04
 Lower: T1-D-01/02, T1-E-01, T1-G-05, T1-H-04/05
 
 
-*Last Updated: 2026-05-22 — Sprint 0, T1-L (outer loop), RFC-003 bug fixes, T1-M (agent ops) added; execution sequence updated*
+*Last Updated: 2026-05-23 — v1.1.0 items BUG-01/02 (already present), BUG-03/06 (fixed), T1-E-02 (delivered), T1-L-09 (60 tests), BUG-08 (Sprint 0) marked complete*

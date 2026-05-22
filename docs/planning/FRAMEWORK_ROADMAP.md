@@ -139,25 +139,25 @@ The dream phase is the mechanism that makes the framework improve over time — 
 | S0-04 | Add GitHub issue templates | Community |
 | S0-05 | Cut v1.0.0 GitHub release with release notes | Release |
 | S0-06 | Add CI badge to README | Social proof |
-| S0-07 | Document convention vs enforcement explicitly in README | Documentation |
+| S0-07 | Document convention vs enforcement explicitly in README | Documentation | ✅ |
 | S0-08 | Surface 2-3 representative skills in docs | Documentation |
 | S0-09 | Add worked example: complete diff → routing → verdict cycle | Documentation |
 | S0-10 | Publish dream phase example: real proposals from real sessions | Documentation |
-| S0-11 | Add "What it prevents" section to README | Documentation |
-| S0-12 | Fix validate.py legacy filename warning | Validation |
-| T1-E-02 | LLMProvider ABC (AnthropicProvider, OpenAIProvider, OllamaProvider) | Provider portability |
-| T1-L-06 | Explicit production scope statement in README and docs | Documentation |
+| S0-11 | Add "What it prevents" section to README | Documentation | ✅ |
+| S0-12 | Fix validate.py legacy filename warning | Validation | ✅ |
+| T1-E-02 | LLMProvider ABC (AnthropicProvider, OpenAIProvider, OllamaProvider) | Provider portability | ✅ |
+| T1-L-06 | Explicit production scope statement in README and docs | Documentation | ✅ |
 | T1-L-08 | High-risk commit classification for fail-open behaviour | Gate hardening |
-| T1-L-09 | Framework self-test suite | Testing |
-| BUG-01 | commit-msg hook not installed by bootstrap (CRITICAL) | Gate wiring |
-| BUG-02 | validate.py does not check commit-msg hook | Validation |
-| BUG-03 | Gate reads empty diff on amend at commit-msg stage | Gate fix |
+| T1-L-09 | Framework self-test suite (60 tests across 6 modules) | Testing | ✅ |
+| BUG-01 | commit-msg hook not installed by bootstrap — already present since initial commit | Gate wiring | ✅ |
+| BUG-02 | validate.py does not check commit-msg hook — already present | Validation | ✅ |
+| BUG-03 | Gate reads empty diff on amend at commit-msg stage — ORIG_HEAD guard + empty tree fallback | Gate fix | ✅ |
 | BUG-04 | PASS/PASS_FAST verdicts not written to audit log | Logging |
 | BUG-05 | ADR domain names not mapping to capability names | Routing fix |
-| BUG-06 | Gate calibration too aggressive — all verdicts are FAIL | Gate calibration |
+| BUG-06 | Gate calibration too aggressive — proportionate calibration + false-positive guard | Gate calibration | ✅ |
 | T1-M-01 | Agent operations guide | Documentation |
 | T1-M-02 | Spec writing guide | Documentation |
-| T1-M-05 | Stack coverage acknowledgment | Documentation |
+| T1-M-05 | Stack coverage acknowledgment | Documentation | ✅ |
 
 **Note on T1-E-02 placement**: Provider agnosticism is moved from v1.3.0 to v1.1.0. Anthropic vendor lock-in is an immediate evaluation objection from any engineering team with data residency requirements. It should not remain a v1.3.0 problem for a framework positioning itself at governed delivery in constrained environments.
 
