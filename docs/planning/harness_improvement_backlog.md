@@ -319,4 +319,14 @@ Add "curse of instructions" principle to skill quality bar and T1-B-06 audit cri
 1. Add to `docs/customisation.md` under skill authoring: "Prefer 3-5 high-consequence rules over 10-20 comprehensive ones. Agents follow the first few rules and overlook the rest (curse of instructions — Osmani, 2026). Every rule you add dilutes the ones above it."
 2. Add to `docs/aisdlc-bootloader.md` skill quality bar table: new row — Rule count | ≤5 high-consequence rules per skill | Why: curse of instructions.
 3. Update T1-B-06 audit criteria to check rule count in addition to line count. A skill with >7 distinct MUST/NEVER/ALWAYS rules is flagged AMBER regardless of line count. Add this check to `verify_install.py` skill metadata validation.
-4. Update `/create-skill` workflow (T1-B-05) template to enforce the rule-count limit at authoring time, not just at audit time.
+4. Update `/create-skill` workflow (T1-B-05) template to enforce the rule-count limit at authoring time, not just at audit time.
+
+
+## HIB-023 — Commit msg not read — BUG-09
+
+**Date**: 2026-05-23
+**Source**: Commit msg
+**Pillar**: T1-G-01 fix
+**Status**: 📅 Backlog — BUG-09
+
+Gate at commit-msg stage cannot read commit message. Reports "no commit message provided" even when message exists. Gate needs to read from `sys.argv[1]` (the COMMIT_EDITMSG path git passes to commit-msg hooks) not from a hardcoded path.
