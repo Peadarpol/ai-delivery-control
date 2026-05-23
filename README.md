@@ -3,8 +3,10 @@
 **You govern. Agents deliver.**
 
 Most AI coding frameworks optimise for autonomy — agents run until criteria pass.
-AI Delivery Control optimises for accountability — humans remain in the loop at
-every consequential decision point.
+AI Delivery Control optimises for accountability — keeping the human architect in the loop at
+every consequential decision point. 
+
+AI Delivery Control is a **lightweight, local-first governance harness**. It operates entirely on your development machine, without server infrastructure. It is designed to establish rigorous guardrails for solo developers and small teams. Formal compliance control mappings (such as the SOCI Act, ISM, or PSPF) are planned for **v3.0.0** and are not a current capability.
 
 Three checkpoints. Not zero.
 
@@ -79,6 +81,14 @@ installer detects a matching stack:
 
 Skills installed by the framework are never overwritten on re-run — developer customisations are preserved.
 
+### Stack Coverage & Manual Extension
+
+Currently, the framework ships with out-of-the-box templates and invariant checks optimized for:
+- **Python (FastAPI)**
+- **Node.js (Express)**
+
+Projects utilizing other stacks (e.g., Go, Rust, Java, or Ruby) are fully supported via core universal skills, but require manual customization of architecture boundaries in `.agent/config.yaml` and stack-specific guidelines under `.agent/skills/`.
+
 ---
 
 ### Tool supplements
@@ -113,23 +123,74 @@ validation suite. Under 10 minutes from zero to working harness.
 
 ## What it is
 
-A governance harness for AI-assisted software delivery. Works with Claude Code, Gemini CLI,
-Cursor, Windsurf, or any LLM-based coding agent. Covers the full delivery lifecycle:
-specification → development → testing → deployment.
+A lightweight governance harness for AI-assisted software delivery. Works with Claude Code, Gemini CLI, Cursor, Windsurf, or any LLM-based coding agent. It covers the full delivery lifecycle: specification → development → testing → deployment.
+
+## What it prevents
+
+By integrating structured guardrails directly at the boundaries of your development workflow, the harness mitigates four critical failure modes of AI-assisted delivery:
+
+1. **Accidental commits to the wrong repository**
+   * *The Problem*: Working across multiple project directories introduces the risk of staging or committing framework code to a client repo (or vice versa).
+   * *Framework Capability*: **P-14 Repository Guard** dynamically verifies the active folder identity at startup and blocks git operations if it detects a mismatch.
+
+2. **Ungoverned or "hallucinated" correctness**
+   * *The Problem*: AI agents tend to resolve failing tests by rewriting test assertions rather than fixing underlying code.
+   * *Framework Capability*: The **Pre-Commit AI Review Gate** is structurally adversarial: a fresh, read-only reviewer agent (independent from the writer session) evaluates the diff and enforces custom project rules.
+
+3. **Context window bloat and information loss**
+   * *The Problem*: Multi-hour sessions accumulate tool logs and terminal output, causing the model's context window to overflow and drop critical architectural decisions.
+   * *Framework Capability*: **Structured Session Lifecycle** maintains active context hot/warm memory tiering and records all key decisions in a durable markdown ledger.
+
+4. **Stale or degraded architectural rules**
+   * *The Problem*: Custom development rules written at project start become stale as the codebase evolves, leading to rule-compliance drift.
+   * *Framework Capability*: The **Dream Phase** processes your session event logs, detects recurring failure patterns, and automatically proposes updated skills.
+
+---
+
+## Hard Enforcement vs Convention
+
+The pre-commit AI review gate, repository identity guard, and architecture boundary checks are the only fully hard-enforced mechanisms. Every other governance behaviour depends on agent compliance with `AGENTS.md`, `governance.md`, and the workflow protocols.
+
+This is a deliberate design choice. Hard enforcement of every rule would make the framework unusable. The gate is hard because it operates at the commit boundary — the moment where ungoverned code becomes permanent. Everything before the commit is convention reinforced by structured context.
+
+Convention-based governance degrades under pressure. The gate does not.
+*Design principle: hard enforcement at the commit boundary, convention everywhere else.*
+
+| Mechanism | Type | Enforcement |
+|-----------|------|-------------|
+| **Pre-commit AI review gate** | Hard | Blocks commit on `FAIL` verdict |
+| **Architecture boundary checks** | Hard | Blocks commit on layer violations |
+| **Repository identity guard (P-14)** | Hard | Blocks git operations in wrong repo |
+| **Session startup protocol** | Convention | Agent compliance via `AGENTS.md` |
+| **Workflow phases** | Convention | Agent compliance via workflow file |
+| **Prohibition table (P-01 to P-17)** | Convention | Agent compliance via `AGENTS.md` |
+| **ORR checklist before main** | Convention | Required by P-01 (never merge to main) |
+
+---
+
+## What is explicitly Out of Scope
+
+To maintain a lightweight, highly-focused codebase, the following areas are deliberately excluded from the framework:
+
+- **Production Monitoring and Alerting**: Real-time server observability, metrics dashboards, and paging systems are out of scope. The framework’s governance boundary ends at the commit and the Operational Readiness Review (ORR) sign-off.
+- **Incident Response**: The framework provides an automated incident-to-backlog pipeline (`incident_to_backlog.py`) to feed production learnings back into future delivery, but does not participate in active production incident resolution.
+- **Infrastructure Provisioning**: Cloud configuration, Terraform scripting, and cloud environment setups are completely out of scope. The framework governs the code structure that gets deployed, not the infrastructure it runs on.
+- **Model Selection and Tuning**: The framework uses LLMs as utility reviewers. It remains agnostic to specific model selection, providing only the tiering configuration (e.g., local tasks vs. cloud reviews).
+- **Compliance Control Mappings**: While highly relevant to regulated industries, formal mappings to compliance standards (such as the SOCI Act, ISM, or PSPF) are planned for **v3.0.0** and are not currently active.
+
+---
 
 ## What it is not
 
-- Not a framework for building AI agents
-- Not an autonomous delivery system
-- Not a replacement for human judgement
+- **Not** a framework for building custom autonomous AI agents.
+- **Not** a fully autonomous software delivery agent.
+- **Not** a replacement for human engineering oversight.
 
 ---
 
 ## Reference Implementation
 
-Built and validated while engineering a multi-tenant SaaS business management platform. The harness governs its own development: all
-framework changes are developed on feature branches, gated by the same pre-commit AI review,
-and merged via PR.
+Built and validated while engineering a multi-tenant SaaS business management platform. The harness governs its own development: all framework changes are developed on feature branches, gated by the same pre-commit AI review, and merged via PR.
 
 ---
 
@@ -143,8 +204,8 @@ and merged via PR.
 
 ## Status
 
-| Tier | Scope | Status |
-|------|-------|--------|
-| **Tier 1** | Solo developer, multiple projects. No server infrastructure. Works offline. | Production-ready |
-| **Tier 2** | Small team, multi-machine. Shared session state and skill registry. | In development |
-| **Tier 3** | Enterprise / regulated. Full database backend, RBAC, compliance reporting. | Planned |
+| Tier | Scope | Status | Target Timeline |
+|------|-------|--------|-----------------|
+| **Tier 1** | Solo developer, multiple projects. No server. Works offline. | **Production-ready** | Current |
+| **Tier 2** | Small team, multi-machine. Shared session state. | **In development** | Q3 2026 |
+| **Tier 3** | Enterprise / regulated. Full database, compliance. | **Planned** | Q4 2026 |

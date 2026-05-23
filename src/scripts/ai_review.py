@@ -289,9 +289,9 @@ CONFIG_FILE = PROJECT_ROOT / ".ai-review-config.json"
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are a skeptical senior engineer performing an adversarial pre-commit review.
-Your job is to find problems. Assume the implementation is wrong until proven otherwise.
-Be specific about failures — vague praise is not useful.
+SYSTEM_PROMPT = """You are a senior engineer performing an independent pre-commit review.
+Your role is to identify genuine problems — bugs, security issues, and architectural
+violations — with specificity and proportionality.
 
 You will receive:
 1. A git diff of staged changes
@@ -311,10 +311,21 @@ Your review must cover:
   security bug.
 - MASS ASSIGNMENT: Verify that new Pydantic input schemas set model_config = {"extra": "forbid"}.
 
-Severity levels:
-- HIGH: Bugs, security issues, or intent not achieved — should block commit
-- MEDIUM: Quality issues, missing tests for critical paths — developer should be aware
-- LOW: Style, naming, minor improvements — informational only
+Severity calibration (critical — follow precisely):
+- HIGH: Actual bugs that would cause runtime failures, security vulnerabilities (injection,
+  exposed secrets, auth bypass), data corruption or loss, broken contracts/interfaces, or
+  stated intent not achieved. Only HIGH issues block a commit.
+- MEDIUM: Quality concerns a senior engineer would flag in code review — missing error
+  handling for likely error paths, untested critical paths, potential performance regressions.
+  Informational; commit proceeds with warnings.
+- LOW: Style, naming, minor refactoring suggestions. Informational only.
+
+Proportionality rules:
+- A correct implementation with only stylistic observations is PASS, not WARN.
+- If the diff achieves its stated intent without bugs or security issues, PASS is the
+  correct verdict. Do not manufacture issues to justify a FAIL or WARN.
+- FAIL requires at least one HIGH finding with a specific file:line citation.
+  Vague or speculative concerns must be downgraded to MEDIUM.
 
 Concern Labels:
 - BRANCH_ISOLATION
@@ -326,7 +337,7 @@ Concern Labels:
 - PERFORMANCE_REGRESSION
 
 Verdict rules:
-- FAIL if any HIGH severity issues exist
+- FAIL if any HIGH severity issues exist (must have specific file:line citation)
 - WARN if MEDIUM issues exist but no HIGH
 - PASS if only LOW issues or none
 
@@ -653,7 +664,18 @@ def _select_context_sections(diff: str, context_text: str) -> str:
 
 
 def get_staged_diff() -> str:
-    """Get the staged diff using git."""
+    """Get the staged diff, with amend-aware fallback for commit-msg stage.
+
+    BUG-03: At commit-msg stage during ``git commit --amend``, ``--staged`` is
+    empty because nothing new was staged.  We detect the amend via ORIG_HEAD
+    and fall back to the commit's actual diff (HEAD~1..HEAD).
+
+    Safety guards (SE-01, SE-02 from critical assessment):
+      - ORIG_HEAD must exist (confirms amend, not a normal empty commit)
+      - rev-list count must be >= 2 (HEAD~1 doesn't exist on first commit)
+      - Single-commit amend falls back to diff against the empty tree
+      - Entire fallback wrapped in try/except (diff retrieval must never crash)
+    """
     result = subprocess.run(
         ["git", "diff", "--staged", "--unified=3"],
         capture_output=True,
@@ -662,7 +684,72 @@ def get_staged_diff() -> str:
         errors="replace",
         cwd=str(PROJECT_ROOT),
     )
-    return result.stdout or ""
+    diff = result.stdout or ""
+
+    # BUG-03: At commit-msg stage during amend, --staged is empty because
+    # nothing new was staged.  Fall back to the commit's actual diff.
+    if not diff.strip():
+        hook_stage = os.environ.get("PRE_COMMIT_HOOK_STAGE", "")
+        if hook_stage == "commit-msg":
+            try:
+                # SE-02: Only trigger on actual amend — ORIG_HEAD exists during
+                # amend/rebase but not during normal commits.
+                orig_head_check = subprocess.run(
+                    ["git", "rev-parse", "--verify", "ORIG_HEAD"],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(PROJECT_ROOT),
+                )
+                if orig_head_check.returncode != 0:
+                    # Not an amend — genuinely empty staged diff.  Skip review.
+                    return diff
+
+                # SE-01: Guard against single-commit repos where HEAD~1
+                # doesn't exist (would cause a fatal git error).
+                count_result = subprocess.run(
+                    ["git", "rev-list", "--count", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(PROJECT_ROOT),
+                )
+                commit_count = int(count_result.stdout.strip() or "0")
+
+                if commit_count < 2:
+                    # First commit being amended — diff against the empty tree.
+                    # 4b825dc... is git's well-known empty tree hash.
+                    amend_result = subprocess.run(
+                        [
+                            "git", "diff",
+                            "4b825dc642cb6eb9a060e54bf899d15f",
+                            "HEAD", "--unified=3",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        cwd=str(PROJECT_ROOT),
+                    )
+                else:
+                    amend_result = subprocess.run(
+                        ["git", "diff", "HEAD~1", "HEAD", "--unified=3"],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        cwd=str(PROJECT_ROOT),
+                    )
+
+                if amend_result.stdout.strip():
+                    diff = amend_result.stdout
+                    print("[REVIEW] Amend detected: reviewing commit diff")
+            except Exception as e:
+                # Diff retrieval must never crash the gate.
+                print(
+                    f"[REVIEW] Amend fallback failed ({e}); "
+                    "proceeding with staged diff"
+                )
+
+    return diff
 
 
 def get_commit_message() -> str:
@@ -803,44 +890,19 @@ def consensus_filter(reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _call_api_with_retry(
-    req: urllib.request.Request, max_retries: int = 3, base_delay: float = 2.0
-) -> bytes:
-    """Execute an API request with exponential-backoff retry on transient errors."""
-    last_error: Exception | None = None
-    for attempt in range(max_retries):
-        try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
-                return bytes(resp.read())
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                delay = base_delay * (2**attempt) + (random.random() * 0.5)
-                time.sleep(delay)
-    raise last_error
-
-
-def call_anthropic(
+def _build_user_message(
     diff: str,
     commit_msg: str,
     context: str,
     repo_map: str = "",
     adr_context: str = "",
     co_change_context: str = "",
-) -> Dict[str, Any]:
-    """Call the Anthropic API with the staged diff and commit message."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
+) -> str:
+    """Assemble the user message from diff, commit message, and context layers.
 
-    # Refuse to review a truncated diff — partial context causes hallucination.
-    # This guard should already have fired in _run_review; this is a safety net.
-    if len(diff) > MAX_DIFF_CHARS:
-        raise RuntimeError(
-            f"Diff too large ({len(diff):,} chars > {MAX_DIFF_CHARS:,}); skip guard should have caught this."
-        )
-
-    # Build user message
+    ARCH-01: Message assembly is the orchestrator's responsibility.  The provider
+    receives the pre-assembled string and handles transport only.
+    """
     parts = []
     parts.append(
         f"## Commit Message\n{commit_msg if commit_msg.strip() else '(no commit message provided)'}"
@@ -854,43 +916,7 @@ def call_anthropic(
     if co_change_context:
         parts.append(f"## Co-change Blast Radius Alerts\n{co_change_context}")
     parts.append(f"## Staged Diff\n```diff\n{diff}\n```")
-
-    user_content = "\n\n".join(parts)
-
-    # Build the system prompt with any additional context
-    system = SYSTEM_PROMPT
-
-    payload = json.dumps(
-        {
-            "model": MODEL,
-            "max_tokens": 1024,
-            "system": system,
-            "messages": [{"role": "user", "content": user_content}],
-        }
-    ).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
-
-    body = json.loads(_call_api_with_retry(req).decode("utf-8"))
-
-    raw = body["content"][0]["text"].strip()
-
-    # Strip markdown fences if model wraps in them despite instructions
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-
-    from typing import cast
-
-    return cast(Dict[str, Any], json.loads(raw))
+    return "\n\n".join(parts)
 
 
 def render_review(review: Dict[str, Any], churn_info: str) -> None:
@@ -941,12 +967,16 @@ def _persist_verdict(
     verdict_obj: ReviewVerdict | None = None,
     review: Dict[str, Any] | None = None,
     fail_open_reason: str | None = None,
+    provider_name: str | None = None,
 ) -> None:
     """Append the review verdict to a local JSONL log for auditability.
 
     Accepts a typed ``ReviewVerdict`` (preferred) or a legacy ``dict``.
     The ``fail_open_reason`` parameter is kept for crash-path callers in
     ``main()`` that have no verdict object to pass.
+
+    SEC-01: ``provider_name`` is logged alongside the model name so
+    provider drift is detectable in audit trails.
     """
     try:
         log_path = PROJECT_ROOT / ".ai-review-log.jsonl"
@@ -959,6 +989,8 @@ def _persist_verdict(
             base["concerns"] = list(
                 {i.get("concern", "GENERAL") for i in verdict_obj.issues}
             )
+            if provider_name:
+                base["provider"] = provider_name
             record = base
         else:
             # Legacy / crash-path: review may be an empty dict.
@@ -1012,10 +1044,13 @@ def _run_review() -> int:
         print("\u26a1 AI review skipped (.skip-ai-review file found)")
         return 0
 
-    # Check for API key at runtime (not module-level)
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("\u26a0\ufe0f  AI review skipped: ANTHROPIC_API_KEY not set.")
+    # T1-E-02: Resolve provider via env var → config → default (anthropic)
+    try:
+        from providers import get_provider
+
+        provider = get_provider()
+    except RuntimeError as e:
+        print(f"\u26a0\ufe0f  AI review skipped: {e}")
         return 0
 
     # Get the staged diff
@@ -1145,7 +1180,8 @@ def _run_review() -> int:
 
     passes = config.get("passes", DEFAULT_PASSES)
     print(
-        f"\n🔍 Running AI adversarial review ({MODEL}, {passes} pass{'es' if passes > 1 else ''})...",
+        f"\n🔍 Running AI review ({provider.name}/{provider.model}, "
+        f"{passes} pass{'es' if passes > 1 else ''})...",
         flush=True,
     )
     start_time = time.time()
@@ -1162,7 +1198,8 @@ def _run_review() -> int:
             if SHUFFLE_HUNKS:
                 current_diff = shuffle_diff_hunks(diff)
 
-            review_dict = call_anthropic(
+            # ARCH-01: Message assembly here (orchestrator), transport in provider
+            user_content = _build_user_message(
                 current_diff,
                 commit_msg,
                 context,
@@ -1170,6 +1207,7 @@ def _run_review() -> int:
                 adr_context=adr_context,
                 co_change_context=co_change_context,
             )
+            review_dict = provider.review(SYSTEM_PROMPT, user_content)
             results.append(review_dict)
 
             if passes > 1:
@@ -1231,8 +1269,8 @@ def _run_review() -> int:
         typed_verdict = ReviewVerdict(
             verdict=raw_verdict_str,
             blocking_concern=raw_review.get("blocking_concern"),
-            model=MODEL,
-            verdict_tier="cloud",
+            model=provider.model,
+            verdict_tier="local" if provider.name == "ollama" else "cloud",
             context_snapshot=snapshot,
             intent_alignment=raw_review.get("intent_alignment"),
             summary=raw_review.get("summary"),
@@ -1249,7 +1287,7 @@ def _run_review() -> int:
     # ─────────────────────────────────────────────────────────────────────────
 
     # Persist the typed verdict and render for the developer.
-    _persist_verdict(verdict_obj=typed_verdict)
+    _persist_verdict(verdict_obj=typed_verdict, provider_name=provider.name)
     render_review(raw_review, churn_info)
     print(f"  \u23f1\ufe0f  Review completed in {elapsed:.1f}s\n")
 

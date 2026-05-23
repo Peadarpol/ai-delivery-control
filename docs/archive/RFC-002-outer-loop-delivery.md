@@ -1,3 +1,7 @@
+> **Archived**: 2026-05-22. Unique content extracted to:
+> - `docs/design/workflow-engine-design.md` (items H.1, H.2, H.4, H.7)
+> - `FRAMEWORK_BACKLOG.md` cross-references (items H.3, H.9.2, H.9.5, K.1)
+
 # RFC-002 — Scaffold V4: Outer Loop Delivery Orchestration
 
 **Branch:** `feature/scaffold-v4-outer-loop`

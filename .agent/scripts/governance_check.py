@@ -40,7 +40,7 @@ def write_audit(check, severity, detail):
     record = {
         "schema_version": "1.0",
         "event_type": "governance_observation",
-        "timestamp_utc": datetime.datetime.utcnow().isoformat() + "Z",
+        "timestamp_utc": datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat() + "Z",
         "session_id": get_session_id(),
         "commit_sha": sha,
         "agent": "governance_check",
