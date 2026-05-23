@@ -59,7 +59,7 @@ def log_action(
         record = {
             "schema_version": "1.0",
             "event_type": "action_trace",
-            "timestamp_utc": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp_utc": datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat() + "Z",
             "session_id": _get_session_id(),
             "commit_sha": None,
             "agent": agent_id or os.environ.get("AGENT_ID", "audit_logger"),

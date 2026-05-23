@@ -292,13 +292,17 @@ class Validator:
         ai_review_file = scripts_dir / "ai_review.py"
         universal_context_file = scripts_dir / "review_context_universal.md"
         project_context_file = scripts_dir / "review_context_project.md"
+        legacy_context_file = scripts_dir / "review_context.md"
         
         if not ai_review_file.exists() or not ai_review_file.is_file():
             return False, f"Missing ai_review.py in source scripts directory: {ai_review_file.relative_to(self.project_path)}"
         if not universal_context_file.exists() or not universal_context_file.is_file():
             return False, f"Missing review_context_universal.md in source scripts directory: {universal_context_file.relative_to(self.project_path)}"
         
-        if not project_context_file.exists() or not project_context_file.is_file():
+        project_exists = project_context_file.exists() and project_context_file.is_file()
+        legacy_exists = legacy_context_file.exists() and legacy_context_file.is_file()
+        
+        if not project_exists and not legacy_exists:
             self.warnings += 1
             print(f"{SYMBOL_WARN} Warning: Project-specific review context is absent at {project_context_file.relative_to(self.project_path)}. AI reviews will proceed using only universal guidelines.")
             

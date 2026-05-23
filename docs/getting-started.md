@@ -15,6 +15,10 @@ Install the AI Delivery Control harness into any project in under 10 minutes.
 
 The harness has no Python dependencies beyond the standard library.
 
+### Stack Coverage & Manual Extension
+
+The framework ships with out-of-the-box templates and invariant checks optimized for **Python (FastAPI)** and **Node.js (Express)**. Projects utilizing other stacks (e.g., Go, Rust, Java, or Ruby) are fully supported via the core universal skills, but require manual customization of architecture boundaries in `.agent/config.yaml` and stack-specific guidelines under `.agent/skills/`.
+
 ---
 
 ## 1. Clone the harness
@@ -129,6 +133,39 @@ review is skipped and logged as `FAIL_OPEN` in `.ai-review-log.jsonl`.
 ```bash
 SKIP_AI_REVIEW=1 git commit -m "ci: update pipeline config"
 ```
+
+### Provider Configuration
+
+By default, the AI review gate uses **Anthropic Claude** (requires `ANTHROPIC_API_KEY`).
+You can switch to other LLM providers:
+
+| Variable | Default | Description |
+|---|---|---|
+| `AI_REVIEW_PROVIDER` | `anthropic` | Provider: `anthropic`, `openai`, or `ollama` |
+| `AI_REVIEW_MODEL` | `claude-sonnet-4-20250514` | Model override (provider-specific) |
+| `OPENAI_API_KEY` | — | Required when provider is `openai` |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Custom endpoint (Azure OpenAI, Groq, Together) |
+
+**Local operation with Ollama** (air-gapped environments):
+
+```bash
+# 1. Install Ollama and pull a model
+ollama pull llama3.1:8b
+
+# 2. Set the provider
+export AI_REVIEW_PROVIDER=ollama
+
+# 3. Verdicts are logged with verdict_tier: local
+```
+
+Provider is also configurable via `.agent/config.yaml`:
+
+```yaml
+ai_review:
+  provider: anthropic  # anthropic | openai | ollama
+```
+
+Environment variables take precedence over config file settings.
 
 ---
 
