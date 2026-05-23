@@ -219,3 +219,137 @@ class TestBuildUserMessage:
     def test_empty_commit_message(self, ai_review):
         result = ai_review._build_user_message("diff", "   ", "")
         assert "(no commit message provided)" in result
+
+
+# ── BUG-04 & BUG-05 fixes (routing, persistence) ──────────────────────────────
+
+
+class TestBug04And05Fixes:
+    """Tests for BUG-04 and BUG-05 fixes in ai_review.py."""
+
+    @pytest.fixture(autouse=True)
+    def setup_paths(self):
+        """Ensure all required script paths are in sys.path so imports succeed."""
+        import sys
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        
+        paths = [
+            str(root / "src" / "scripts"),
+            str(root / ".agent" / "scripts"),
+            str(root / ".agent" / "skills" / "universal" / "senior-architect" / "scripts")
+        ]
+        
+        added = []
+        for p in paths:
+            if p not in sys.path:
+                sys.path.insert(0, p)
+                added.append(p)
+                
+        yield
+        
+        # Clean up sys.path after tests run to keep state clean
+        for p in added:
+            if p in sys.path:
+                sys.path.remove(p)
+
+    def test_pass_fast_verdict_is_logged(self, ai_review):
+        """Pre-flight shortcut (PASS_FAST) verdict must be logged before returning early."""
+        with patch("ai_review.get_staged_diff", return_value="+# Only comment changes\n"), \
+             patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
+                 requires_review=False, direct_pass_allowed=True, planner_note="Whitespace or comment-only"
+             )), \
+             patch("ai_review._persist_verdict") as mock_persist:
+            
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+            
+            mock_persist.assert_called_once()
+            called_verdict = mock_persist.call_args[1].get("verdict_obj")
+            assert called_verdict is not None
+            assert called_verdict.verdict == "PASS_FAST"
+
+    def test_pass_verdict_is_logged(self, ai_review):
+        """Full review PASS verdict must be logged before exit."""
+        mock_provider = MagicMock()
+        mock_provider.name = "mock-provider"
+        mock_provider.model = "mock-model"
+        mock_provider.review.return_value = {
+            "verdict": "PASS",
+            "intent_alignment": "Intent aligned.",
+            "issues": [],
+            "summary": "All code is excellent."
+        }
+        
+        with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
+                 requires_review=True, direct_pass_allowed=False, planner_note=""
+             )), \
+             patch("ai_review.load_review_context", return_value=""), \
+             patch("repo_map.generate_repo_map", return_value=""), \
+             patch("repo_map.get_pagerank_scores", return_value={}), \
+             patch("ai_review.get_adr_context", return_value=("", [], [])), \
+             patch("co_change_check.run_co_change_estimator", return_value=[]), \
+             patch("providers.get_provider", return_value=mock_provider), \
+             patch("ai_review._persist_verdict") as mock_persist, \
+             patch("ai_review.render_review"):
+            
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+            
+            mock_persist.assert_called_once()
+            called_verdict = mock_persist.call_args[1].get("verdict_obj")
+            assert called_verdict is not None
+            assert called_verdict.verdict == "PASS"
+            assert mock_persist.call_args[1].get("provider_name") == "mock-provider"
+
+    def test_adr_domain_maps_to_capability(self, ai_review):
+        """ADR domains must map to canonical capabilities using the UNIVERSAL_ADR_DOMAIN_TO_CAPABILITY dict."""
+        test_cases = [
+            ("branch_isolation", "BRANCH_ISOLATION"),
+            ("remove_uow_autocommit", "TRANSACTIONAL_INTEGRITY"),
+            ("clean_architecture", "CLEAN_ARCH"),
+            ("authentication", "RBAC"),
+            ("schema_hardening", "MASS_ASSIGNMENT"),
+        ]
+        for domain, expected_capability in test_cases:
+            with patch("architecture_checks.extract_adr_annotations", return_value=[domain]), \
+                 patch("pathlib.Path.exists", return_value=True):
+                decision = ai_review.build_route_decision(["src/file.py"], "", {})
+                assert expected_capability in decision.selected_tools
+
+    def test_adr_domain_case_normalisation(self, ai_review):
+        """ADR domains with mixed/upper case must be normalized to lowercase for lookup."""
+        mixed_case_domains = ["Branch_Isolation", "REMOVE_UOW_AUTOCOMMIT", "Clean_Architecture"]
+        expected_capabilities = ["BRANCH_ISOLATION", "TRANSACTIONAL_INTEGRITY", "CLEAN_ARCH"]
+        
+        for domain, expected_capability in zip(mixed_case_domains, expected_capabilities):
+            with patch("architecture_checks.extract_adr_annotations", return_value=[domain]), \
+                 patch("pathlib.Path.exists", return_value=True):
+                decision = ai_review.build_route_decision(["src/file.py"], "", {})
+                assert expected_capability in decision.selected_tools
+
+    def test_adr_domain_project_config_mapping(self, ai_review, tmp_path):
+        """Project-specific ADR mappings from .agent/config.yaml must override/merge with universal ones."""
+        config_yaml_content = """
+architecture_checks:
+  adr_capability_mappings:
+    saas_architecture: CLEAN_ARCH
+    authentication: CLEAN_ARCH  # Override universal authentication (RBAC) to CLEAN_ARCH
+"""
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        config_file = agent_dir / "config.yaml"
+        config_file.write_text(config_yaml_content, encoding="utf-8")
+        
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("architecture_checks.extract_adr_annotations", return_value=["saas_architecture", "authentication"]), \
+             patch("pathlib.Path.exists", return_value=True):
+            
+            decision = ai_review.build_route_decision(["src/file.py"], "", {})
+            # saas_architecture should map to CLEAN_ARCH (project config mapping)
+            assert "CLEAN_ARCH" in decision.selected_tools
+            # authentication should map to CLEAN_ARCH (project config mapping override of universal RBAC)
+            assert "CLEAN_ARCH" in decision.selected_tools
+            # RBAC should NOT be in selected_tools because authentication's mapping was overridden
+            assert "RBAC" not in decision.selected_tools

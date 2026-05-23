@@ -101,6 +101,73 @@ class RouteDecision(BaseModel):
     policy_notes: List[str] = Field(default_factory=list)
 
 
+# ── ADR Domain Mapping (BUG-05) ───────────────────────────────────────────────
+
+UNIVERSAL_ADR_DOMAIN_TO_CAPABILITY = {
+    "branch_isolation": "BRANCH_ISOLATION",
+    "remove_uow_autocommit": "TRANSACTIONAL_INTEGRITY",
+    "clean_architecture": "CLEAN_ARCH",
+    "authentication": "RBAC",
+    "schema_hardening": "MASS_ASSIGNMENT",
+    "uow_pattern": "TRANSACTIONAL_INTEGRITY",
+}
+
+
+def _load_adr_capability_mappings() -> Dict[str, str]:
+    """Read adr_capability_mappings from .agent/config.yaml.
+
+    Uses simple indentation and prefix matching to avoid a YAML dependency.
+    """
+    mappings = {}
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return mappings
+
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        in_arch_checks = False
+        in_mappings = False
+        
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+                
+            # Detect section transitions
+            if stripped == "architecture_checks:":
+                in_arch_checks = True
+                in_mappings = False
+                continue
+                
+            if in_arch_checks:
+                indent = len(line) - len(line.lstrip())
+                
+                if stripped == "adr_capability_mappings:":
+                    in_mappings = True
+                    continue
+                    
+                if in_mappings:
+                    if ":" in stripped:
+                        key_part, val_part = stripped.split(":", 1)
+                        # Remove comment if any (e.g. key: value # comment)
+                        val_part = val_part.split("#", 1)[0]
+                        key = key_part.strip().strip("\"'")
+                        val = val_part.strip().strip("\"'")
+                        if key and val:
+                            mappings[key] = val
+                    else:
+                        if indent == 0:
+                            in_arch_checks = False
+                            in_mappings = False
+                else:
+                    if indent == 0:
+                        in_arch_checks = False
+    except Exception:
+        pass
+        
+    return mappings
+
+
 def build_route_decision(
     changed_files: List[str], diff_text: str, pagerank_scores: Dict[str, float]
 ) -> RouteDecision:
@@ -173,6 +240,27 @@ def build_route_decision(
         "MIGRATIONS": is_mig,
         "CLEAN_ARCH": is_ca,
     }
+
+    # Enable capabilities based on ADR domains (BUG-05 - revised two-layer design)
+    # Layer 1: Universal seeds
+    adr_mappings = dict(UNIVERSAL_ADR_DOMAIN_TO_CAPABILITY)
+    
+    # Layer 2: Merge project-specific config mappings (wins on conflicts)
+    try:
+        project_mappings = _load_adr_capability_mappings()
+        adr_mappings.update(project_mappings)
+    except Exception:
+        pass
+        
+    # Normalize keys/values and apply
+    normalized_mappings = {k.strip().lower(): v.strip().upper() for k, v in adr_mappings.items()}
+    
+    for domain in active_adr_domains:
+        norm = domain.strip().lower()
+        if norm in normalized_mappings:
+            cap_name = normalized_mappings[norm]
+            if cap_name in capabilities:
+                capabilities[cap_name] = True
 
     for cap_name, active in capabilities.items():
         if active:
