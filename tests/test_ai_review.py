@@ -353,3 +353,184 @@ architecture_checks:
             assert "CLEAN_ARCH" in decision.selected_tools
             # RBAC should NOT be in selected_tools because authentication's mapping was overridden
             assert "RBAC" not in decision.selected_tools
+
+
+# ── T1-L-08: High-risk commit classification ──────────────────────────────────
+
+
+class TestHighRiskCommitClassification:
+    """Tests for T1-L-08 — High-risk commit classification and fail-closed behavior."""
+
+    @pytest.fixture(autouse=True)
+    def setup_paths(self):
+        """Ensure all required script paths are in sys.path so imports succeed."""
+        import sys
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        
+        paths = [
+            str(root / "src" / "scripts"),
+            str(root / ".agent" / "scripts"),
+            str(root / ".agent" / "skills" / "universal" / "senior-architect" / "scripts")
+        ]
+        
+        added = []
+        for p in paths:
+            if p not in sys.path:
+                sys.path.insert(0, p)
+                added.append(p)
+                
+        yield
+        
+        # Clean up sys.path after tests run to keep state clean
+        for p in added:
+            if p in sys.path:
+                sys.path.remove(p)
+
+    def test_high_risk_path_detection(self, ai_review):
+        """Verify migrations matching paths classifier returns True."""
+        is_hr, matches = ai_review.classify_commit_risk(["src/migrations/0001_initial.py"], [])
+        assert is_hr is True
+        assert any("path:" in m and "migrations" in m for m in matches)
+
+    def test_high_risk_filename_detection(self, ai_review):
+        """Verify repo files matching filenames returns True."""
+        is_hr, matches = ai_review.classify_commit_risk(["src/repositories/unit_of_work.py"], [])
+        assert is_hr is True
+        assert any("filename:unit_of_work.py" in m for m in matches)
+
+    def test_high_risk_adr_domain(self, ai_review):
+        """Verify active ADR domain in adr_domains returns True."""
+        is_hr, matches = ai_review.classify_commit_risk(["src/other.py"], ["branch_isolation"])
+        assert is_hr is True
+        assert any("adr_domain:branch_isolation" in m for m in matches)
+
+    def test_low_risk_docs_pass(self, ai_review):
+        """Verify changes touching only documentation return False."""
+        is_hr, matches = ai_review.classify_commit_risk(["README.md", "docs/index.md"], ["some_low_risk_domain"])
+        assert is_hr is False
+        assert len(matches) == 0
+
+    def test_fail_closed_on_high_risk_no_api(self, ai_review, tmp_path):
+        """API down + high risk → exit 1 and event logged."""
+        commands = {
+            "git diff --staged --unified=3": "diff --git a/src/migrations/0001_initial.py b/src/migrations/0001_initial.py\n+code",
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+            "git log -n 1 --pretty=format:%B": "feat: schema change",
+        }
+
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            # Handle diff cached name-only
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("ai_review.get_staged_diff", return_value="diff --git a/src/migrations/0001_initial.py b/src/migrations/0001_initial.py\n+code"), \
+             patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
+                 requires_review=True, direct_pass_allowed=False, planner_note=""
+             )), \
+             patch("ai_review.load_review_context", return_value=""), \
+             patch("repo_map.generate_repo_map", return_value=""), \
+             patch("repo_map.get_pagerank_scores", return_value={}), \
+             patch("ai_review.get_adr_context", return_value=("", [], [])), \
+             patch("co_change_check.run_co_change_estimator", return_value=[]), \
+             patch("providers.get_provider", side_effect=RuntimeError("Provider offline")), \
+             patch("ai_review.subprocess.run", side_effect=mock_run):
+
+            with pytest.raises(SystemExit) as excinfo:
+                ai_review._run_review()
+
+            assert excinfo.value.code == 1
+
+            # Verify logged event
+            log_path = tmp_path / ".agent" / "state" / "harness_events.jsonl"
+            assert log_path.exists()
+            
+            lines = log_path.read_text(encoding="utf-8").splitlines()
+            assert len(lines) > 0
+            
+            event = json.loads(lines[-1])
+            assert event["event_type"] == "high_risk_gate_closed"
+            assert event["severity"] == "HIGH"
+            assert "Provider offline" in event["payload"]["reason"]
+            assert any("migrations" in m for m in event["payload"]["high_risk_matches"])
+
+    def test_fail_open_on_low_risk_no_api(self, ai_review, tmp_path):
+        """API down + low risk → exit 0 (fail-open) and no high risk event logged."""
+        commands = {
+            "git diff --staged --unified=3": "diff --git a/README.md b/README.md\n+doc changes",
+            "git diff --cached --name-only": "README.md\n",
+            "git log -n 1 --pretty=format:%B": "docs: update readme",
+        }
+
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("ai_review.get_staged_diff", return_value="diff --git a/README.md b/README.md\n+doc changes"), \
+             patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
+                 requires_review=True, direct_pass_allowed=False, planner_note=""
+             )), \
+             patch("ai_review.load_review_context", return_value=""), \
+             patch("repo_map.generate_repo_map", return_value=""), \
+             patch("repo_map.get_pagerank_scores", return_value={}), \
+             patch("ai_review.get_adr_context", return_value=("", [], [])), \
+             patch("co_change_check.run_co_change_estimator", return_value=[]), \
+             patch("providers.get_provider", side_effect=RuntimeError("Provider offline")), \
+             patch("ai_review.subprocess.run", side_effect=mock_run):
+
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+
+            # Verify no high_risk_gate_closed event logged
+            log_path = tmp_path / ".agent" / "state" / "harness_events.jsonl"
+            if log_path.exists():
+                lines = log_path.read_text(encoding="utf-8").splitlines()
+                for line in lines:
+                    event = json.loads(line)
+                    assert event["event_type"] != "high_risk_gate_closed"
+
+    def test_skip_reason_logged(self, ai_review, tmp_path):
+        """SKIP_AI_REVIEW=1 + SKIP_REASON on high risk commit → logged to harness_events."""
+        commands = {
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+        }
+
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "Emergency deploy"}), \
+             patch("ai_review.subprocess.run", side_effect=mock_run):
+
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+
+            log_path = tmp_path / ".agent" / "state" / "harness_events.jsonl"
+            assert log_path.exists()
+
+            lines = log_path.read_text(encoding="utf-8").splitlines()
+            assert len(lines) > 0
+            event = json.loads(lines[-1])
+            assert event["event_type"] == "high_risk_gate_override"
+            assert event["severity"] == "WARNING"
+            assert event["payload"]["skip_reason"] == "Emergency deploy"
+            assert any("migrations" in m for m in event["payload"]["high_risk_matches"])
+
