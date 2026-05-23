@@ -168,6 +168,193 @@ def _load_adr_capability_mappings() -> Dict[str, str]:
     return mappings
 
 
+# ── High-Risk Commit Classification (T1-L-08) ─────────────────────────────────
+
+HIGH_RISK_PATTERNS = {
+    "paths": [
+        "*/migrations/*",
+        "*/auth/*",
+        "*/rbac/*", 
+        "*/permissions/*",
+        "*/security/*",
+    ],
+    "filenames": [
+        "unit_of_work.py",
+        "base_repository.py",
+        "models.py",
+    ],
+    "adr_domains": [
+        "branch_isolation",
+        "authentication",
+        "schema_hardening",
+    ],
+}
+
+
+def _load_high_risk_patterns() -> Dict[str, List[str]]:
+    """Load high_risk_patterns from .agent/config.yaml.
+
+    Uses simple line parsing to avoid PyYAML dependency.
+    """
+    config_patterns = {"paths": [], "filenames": [], "adr_domains": []}
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return config_patterns
+
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        in_arch_checks = False
+        in_patterns = False
+        current_list = None
+        
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+                
+            # Transition triggers
+            if stripped == "architecture_checks:":
+                in_arch_checks = True
+                in_patterns = False
+                continue
+                
+            if in_arch_checks:
+                indent = len(line) - len(line.lstrip())
+                if indent == 0:
+                    in_arch_checks = False
+                    in_patterns = False
+                    continue
+                    
+                if stripped == "high_risk_patterns:":
+                    in_patterns = True
+                    continue
+                    
+                if in_patterns:
+                    if indent <= 2:  # Exited high_risk_patterns block
+                        if stripped != "high_risk_patterns:":
+                            in_patterns = False
+                            continue
+                            
+                    # Let's detect lists: paths:, filenames:, adr_domains:
+                    if stripped in ("paths:", "filenames:", "adr_domains:"):
+                        current_list = stripped[:-1]  # "paths", "filenames", or "adr_domains"
+                        continue
+                        
+                    # Parse list items like `- "item"` or `- item`
+                    if stripped.startswith("-") and current_list:
+                        item = stripped[1:].strip().strip("\"'")
+                        if item:
+                            config_patterns[current_list].append(item)
+    except Exception:
+        pass
+        
+    return config_patterns
+
+
+def classify_commit_risk(changed_files: List[str], adr_domains: List[str]) -> Tuple[bool, List[str]]:
+    """Classify commit risk based on modified paths, filenames, and active ADR domains.
+
+    Returns:
+        (is_high_risk, matched_patterns)
+    """
+    import fnmatch
+    
+    cfg = _load_high_risk_patterns()
+    
+    paths = list(HIGH_RISK_PATTERNS["paths"]) + cfg.get("paths", [])
+    filenames = list(HIGH_RISK_PATTERNS["filenames"]) + cfg.get("filenames", [])
+    adr_domains_list = list(HIGH_RISK_PATTERNS["adr_domains"]) + cfg.get("adr_domains", [])
+    
+    matched = []
+    
+    # Normalize changed_files to forward slashes for path pattern matching
+    normalized_files = [f.replace("\\", "/") for f in changed_files]
+    
+    for f in normalized_files:
+        # Match paths
+        for pat in paths:
+            if fnmatch.fnmatch(f, pat):
+                matched.append(f"path:{pat} (matches {f})")
+                
+        # Match filenames
+        name = Path(f).name
+        for fn in filenames:
+            if name == fn:
+                matched.append(f"filename:{fn} (matches {f})")
+                
+    # Match ADR domains
+    normalized_adr = [d.strip().lower() for d in adr_domains]
+    for adr in adr_domains_list:
+        norm_adr = adr.strip().lower()
+        if norm_adr in normalized_adr:
+            matched.append(f"adr_domain:{adr}")
+            
+    return len(matched) > 0, matched
+
+
+def log_harness_event(event_dict: Dict[str, Any]) -> None:
+    """Log a harness event to .agent/state/harness_events.jsonl (T1-L-08)."""
+    try:
+        log_dir = PROJECT_ROOT / ".agent" / "state"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "harness_events.jsonl"
+        
+        session_id = None
+        session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
+        if session_file.exists():
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    session_id = json.load(f).get("session_id")
+            except Exception:
+                pass
+                
+        # Modern standard-compliant UTC datetime
+        now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+        
+        record = {
+            "schema_version": "1.0",
+            "event_type": event_dict.get("event_type"),
+            "timestamp_utc": now_utc,
+            "session_id": session_id,
+            "commit_sha": None,
+            "agent": os.environ.get("AGENT_ID", "ai_review"),
+            "severity": event_dict.get("severity", "INFO"),
+            "payload": event_dict.get("payload", {}),
+        }
+        
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass  # Never block execution due to logging failures
+
+
+def _handle_api_unavailable(reason: str, changed_files: List[str], active_domains: List[str]) -> int:
+    """Handle API/provider unavailability with high-risk fail-closed enforcement (T1-L-08)."""
+    is_high_risk, matched_patterns = classify_commit_risk(changed_files, active_domains)
+    _persist_verdict(fail_open_reason=reason)
+    
+    if is_high_risk:
+        print("[REVIEW] API unavailable + high-risk commit → FAIL CLOSED")
+        print("[REVIEW] High-risk files detected — manual review required")
+        print("[REVIEW] Override: SKIP_AI_REVIEW=1 SKIP_REASON='...'")
+        
+        log_harness_event({
+            "event_type": "high_risk_gate_closed",
+            "severity": "HIGH",
+            "payload": {
+                "reason": f"API unavailable on high-risk commit ({reason})",
+                "high_risk_matches": matched_patterns,
+                "override_available": "SKIP_AI_REVIEW=1 SKIP_REASON=..."
+            }
+        })
+        sys.exit(1)  # Block the commit
+    else:
+        # Fail open — low-risk commit, proceed
+        print(f"⚠️  AI review skipped (fail-open): {reason}")
+        print("   Allowing commit. Review manually if this persists.")
+        return 0
+
+
 def build_route_decision(
     changed_files: List[str], diff_text: str, pagerank_scores: Dict[str, float]
 ) -> RouteDecision:
@@ -1124,21 +1311,54 @@ def _run_review() -> int:
 
     # Allow explicit bypass via env var
     if os.environ.get("SKIP_AI_REVIEW") == "1":
+        # Check if high-risk to enforce SKIP_REASON logging/warnings (T1-L-08)
+        try:
+            res = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=str(PROJECT_ROOT),
+            )
+            files = [f.strip() for f in res.stdout.splitlines() if f.strip()]
+            
+            try:
+                from architecture_checks import extract_adr_annotations
+            except ImportError:
+                extract_adr_annotations = lambda path: []
+                
+            domains = []
+            for f in files:
+                if Path(f).exists():
+                    for domain in extract_adr_annotations(f):
+                        domains.append(domain.lower())
+        except Exception:
+            files = []
+            domains = []
+            
+        is_hr, matches = classify_commit_risk(files, domains)
+        if is_hr:
+            skip_reason = os.environ.get("SKIP_REASON", "").strip()
+            if not skip_reason:
+                print("⚠️ [REVIEW] WARNING: Bypassing a high-risk commit via SKIP_AI_REVIEW=1 without providing a SKIP_REASON env var!")
+            else:
+                log_harness_event({
+                    "event_type": "high_risk_gate_override",
+                    "severity": "WARNING",
+                    "payload": {
+                        "reason": "Developer bypassed high-risk gate",
+                        "skip_reason": skip_reason,
+                        "high_risk_matches": matches
+                    }
+                })
+                
         print("\u26a1 AI review skipped (SKIP_AI_REVIEW=1)")
         return 0
 
     # Allow bypass via sentinel file (for pre-commit env var propagation issues)
     if (PROJECT_ROOT / ".skip-ai-review").exists():
         print("\u26a1 AI review skipped (.skip-ai-review file found)")
-        return 0
-
-    # T1-E-02: Resolve provider via env var → config → default (anthropic)
-    try:
-        from providers import get_provider
-
-        provider = get_provider()
-    except RuntimeError as e:
-        print(f"\u26a0\ufe0f  AI review skipped: {e}")
         return 0
 
     # Get the staged diff
@@ -1225,6 +1445,15 @@ def _run_review() -> int:
     # 3. Generate prioritized ADR context (T1-H-02)
     adr_context, active_domains, adr_policy_notes = get_adr_context(changed_files)
 
+    # T1-E-02 / T1-L-08: Resolve provider after active_domains / changed_files are resolved
+    try:
+        from providers import get_provider
+
+        provider = get_provider()
+    except RuntimeError as e:
+        reason = f"Provider setup failed: {e}"
+        return _handle_api_unavailable(reason, changed_files, active_domains)
+
     # 4. Compute RouteDecision dynamically (T1-G-01, T1-G-04)
     route_decision = build_route_decision(changed_files, diff, pagerank_scores)
     # Merge any adr-specific policy notes into our routing decision
@@ -1306,20 +1535,14 @@ def _run_review() -> int:
 
     except urllib.error.URLError as e:
         elapsed = time.time() - start_time
-        _persist_verdict(fail_open_reason=f"Network error: {e}")
-        print(f"⚠️  AI review timed out or network error ({elapsed:.1f}s): {e}")
-        print("   Allowing commit. Review manually if this persists.")
-        return 0
+        reason = f"Network error ({elapsed:.1f}s): {e}"
+        return _handle_api_unavailable(reason, changed_files, active_domains)
     except json.JSONDecodeError as e:
-        _persist_verdict(fail_open_reason=f"JSON parse error: {e}")
-        print(f"⚠️  AI review returned unparseable response: {e}")
-        print("   Allowing commit.")
-        return 0
+        reason = f"JSON parse error: {e}"
+        return _handle_api_unavailable(reason, changed_files, active_domains)
     except Exception as e:
-        _persist_verdict(fail_open_reason=str(e))
-        print(f"⚠️  AI review error: {e}")
-        print("   Allowing commit.")
-        return 0
+        reason = str(e)
+        return _handle_api_unavailable(reason, changed_files, active_domains)
 
     elapsed = time.time() - start_time
 
@@ -1346,12 +1569,13 @@ def _run_review() -> int:
                     )
     # ─────────────────────────────────────────────────────────────────────────
 
+    is_hr, _ = classify_commit_risk(changed_files, active_domains)
     snapshot: Optional[str] = None
-    if raw_verdict_str in ("FAIL", "WARN"):
+    if raw_verdict_str in ("FAIL", "WARN", "PASS"):
         # Record which context sections were active so a FAIL can be debugged
         # without reconstructing the full session state (arXiv 2603.07670).
         active_sections = _get_active_context_sections(diff)
-        snapshot = f"sections={active_sections}; adr_domains={active_domains}; repo_map_len={len(repo_map)}; context_chars={len(context)}"
+        snapshot = f"sections={active_sections}; adr_domains={active_domains}; repo_map_len={len(repo_map)}; context_chars={len(context)}; is_high_risk={is_hr}"
 
     try:
         typed_verdict = ReviewVerdict(
@@ -1366,12 +1590,9 @@ def _run_review() -> int:
             route_decision=route_decision,
         )
     except ValidationError as exc:
-        # Structured fail-open: log the validation error, allow commit.
+        # Structured fail-open: log the validation error, check risk classification.
         fail_reason = f"ReviewVerdict validation failed: {exc}"
-        _persist_verdict(fail_open_reason=fail_reason)
-        print(f"⚠️  AI review response failed schema validation (fail-open): {exc}")
-        print("   Allowing commit.")
-        return 0
+        return _handle_api_unavailable(fail_reason, changed_files, active_domains)
     # ─────────────────────────────────────────────────────────────────────────
 
     # Persist the typed verdict and render for the developer.
