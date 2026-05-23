@@ -253,3 +253,14 @@ architecture:
       default:
         threshold: 30
 
+
+architecture_checks:
+  adr_capability_mappings:
+    # Map your project's ADR domain names to gate capabilities.
+    # Capabilities: BRANCH_ISOLATION, TRANSACTIONAL_INTEGRITY,
+    #               CLEAN_ARCH, MASS_ASSIGNMENT, RBAC, MIGRATIONS
+    # Example:
+    # multi_tenancy: BRANCH_ISOLATION
+    # payment_flow: TRANSACTIONAL_INTEGRITY
+    # saas_architecture: CLEAN_ARCH
+
