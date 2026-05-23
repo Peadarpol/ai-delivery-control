@@ -264,3 +264,10 @@ architecture_checks:
     # payment_flow: TRANSACTIONAL_INTEGRITY
     # saas_architecture: CLEAN_ARCH
 
+  # Paths/files treated as high-risk when API is unavailable
+  # High-risk commits fail closed (not open) without the gate
+  high_risk_patterns:
+    paths: []       # e.g. "*/payments/*"
+    filenames: []   # e.g. "payment_gateway.py"
+    adr_domains: [] # e.g. "payment_flow"
+
