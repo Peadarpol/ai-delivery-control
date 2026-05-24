@@ -24,7 +24,7 @@ Three checkpoints. Not zero.
 
 `AGENTS.md` defines the mandatory session lifecycle every agent follows, across all tools:
 
-**14 absolute prohibitions** enforced by convention and the pre-commit gate — among them:
+**17 absolute prohibitions (P-01–P-17)** enforced by convention and the pre-commit gate — among them:
 
 - No merging to `main` without explicit instruction
 - No `git add .` or `git add -A` — always named files only
@@ -123,7 +123,7 @@ validation suite. Under 10 minutes from zero to working harness.
 
 ## What it is
 
-A lightweight governance harness for AI-assisted software delivery. Works with Claude Code, Gemini CLI, Cursor, Windsurf, or any LLM-based coding agent. It covers the full delivery lifecycle: specification → development → testing → deployment.
+A lightweight governance harness for AI-assisted software delivery. Works with Claude Code, Gemini CLI, Cursor, Windsurf, or any LLM-based coding agent. It governs delivery execution — session lifecycle, pre-commit gate, and audit trail — but not production monitoring, incident response, or infrastructure provisioning. See [Out of Scope](#what-is-explicitly-out-of-scope) below.
 
 ## What it prevents
 
@@ -173,7 +173,7 @@ Convention-based governance degrades under pressure. The gate does not.
 To maintain a lightweight, highly-focused codebase, the following areas are deliberately excluded from the framework:
 
 - **Production Monitoring and Alerting**: Real-time server observability, metrics dashboards, and paging systems are out of scope. The framework’s governance boundary ends at the commit and the Operational Readiness Review (ORR) sign-off.
-- **Incident Response**: The framework provides an automated incident-to-backlog pipeline (`incident_to_backlog.py`) to feed production learnings back into future delivery, but does not participate in active production incident resolution.
+- **Incident Response**: The framework provides `incident_to_eval.py` to convert escaped defects into permanent regression guards in the eval dataset, but does not participate in active production incident resolution. An incident-to-backlog pipeline is planned (T1-L-07, not yet delivered).
 - **Infrastructure Provisioning**: Cloud configuration, Terraform scripting, and cloud environment setups are completely out of scope. The framework governs the code structure that gets deployed, not the infrastructure it runs on.
 - **Model Selection and Tuning**: The framework uses LLMs as utility reviewers. It remains agnostic to specific model selection, providing only the tiering configuration (e.g., local tasks vs. cloud reviews).
 - **Compliance Control Mappings**: While highly relevant to regulated industries, formal mappings to compliance standards (such as the SOCI Act, ISM, or PSPF) are planned for **v3.0.0** and are not currently active.

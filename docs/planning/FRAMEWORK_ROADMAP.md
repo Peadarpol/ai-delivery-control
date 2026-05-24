@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.0.0
-**Target Release**: v1.1.0
-**Last Updated**: 2026-05-22
+**Current Version**: 1.1.0
+**Target Release**: v1.2.0
+**Last Updated**: 2026-05-23
 
 ---
 
@@ -64,7 +64,7 @@ Convention-based governance degrades under pressure. The gate does not. Design p
 The review gate is adversarial in a specific technical sense — not in the sense of "it reviews code" (GitHub Copilot Code Review does that) but in the sense of:
 
 1. **Separation of agents**: The writing agent and the reviewing model are separate. The reviewing model has no access to the writing agent's reasoning, only the diff and the review context. It cannot rationalise the implementation.
-2. **Adversarial system prompt**: The reviewer is instructed to assume the implementation is wrong until proven otherwise, not to find minor issues in an otherwise correct implementation.
+2. **Proportionate system prompt**: The reviewer is instructed to identify genuine problems with specificity and proportionality — HIGH for actual bugs and security issues, MEDIUM for quality concerns, LOW for style. FAIL requires a specific file:line citation. The reviewer does not manufacture findings.
 3. **Structured verdict schema**: PASS / WARN / FAIL with a typed `ReviewVerdict` Pydantic model — not a prose review. Malformed LLM responses raise validation errors rather than silently passing.
 4. **Two-layer review context**: Universal architectural invariants (framework-owned) plus project-specific rules (developer-maintained) are injected into every review. The reviewer knows the project's rules, not just general best practice.
 5. **Persistent audit trail**: Every verdict is logged to `.ai-review-log.jsonl`. Verdict history can be analysed for patterns; the dream phase uses this data.
@@ -118,7 +118,7 @@ The dream phase is the mechanism that makes the framework improve over time — 
 
 ---
 
-### v1.1.0 — Demonstrably Working 🔄 CURRENT TARGET (Q2 2026)
+### v1.1.0 — Demonstrably Working ✅ SHIPPED (2026-05-23)
 
 **Goal**: Show the framework working in practice. The headline is the self-improvement loop producing real proposals from real sessions — not hygiene items. A developer landing on this project should be able to see the temporal moat in action, understand what makes the gate adversarial, and run the framework without an Anthropic account.
 
@@ -147,23 +147,23 @@ The dream phase is the mechanism that makes the framework improve over time — 
 | S0-12 | Fix validate.py legacy filename warning | Validation | ✅ |
 | T1-E-02 | LLMProvider ABC (AnthropicProvider, OpenAIProvider, OllamaProvider) | Provider portability | ✅ |
 | T1-L-06 | Explicit production scope statement in README and docs | Documentation | ✅ |
-| T1-L-08 | High-risk commit classification for fail-open behaviour | Gate hardening |
+| T1-L-08 | High-risk commit classification for fail-open behaviour | Gate hardening | ✅ |
 | T1-L-09 | Framework self-test suite (60 tests across 6 modules) | Testing | ✅ |
 | BUG-01 | commit-msg hook not installed by bootstrap — already present since initial commit | Gate wiring | ✅ |
 | BUG-02 | validate.py does not check commit-msg hook — already present | Validation | ✅ |
 | BUG-03 | Gate reads empty diff on amend at commit-msg stage — ORIG_HEAD guard + empty tree fallback | Gate fix | ✅ |
-| BUG-04 | PASS/PASS_FAST verdicts not written to audit log | Logging |
-| BUG-05 | ADR domain names not mapping to capability names | Routing fix |
+| BUG-04 | PASS/PASS_FAST verdicts not written to audit log | Logging | ✅ |
+| BUG-05 | ADR domain names not mapping to capability names | Routing fix | ✅ |
 | BUG-06 | Gate calibration too aggressive — proportionate calibration + false-positive guard | Gate calibration | ✅ |
-| T1-M-01 | Agent operations guide | Documentation |
-| T1-M-02 | Spec writing guide | Documentation |
+| T1-M-01 | Agent operations guide | Documentation | — (human-authored, deferred) |
+| T1-M-02 | Spec writing guide | Documentation | — (human-authored, deferred) |
 | T1-M-05 | Stack coverage acknowledgment | Documentation | ✅ |
 
 **Note on T1-E-02 placement**: Provider agnosticism is moved from v1.3.0 to v1.1.0. Anthropic vendor lock-in is an immediate evaluation objection from any engineering team with data residency requirements. It should not remain a v1.3.0 problem for a framework positioning itself at governed delivery in constrained environments.
 
 ---
 
-### v1.2.0 — Outer Loop 📋 PLANNED (Q3 2026)
+### v1.2.0 — Outer Loop 🔄 ACTIVE TARGET (Q3 2026)
 
 **Goal**: Govern the full delivery lifecycle from requirement to commit, not just from commit to repository.
 
@@ -181,6 +181,10 @@ The dream phase is the mechanism that makes the framework improve over time — 
 
 | ID | Item | Description |
 |----|------|-------------|
+| T1-H-08 | Branch-isolated model roster in compiled wiki | AST-generated roster of confirmed branch-isolated models injected into wiki; suppresses false-positive BRANCH_ISOLATION flags on verified models. Dependency: T1-H-06 ✅, T1-H-01 ✅. |
+| T1-L-10 | False positive → eval regression pipeline | `false_positive_to_eval.py` — confirmed false positives create permanent "must not flag" guards in the T1-L-09 test suite; invoked automatically by rebuttal and structured bypass paths. Dependency: T1-L-09 ✅. |
+| T1-G-07 | Structured SKIP_REASON enforcement | High-risk bypasses require structured JSON SKIP_REASON; malformed reasons rejected; valid reasons feed false positive pipeline automatically. Dependency: T1-L-08 ✅, T1-L-10. |
+| T1-G-06 | Structured rebuttal protocol | FAIL verdict triggers a second-pass review with agent-provided structured evidence per finding; REBUTTAL_ACCEPTED unblocks commit and creates eval guard automatically. Dependency: T1-E-02 ✅, T1-G-03 ✅. |
 | T1-L-01 | Spec quality gate | Before `/feature-implementation` begins, SPEC-XXX.md must exist and pass quality checks: acceptance criteria present, out-of-scope stated, architectural constraints identified, status APPROVED. Gate refuses to start without an approved spec. |
 | T1-L-02 | `/business-analyst` workflow | Full state-machine workflow: requirement intake → user story extraction → BDD scenarios → spec drafting → acceptance criteria → traceability matrix → human approval gate. Agent drafts; human approves. |
 | T1-L-03 | `/project-manager` workflow | How an approved SPEC becomes a prioritised backlog item with effort estimate and dependencies. Sprint planning and dependency resolution. |
@@ -327,7 +331,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ## Current Sprint Status
 
-**Active milestone**: v1.1.0
+**Active milestone**: v1.2.0 (v1.1.0 shipped 2026-05-23)
 **Sprint tracking**: `.agent/state/active_context.md`
 
 **Priority order** (after current project work completes):

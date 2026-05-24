@@ -223,7 +223,9 @@ RFC-003 session completed with gate never firing. No log entry, no warning, no v
 **Pillar**: T1-A-02 fix
 **Status**: 📅 Backlog — BUG-01 (CRITICAL)
 
-AI review gate configured at `commit-msg` stage but `commit-msg` hook not installed = gate never fires. Entire RFC-003 session ran without gate coverage. Fix: `bootstrap/install.py` must run `pre-commit install --hook-type commit-msg` in addition to `pre-commit install`. Already partially in spec — verify it's executed.
+AI review gate configured at `commit-msg` stage but `commit-msg` hook not installed = gate never fires. Entire RFC-003 session ran without gate coverage. This creates a security vulnerability, as the gate's protections are bypassed, and the gate fails to enforce its policies.
+
+**Suggested change**: Update `bootstrap/install.py` to ensure it runs `pre-commit install --hook-type commit-msg` in addition to the default `pre-commit install`.
 
 ---
 
@@ -234,7 +236,9 @@ AI review gate configured at `commit-msg` stage but `commit-msg` hook not instal
 **Pillar**: T1-A-03 fix
 **Status**: 📅 Backlog — BUG-02
 
-`bootstrap/validate.py` checks for `pre-commit` and `pre-push` hooks but not `commit-msg` hook. Gate was absent for entire session and validation reported ✅. Add `commit-msg` to the hook layout check.
+`bootstrap/validate.py` checks for `pre-commit` and `pre-push` hooks but not `commit-msg` hook. Gate was absent for entire session and validation reported ✅.
+
+**Suggested change**: Update `bootstrap/validate.py` to check for the presence of the `commit-msg` hook in addition to the other hooks in the hook layout check.
 
 ---
 
@@ -282,51 +286,113 @@ PASS and PASS_FAST verdicts not written to `.ai-review-log.jsonl`. Only FAIL ver
 
 ---
 
-## HIB-021 — Governance restructure: Always/Ask First/Never three-category framework
-
-**Date**: 2026-05-21
-**Source**: T1-B governance restructure
-**Pillar**: T1-B series
-**Status**: 📅 Backlog
-
-Restructure `governance.md` into Always/Ask First/Never three-category decision framework (source: Osmani O'Reilly, Feb 2026 — "curse of instructions" research).
-
-**Rationale**: Research shows agents follow the first few rules and overlook the rest when presented with a flat numbered list. A three-category decision framework gives agents a mental model they can apply to novel situations, not just a lookup table.
-
-**Implementation**:
-Keep P-01 through P-14 as the canonical numbered reference (immutable audit trail). Add a new operational section above the prohibition table:
-
-- **ALWAYS** (do without asking): Run `check_repo.py` before any git operation; run tests before commits; write tests before implementation code; follow active workflow from start state.
-- **ASK FIRST** (escalate to human): Database schema changes; adding or removing dependencies; modifying auth, RBAC, or security code; commits touching more than 5 files; anything that contradicts a rule in `domain_rules.md`.
-- **NEVER** (absolute prohibition, maps to P-series): Merge to main/master without CI approval (P-01); delete migration files (P-02); disable or weaken test assertions (P-03); commit secrets or API keys (P-06); use `git commit --no-verify` (P-11); [full P-series remains authoritative].
-
-Update `AGENTS.md` and `aisdlc-bootloader.md` to reference the three-category framing as the operational layer.
-
----
-
-## HIB-022 — Skill authoring: "curse of instructions" rule-count principle
-
-**Date**: 2026-05-21
-**Source**: T1-B skill authoring principle
-**Pillar**: T1-B series
-**Status**: 📅 Backlog
-
-Add "curse of instructions" principle to skill quality bar and T1-B-06 audit criteria (source: Osmani O'Reilly Feb 2026 — GitHub analysis of 2,500+ agent config files; confirmed by GPT-4/Claude research).
-
-**Rationale**: When agents are presented with many rules simultaneously, they comply with the first few and overlook the rest. A skill with 5 well-enforced rules produces better agent behaviour than a skill with 20. This is not a length concern — it is a rule-count concern. A skill can be 80 lines and still be over-specified if it contains 15 rules.
-
-**Implementation**:
-1. Add to `docs/customisation.md` under skill authoring: "Prefer 3-5 high-consequence rules over 10-20 comprehensive ones. Agents follow the first few rules and overlook the rest (curse of instructions — Osmani, 2026). Every rule you add dilutes the ones above it."
-2. Add to `docs/aisdlc-bootloader.md` skill quality bar table: new row — Rule count | ≤5 high-consequence rules per skill | Why: curse of instructions.
-3. Update T1-B-06 audit criteria to check rule count in addition to line count. A skill with >7 distinct MUST/NEVER/ALWAYS rules is flagged AMBER regardless of line count. Add this check to `verify_install.py` skill metadata validation.
-4. Update `/create-skill` workflow (T1-B-05) template to enforce the rule-count limit at authoring time, not just at audit time.
-
-
-## HIB-023 — Commit msg not read — BUG-09
+## HIB-021 — Commit msg not read at commit-msg stage (BUG-09)
 
 **Date**: 2026-05-23
 **Source**: Commit msg
 **Pillar**: T1-G-01 fix
 **Status**: 📅 Backlog — BUG-09
 
-Gate at commit-msg stage cannot read commit message. Reports "no commit message provided" even when message exists. Gate needs to read from `sys.argv[1]` (the COMMIT_EDITMSG path git passes to commit-msg hooks) not from a hardcoded path.
+When the gate runs at the `commit-msg` stage, it fails to read the commit message and reports "no commit message provided" even when a message exists. The current implementation looks for the commit message in a hardcoded path (e.g., `.ai-review-temp.md`), but Git actually creates the temporary commit message at a path under `.git/COMMIT_EDITMSG` and passes that path as an argument to the `commit-msg` hook.
+
+**Suggested change**: Update the gate script to read the commit message from the file path provided via CLI argument (`sys.argv[1]`), which Git passes when the hook is invoked.
+
+---
+
+## HIB-022 — Automatic framework version bump
+
+**Date**: 2026-05-23
+**Source**: Framework sync
+**Pillar**: T1-A-02 fix
+**Status**: 📅 Backlog
+
+Framework sync must automatically bump `framework.version` in `config.yaml` and `UNIVERSAL_CONTEXT.md` to the new version. Currently, this process is manual, making it easy to forget or get wrong.
+
+**Suggested change**: Update `upgrade.py` or framework compile processes to automatically detect the new framework version and update `framework.version` in `config.yaml` and `UNIVERSAL_CONTEXT.md` accordingly.
+
+---
+
+## HIB-023 — ADR domain validation in environment checks
+
+**Date**: 2026-05-23
+**Source**: ADR Domains
+**Pillar**: T1-A-03 enhancement
+**Status**: 📅 Backlog
+
+The gate could silently warn or fail if the ADR domain names defined in `adr_capability_mappings` do not correspond to actual ADR files in `docs/architecture/adr/`. Currently, there is no validation for this mapping alignment.
+
+**Suggested change**: Add a check to `validate.py` and `bootstrap/validate.py` to ensure that all domain names referenced in `adr_capability_mappings` correspond to real ADR files in `docs/architecture/adr/`, producing a warning if a mismatch or missing file is detected.
+
+
+
+---
+
+## HIB-024 — Session memory treated as facts not claims
+
+**Date**: 2026-05-24
+**Source**: Shokunin v4.2.3 verify_file_path pattern
+**Pillar**: T1-I-04 / Memory
+**Status**: 📅 Quick win — no new dependencies
+
+`init_session.py` loads `active_context.md` and acts on its contents as if they
+are current facts. They are claims from a frozen point in time — the branch may
+have changed, commits may have been made, tasks may be stale.
+
+**Suggested change**: Before orientation begins, cross-reference key claims in
+`active_context.md` against git reality: claimed branch vs `git branch` output,
+last commit claim vs `git log -1`, open file claims vs `git status`. Print WARN
+for any mismatches. Costs one subprocess call per claim. Zero new dependencies.
+This is the init_session.py equivalent of Shokunin's `verify_file_path` MCP tool
+— treating memory as claims requiring verification, not facts.
+
+---
+
+## HIB-025 — Polite suggestions in AGENTS.md degrade compliance
+
+**Date**: 2026-05-24
+**Source**: Shokunin author observation (real operational experience with 62+ skills)
+**Pillar**: T1-B governance
+**Status**: 📅 Quick win — documentation only
+
+Shokunin author found through real operational use that "MANDATORY" and
+imperative language produces materially better agent compliance than polite
+suggestions. "Models respond to explicit commands." This was confirmed by the
+Osmani curse-of-instructions research cited in HIB-009.
+
+**Suggested change**: Audit AGENTS.md for governance-critical sections using
+conversational framing ("should", "consider", "it is recommended"). Replace with
+imperative language ("must", "always", "never") where compliance is
+non-negotiable. The prohibition table already uses imperative language correctly.
+Candidates for tightening: session startup protocol, workflow-first section,
+escalation triggers. Do not change the conversational tone in non-governance
+sections (agent conduct, skills guidance).
+
+---
+
+## HIB-026 — Typed memory entry classification for governance events
+
+**Date**: 2026-05-24
+**Source**: Shokunin v4.2.3 entry type system
+**Pillar**: T1-C-01 / Memory
+**Status**: 📅 Backlog — T1-C-01 scope extension
+
+`harness_events.jsonl` uses governance-focused `event_type` (halt_event,
+governance_observation, action_trace) but doesn't classify governance-relevant
+content types that the dream phase and `init_session.py` need to reason about.
+
+**Suggested change**: Add governance-relevant entry types (adapted from Shokunin,
+governance context not general session capture):
+- `decision` — architectural/governance decision made this session
+- `checkpoint` — phase gate passed (plan approved, UAT passed, ORR complete)
+- `claim_file` — file path verified to exist at this timestamp
+- `claim_function` — function signature verified at this timestamp
+- `session_end` — structured auto-generated close summary
+
+NOT applicable from Shokunin: `preference`, `command`, `general` (personal
+assistant types, not governance types — don't add these).
+
+The `session_end` type is the most immediately valuable: auto-generated at
+session close via Stop hook (Claude Code) or retrospective inference fallback.
+Fields: commits_made, files_changed, gate_verdicts, decisions_logged,
+open_tasks_remaining, outcome. Supplements agent-written last_session_summary.md
+with a compliance-independent machine-generated record.

@@ -265,20 +265,15 @@ beyond Phase 1. The loop operates as follows:
 - The pre-commit AI review gate logs structured verdicts to `.ai-review-log.jsonl` (gitignored)
 - Governance events write to `.agent/state/harness_events.jsonl` (gitignored)
 
-**Dream phase (fires automatically at session start when thresholds are met):**
+**Dream phase — not yet operational (T1-D-03, backlog):**
+`distill_dream.py` is not yet implemented. Data accumulation above runs today and is
+building the event history the dream phase will read once delivered. The intended
+design when implemented:
 - Threshold: ≥15 sessions spanning ≥14 days, with ≥7 days since last run
 - `distill_dream.py` reads event patterns, identifies recurring failures, routes proposals to owning skills via `skill_ownership.yaml`
 - Proposals appear in `.agent/state/dream_proposals/` as `{skill}__{pattern}__open.md`
-
-**Your role (monthly review):**
-
-For each open proposal in `dream_proposals/`:
-- **Accept**: apply the proposed rule to the skill file, rename to `__reviewed.md`
-- **Reject**: add a rejection note, rename to `__reviewed.md`
-- **Modify**: apply a modified version, rename to `__reviewed.md`
-
-`__open` and `__contradiction` proposals are never auto-archived. They require your
-explicit action. `__reviewed` files older than 365 days are archived automatically.
+- Monthly human review: Accept → apply + rename `__reviewed.md`; Reject → note + rename; Modify → apply modified version + rename
+- `__open` and `__contradiction` proposals require explicit human action before archival
 
 After any escaped defect reaches production, run:
 ```bash

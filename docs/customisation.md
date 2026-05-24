@@ -36,7 +36,7 @@ review if any new query on a multi-tenant table lacks an explicit isolation filt
 | Element | Format | Purpose |
 |---|---|---|
 | Rule ID | `## [RULE:YOUR-ID] Title` | Unique identifier — uppercase, hyphenated |
-| Section tag | `<!-- SECTION:snake_case_id -->` | Used for future selective injection (T1-G-01) |
+| Section tag | `<!-- SECTION:snake_case_id -->` | Used by the diff-aware routing step (T1-G-01) to select relevant sections per diff |
 | Body | Plain English, written as reviewer instructions | Describe what to check and at what severity |
 
 **Severity guidance** — state explicitly what warrants each verdict:
