@@ -75,6 +75,45 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
     note = "Session closed with no commits."
     action_str = "No active commits made. Session closed."
 
+    # Aggregate token statistics strictly matching this session_id from .ai-review-log.jsonl
+    input_tokens = 0
+    output_tokens = 0
+    context_load_est = 0
+    repo_map_est = 0
+    adr_injection_est = 0
+    call_count = 0
+    has_fail = False
+
+    REVIEW_LOG_FILE = Path(".ai-review-log.jsonl")
+    if REVIEW_LOG_FILE.exists():
+        try:
+            start_dt = parse_iso_datetime(prev_start)
+            lines = REVIEW_LOG_FILE.read_text(encoding="utf-8").splitlines()
+            for line in lines:
+                if not line.strip():
+                    continue
+                log = json.loads(line)
+
+                # Verify session_id match strictly
+                log_session_id = log.get("session_id")
+                if log_session_id != prev_id:
+                    continue
+
+                call_count += 1
+                usage = log.get("token_usage", {})
+                input_tokens += usage.get("input_tokens", 0)
+                output_tokens += usage.get("output_tokens", 0)
+                context_load_est += usage.get("context_load_estimated_tokens", 0)
+                repo_map_est += usage.get("repo_map_estimated_tokens", 0)
+                adr_injection_est += usage.get("adr_injection_estimated_tokens", 0)
+
+                # Check for FAIL verdict within this session
+                log_time = parse_iso_datetime(log.get("timestamp", ""))
+                if log_time > start_dt and log.get("verdict") == "FAIL":
+                    has_fail = True
+        except Exception:
+            pass
+
     # Support outcome_override in session.json
     if "outcome_override" in prev_data:
         outcome = prev_data["outcome_override"]
@@ -118,24 +157,6 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             if commits:
                 action_str = f"[COMMIT]: {commits[0]['message']}"
 
-                # Check for FAIL verdicts in .ai-review-log.jsonl
-                has_fail = False
-                REVIEW_LOG_FILE = Path(".ai-review-log.jsonl")
-                if REVIEW_LOG_FILE.exists():
-                    try:
-                        start_dt = parse_iso_datetime(prev_start)
-                        lines = REVIEW_LOG_FILE.read_text(encoding="utf-8").splitlines()
-                        for line in lines:
-                            if not line.strip():
-                                continue
-                            log = json.loads(line)
-                            log_time = parse_iso_datetime(log.get("timestamp", ""))
-                            if log_time > start_dt and log.get("verdict") == "FAIL":
-                                has_fail = True
-                                break
-                    except Exception:
-                        pass
-
                 # Check for open tasks in active_context.md
                 has_open_tasks = False
                 CONTEXT_FILE = STATE_DIR / "active_context.md"
@@ -167,6 +188,15 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     # Log to session_ledger.jsonl
+    token_usage_stats = {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "context_load_estimated_tokens": context_load_est,
+        "repo_map_estimated_tokens": repo_map_est,
+        "adr_injection_estimated_tokens": adr_injection_est,
+        "call_count": call_count,
+    }
+
     ledger_entry = {
         "session_id": prev_id,
         "date": date_str,
@@ -177,6 +207,7 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         "outcome_source": source,
         "outcome_note": note,
         "harness_version": "2.0",
+        "token_usage": token_usage_stats,
     }
 
     try:
@@ -190,6 +221,7 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
     prev_data["outcome"] = outcome
     prev_data["outcome_source"] = source
     prev_data["outcome_note"] = note
+    prev_data["token_usage"] = token_usage_stats
     try:
         with open(SESSION_FILE, "w", encoding="utf-8") as f:
             json.dump(prev_data, f, indent=4)
@@ -261,6 +293,14 @@ def initialize_session(agent_name: str = "Harness") -> None:
         "last_activity": start_time,
         "status": "ACTIVE",
         "agent": agent_name,
+        "token_usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "context_load_estimated_tokens": 0,
+            "repo_map_estimated_tokens": 0,
+            "adr_injection_estimated_tokens": 0,
+            "call_count": 0,
+        }
     }
 
     with open(SESSION_FILE, "w", encoding="utf-8") as f:

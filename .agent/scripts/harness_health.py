@@ -256,6 +256,95 @@ def report_dream_phase():
     print(f"  Last Run       : {last_run}{first_run_status}")
 
 
+def report_token_trends():
+    section_header("TOKEN MEASUREMENT & TRENDS")
+    ledger_path = Path(".agent/state/session_ledger.jsonl")
+    if not ledger_path.exists():
+        print("  Status         : \033[94mPENDING (No ledger found)\033[0m")
+        return
+
+    sessions = []
+    try:
+        with open(ledger_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                if "token_usage" in record:
+                    sessions.append(record["token_usage"])
+    except Exception as e:
+        print(f"  Error reading ledger: {e}")
+        return
+
+    if not sessions:
+        print("  Status         : \033[93mNO TOKEN DATA YET\033[0m")
+        return
+
+    total_sessions = len(sessions)
+    total_calls = sum(s.get("call_count", 0) for s in sessions)
+    total_input = sum(s.get("input_tokens", 0) for s in sessions)
+    total_output = sum(s.get("output_tokens", 0) for s in sessions)
+    total_est = sum(
+        s.get("context_load_estimated_tokens", 0) +
+        s.get("repo_map_estimated_tokens", 0) +
+        s.get("adr_injection_estimated_tokens", 0)
+        for s in sessions
+    )
+
+    avg_input = total_input / total_sessions
+    avg_output = total_output / total_sessions
+    avg_est = total_est / total_sessions
+
+    print(f"  Sessions Traced: {total_sessions}")
+    print(f"  Total API Calls: {total_calls}")
+    print(f"  Avg Actual In  : {avg_input:.1f} tokens/session")
+    print(f"  Avg Actual Out : {avg_output:.1f} tokens/session")
+    print(f"  Avg Est Overhead: {avg_est:.1f} tokens/session")
+
+    # Trend calculation: last 3 sessions vs previous sessions
+    if total_sessions >= 3:
+        recent = sessions[-3:]
+        prior = sessions[:-3]
+        if prior:
+            avg_recent_total = sum(s.get("input_tokens", 0) + s.get("output_tokens", 0) for s in recent) / 3
+            avg_prior_total = sum(s.get("input_tokens", 0) + s.get("output_tokens", 0) for s in prior) / len(prior)
+
+            # Trend threshold (5% change)
+            diff_pct = (avg_recent_total - avg_prior_total) / max(avg_prior_total, 1.0)
+            if diff_pct < -0.05:
+                print("  Token Trend    : \033[92m↓ IMPROVING (Optimized)\033[0m")
+            elif diff_pct > 0.05:
+                print("  Token Trend    : \033[91m↑ DEGRADING (Rising Cost)\033[0m")
+            else:
+                print("  Token Trend    : \033[94m→ STABLE\033[0m")
+        else:
+            print("  Token Trend    : \033[94m→ STABLE (First session block)\033[0m")
+    else:
+        print("  Token Trend    : \033[94m→ STABLE (Insufficient data)\033[0m")
+
+
+def check_harness_alerts():
+    events_path = Path(".agent/state/harness_events.jsonl")
+    if not events_path.exists():
+        return
+
+    has_roster_warn = False
+    try:
+        with open(events_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                evt = json.loads(line)
+                if evt.get("event_type") == "branch_isolation_roster_warning":
+                    has_roster_warn = True
+    except Exception:
+        pass
+
+    if has_roster_warn:
+        print("\n\033[91m⚠️  [HARNESS WARNING] No model files matched branch_isolation.model_file_patterns.\033[0m")
+        print("\033[91m   BRANCH_ISOLATION suppression is currently inactive. Update config.yaml to fix.\033[0m")
+
+
 def main():
     show_all = "--all" in sys.argv
     print("\033[1m" + "=" * 60)
@@ -268,7 +357,9 @@ def main():
     report_dlq_pointer()
     report_schema_hardening()
     report_dream_phase()
+    report_token_trends()
     report_backlog(show_all=show_all)
+    check_harness_alerts()
 
     print("\n" + "=" * 60)
     print(f"Report Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

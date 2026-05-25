@@ -20,6 +20,7 @@ env/
 .ai-review-log.jsonl
 .agent/state/
 .agent/wiki/
+.skip-ai-reason.json
 
 # Mock testing scratch directory
 scratch/

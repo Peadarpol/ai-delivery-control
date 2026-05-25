@@ -167,6 +167,21 @@ ai_review:
 
 Environment variables take precedence over config file settings.
 
+### Provider-Agnostic Budget Tier
+
+To allow zero-cost or extremely low-cost local execution of background tasks (like compilation of AST rosters, wiki pages, and classification of commit risks), the harness features a **budget** model tier. By default, the budget tier routes tasks to **Ollama** using a generic local model (such as `gemma4`), but is completely **provider-agnostic**.
+
+You can route budget tasks to any registered LLMProvider, including cheap cloud endpoints (like Claude Haiku, GPT-4o-mini, or Groq) by updating `.agent/config.yaml`:
+
+```yaml
+model_routing:
+  budget_provider: anthropic
+  budget_model: claude-3-5-haiku-20241022
+  budget_provider_timeout_seconds: 5
+```
+
+This ensures full topology independence: developers are never forced to run heavy local daemons if they prefer cost-effective cloud models!
+
 ---
 
 ## 6. Make your first governed commit

@@ -1,14 +1,16 @@
 # AI Delivery Control
 
+[![CI Build Status](https://github.com/Peadarpol/ai-delivery-control/actions/workflows/ci.yml/badge.svg)](https://github.com/Peadarpol/ai-delivery-control/actions)
+
+AI Delivery Control is a **lightweight, local-first governance harness**. It operates entirely on your development machine, without server infrastructure. It is designed to establish rigorous guardrails for solo developers and small teams. 
+
+
 **You govern. Agents deliver.**
 
 Most AI coding frameworks optimise for autonomy — agents run until criteria pass.
-AI Delivery Control optimises for accountability — keeping the human architect in the loop at
-every consequential decision point. 
+AI Delivery Control optimises for accountability — keeping the human architect in the loop at consequential decision points.
 
-AI Delivery Control is a **lightweight, local-first governance harness**. It operates entirely on your development machine, without server infrastructure. It is designed to establish rigorous guardrails for solo developers and small teams. Formal compliance control mappings (such as the SOCI Act, ISM, or PSPF) are planned for **v3.0.0** and are not a current capability.
-
-Three checkpoints. Not zero.
+**Three checkpoints**
 
 | Checkpoint | When | What it enforces |
 |---|---|---|
