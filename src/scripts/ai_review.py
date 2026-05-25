@@ -29,7 +29,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -74,6 +74,219 @@ def _safe_symbol(emoji: str, fallback: str) -> str:
 SYMBOL_ACTIVE = _safe_symbol("⚡", "[ACTIVE]")
 SYMBOL_REVIEW = _safe_symbol("🔍", "[REVIEW]")
 SYMBOL_SHIELD = _safe_symbol("🛡️", "[GUARD]")
+
+
+def _get_active_session_id() -> str | None:
+    session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
+    if session_file.exists():
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                return json.load(f).get("session_id")
+        except Exception:
+            pass
+    return None
+
+
+def _load_token_ratios() -> Dict[str, float]:
+    """Load char_to_token_ratio from .agent/config.yaml.
+
+    Defaults to review=4.0, budget=3.5.
+    """
+    ratios = {"review": 4.0, "budget": 3.5}
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return ratios
+
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        in_token_tracking = False
+        in_ratios = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if stripped == "token_tracking:":
+                in_token_tracking = True
+                continue
+
+            if in_token_tracking:
+                indent = len(line) - len(line.lstrip())
+                if indent == 0:
+                    in_token_tracking = False
+                    in_ratios = False
+                    continue
+
+                if stripped == "char_to_token_ratio:":
+                    in_ratios = True
+                    continue
+
+                if in_ratios:
+                    if indent <= 2 and stripped != "char_to_token_ratio:":
+                        in_ratios = False
+                        continue
+                    if ":" in stripped:
+                        key_part, val_part = stripped.split(":", 1)
+                        key = key_part.strip().strip("\"'")
+                        val = val_part.split("#", 1)[0].strip()
+                        if key in ratios:
+                            try:
+                                ratios[key] = float(val)
+                            except ValueError:
+                                pass
+    except Exception:
+        pass
+    return ratios
+
+
+def _load_branch_isolation_config() -> Tuple[List[str], List[str]]:
+    """Load model_file_patterns and base_classes from .agent/config.yaml."""
+    patterns = []
+    base_classes = []
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return ["src/**/models.py", "src/**/model.py"], ["BranchAwareMixin", "BranchIsolatedMixin"]
+
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        in_branch_isolation = False
+        
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if stripped == "branch_isolation:":
+                in_branch_isolation = True
+                continue
+
+            if in_branch_isolation:
+                indent = len(line) - len(line.lstrip())
+                if indent == 0:
+                    in_branch_isolation = False
+                    continue
+
+                if stripped.startswith("model_file_patterns:"):
+                    if "[" in stripped:
+                        lst_str = stripped.split("[", 1)[1].split("]", 1)[0]
+                        patterns = [p.strip().strip("\"'") for p in lst_str.split(",") if p.strip()]
+                elif stripped.startswith("base_classes:"):
+                    if "[" in stripped:
+                        lst_str = stripped.split("[", 1)[1].split("]", 1)[0]
+                        base_classes = [b.strip().strip("\"'") for b in lst_str.split(",") if b.strip()]
+    except Exception:
+        pass
+
+    if not patterns:
+        patterns = ["src/**/models.py", "src/**/model.py"]
+    if not base_classes:
+        base_classes = ["BranchAwareMixin", "BranchIsolatedMixin"]
+
+    return patterns, base_classes
+
+
+def _ensure_and_load_model_roster() -> Dict[str, Any]:
+    """Verify roster cache and compile/regenerate if model files changed or if missing."""
+    roster_path = PROJECT_ROOT / ".agent" / "wiki" / "branch_isolation_roster.json"
+    patterns, base_classes = _load_branch_isolation_config()
+
+    recompile = False
+    if not roster_path.exists():
+        recompile = True
+    else:
+        try:
+            roster_mtime = roster_path.stat().st_mtime
+            import glob
+            for pat in patterns:
+                search_pat = str(PROJECT_ROOT / pat)
+                for match in glob.glob(search_pat, recursive=True):
+                    if os.path.isfile(match) and os.path.getmtime(match) > roster_mtime:
+                        recompile = True
+                        break
+                if recompile:
+                    break
+        except Exception:
+            recompile = True
+
+    if recompile:
+        try:
+            _setup_sys_path()
+            from roster_builder import build_branch_isolation_roster
+            roster = build_branch_isolation_roster(patterns, base_classes, PROJECT_ROOT)
+            roster_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(roster_path, "w", encoding="utf-8") as f:
+                json.dump(roster, f, indent=4)
+        except Exception as e:
+            print(f"⚠️  [ROSTER] Roster recompilation failed: {e}")
+            if roster_path.exists():
+                try:
+                    with open(roster_path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    pass
+            return {}
+    else:
+        try:
+            with open(roster_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    if roster_path.exists():
+        try:
+            with open(roster_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def verify_and_suppress_roster_issues(typed_verdict: ReviewVerdict, route_decision: RouteDecision) -> None:
+    """Read roster and suppress false-positive BRANCH_ISOLATION warnings if confirmed in roster."""
+    if not typed_verdict.issues:
+        return
+
+    roster = _ensure_and_load_model_roster()
+    if not roster:
+        return
+
+    new_issues = []
+    suppressed_any = False
+
+    for issue in typed_verdict.issues:
+        concern = issue.get("concern")
+        desc = issue.get("description", "")
+        
+        suppressed = False
+        if concern == "BRANCH_ISOLATION":
+            for model_name, info in roster.items():
+                if model_name in desc or model_name in issue.get("location", ""):
+                    col = info.get("column", "branch_id")
+                    fk = info.get("fk", "branches.id")
+                    nullable = info.get("nullable", True)
+                    
+                    note = f"BRANCH_ISOLATION: {model_name} confirmed branch-isolated ({col}: FK\u2192{fk}, nullable={nullable} — compiled YYYY-MM-DD)"
+                    print(f"✅ [ROSTER] Suppressed false-positive: {note}")
+                    route_decision.policy_notes.append(f"✅ Suppressed: {note}")
+                    suppressed = True
+                    suppressed_any = True
+                    break
+
+        if not suppressed:
+            new_issues.append(issue)
+
+    if suppressed_any:
+        typed_verdict.issues = new_issues
+        high_issues = [i for i in new_issues if i.get("severity") == "HIGH"]
+        med_issues = [i for i in new_issues if i.get("severity") == "MEDIUM"]
+        
+        if not high_issues:
+            typed_verdict.blocking_concern = None
+            if med_issues:
+                typed_verdict.verdict = "WARN"
+            else:
+                typed_verdict.verdict = "PASS"
+
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -521,7 +734,8 @@ class ReviewVerdict(BaseModel):
     fail_open_reason: Optional[str] = None
     model: str
     token_usage: Dict[str, int] = Field(default_factory=dict)
-    verdict_tier: Literal["cloud", "local", "preflight"] = "cloud"
+    verdict_tier: Literal["cloud", "local", "review", "budget", "preflight"] = "review"
+    session_id: Optional[str] = None
     # Populated on FAIL and WARN verdicts only — the exact sections injected
     # (review_context section IDs, ADR domains, repo map token count).
     # Kept None for PASS_FAST to avoid log bloat.
@@ -1308,53 +1522,178 @@ def main() -> int:
 
 def _run_review() -> int:
     """Internal review logic. Exceptions propagate to main() for fail-open."""
-
-    # Allow explicit bypass via env var
-    if os.environ.get("SKIP_AI_REVIEW") == "1":
-        # Check if high-risk to enforce SKIP_REASON logging/warnings (T1-L-08)
+    # Resolve changed files and active ADR domains early for risk assessment & session traceability
+    try:
+        res = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(PROJECT_ROOT),
+        )
+        changed_files = [f.strip() for f in res.stdout.splitlines() if f.strip()]
+        
         try:
-            res = subprocess.run(
-                ["git", "diff", "--cached", "--name-only"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=str(PROJECT_ROOT),
-            )
-            files = [f.strip() for f in res.stdout.splitlines() if f.strip()]
+            from architecture_checks import extract_adr_annotations
+        except ImportError:
+            extract_adr_annotations = lambda path: []
             
-            try:
-                from architecture_checks import extract_adr_annotations
-            except ImportError:
-                extract_adr_annotations = lambda path: []
-                
-            domains = []
-            for f in files:
-                if Path(f).exists():
-                    for domain in extract_adr_annotations(f):
-                        domains.append(domain.lower())
-        except Exception:
-            files = []
-            domains = []
-            
-        is_hr, matches = classify_commit_risk(files, domains)
+        active_domains = []
+        for f in changed_files:
+            if Path(f).exists():
+                for domain in extract_adr_annotations(f):
+                    active_domains.append(domain.lower())
+    except Exception:
+        changed_files = []
+        active_domains = []
+
+    is_hr, matches = classify_commit_risk(changed_files, active_domains)
+    session_id = _get_active_session_id()
+
+    # Allow explicit bypass via env var or local file
+    if os.environ.get("SKIP_AI_REVIEW") == "1":
         if is_hr:
-            skip_reason = os.environ.get("SKIP_REASON", "").strip()
-            if not skip_reason:
-                print("⚠️ [REVIEW] WARNING: Bypassing a high-risk commit via SKIP_AI_REVIEW=1 without providing a SKIP_REASON env var!")
-            else:
-                log_harness_event({
-                    "event_type": "high_risk_gate_override",
-                    "severity": "WARNING",
-                    "payload": {
-                        "reason": "Developer bypassed high-risk gate",
-                        "skip_reason": skip_reason,
-                        "high_risk_matches": matches
-                    }
-                })
-                
-        print("\u26a1 AI review skipped (SKIP_AI_REVIEW=1)")
-        return 0
+            # Enforce structured bypass validation
+            skip_reason_str = os.environ.get("SKIP_REASON", "").strip()
+            bypass_data = None
+            used_vector = None
+            
+            # Vector B (Direct): First parse from SKIP_REASON env var if it's JSON
+            if skip_reason_str and skip_reason_str != "@file":
+                try:
+                    bypass_data = json.loads(skip_reason_str)
+                    used_vector = "Vector B (Direct Env)"
+                except Exception:
+                    pass
+
+            session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
+            session_start_time = None
+            if session_file.exists():
+                try:
+                    with open(session_file, "r", encoding="utf-8") as f:
+                        session_start_time = json.load(f).get("start_time")
+                except Exception:
+                    pass
+
+            bypass_file = PROJECT_ROOT / ".skip-ai-reason.json"
+
+            # Vector C (Interactive TTY Wizard): Prompt developer and write to file
+            # *Note on labels*: labels reflect naming (A=file, B=direct, C=wizard) not execution order (B -> C -> A)
+            if not bypass_data and sys.stdin.isatty():
+                print("[BYPASS] High-risk commit bypass interactive wizard active (Vector C)...")
+                rebuttal_type = ""
+                while rebuttal_type not in ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE"):
+                    print("Select rebuttal type:")
+                    print("  1. FALSE_POSITIVE")
+                    print("  2. SPEC_REQUIREMENT")
+                    print("  3. ARCHITECTURAL_INVARIANT")
+                    print("  4. OUT_OF_SCOPE")
+                    choice = input("Choice (1-4): ").strip()
+                    if choice == "1": rebuttal_type = "FALSE_POSITIVE"
+                    elif choice == "2": rebuttal_type = "SPEC_REQUIREMENT"
+                    elif choice == "3": rebuttal_type = "ARCHITECTURAL_INVARIANT"
+                    elif choice == "4": rebuttal_type = "OUT_OF_SCOPE"
+
+                finding_ids_str = input("Finding IDs (comma-separated, e.g. T1-G-07,T1-L-10): ").strip()
+                finding_ids = [fid.strip() for fid in finding_ids_str.split(",") if fid.strip()]
+                evidence = input("Evidence/Rationale: ").strip()
+
+                wizard_data = {
+                    "rebuttal_type": rebuttal_type,
+                    "finding_ids": finding_ids,
+                    "evidence": evidence,
+                }
+
+                try:
+                    with open(bypass_file, "w", encoding="utf-8") as f:
+                        json.dump(wizard_data, f, indent=4)
+                    print(f"[BYPASS] Wizard successfully wrote {bypass_file.name}")
+                except Exception as e:
+                    print(f"❌ [BYPASS] Failed to write wizard file: {e}")
+
+            # Vector A (File): Read from .skip-ai-reason.json
+            if not bypass_data and (skip_reason_str == "@file" or bypass_file.exists()):
+                if bypass_file.exists():
+                    try:
+                        mtime = bypass_file.stat().st_mtime
+                        import datetime
+                        if session_start_time:
+                            session_dt = datetime.datetime.fromisoformat(session_start_time.replace("Z", "+00:00"))
+                            file_dt = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc)
+                            if file_dt < session_dt:
+                                print("⚠️  [BYPASS] STALE_BYPASS_FILE_DETECTED: Rationale file predates current session startup!")
+                    except Exception:
+                        pass
+
+                    try:
+                        bypass_data = json.loads(bypass_file.read_text(encoding="utf-8"))
+                        used_vector = "Vector A (File)"
+
+                        # Immediately consume-and-delete on successful read
+                        try:
+                            bypass_file.unlink()
+                            print(f"[BYPASS] Successfully consumed and deleted {bypass_file.name}")
+                        except Exception as e:
+                            print(f"⚠️  [BYPASS] Failed to auto-delete {bypass_file.name}: {e}")
+                    except Exception as e:
+                        print(f"❌ [BYPASS] Error reading bypass file: {e}")
+
+            if not bypass_data:
+                print("❌ [BYPASS] High-risk commit bypass rejected!")
+                print("   A structured SKIP_REASON (JSON) is required for high-risk commits.")
+                print("   Please provide it via environment variable SKIP_REASON='{...}'")
+                print("   or write it to `.skip-ai-reason.json` and set SKIP_REASON='@file'")
+                print("\n   Required keys: rebuttal_type, finding_ids (list), evidence")
+                print("   Rebuttal types: FALSE_POSITIVE, SPEC_REQUIREMENT, ARCHITECTURAL_INVARIANT, OUT_OF_SCOPE")
+                sys.exit(1)
+
+            rebuttal_type = bypass_data.get("rebuttal_type")
+            finding_ids = bypass_data.get("finding_ids")
+            evidence = bypass_data.get("evidence")
+
+            valid_rebuttals = ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE")
+
+            if (rebuttal_type not in valid_rebuttals or 
+                not isinstance(finding_ids, list) or not finding_ids or 
+                not isinstance(evidence, str) or not evidence.strip()):
+                print("❌ [BYPASS] Validation failed for structured bypass reason!")
+                print(f"   Received: {bypass_data}")
+                print("   Ensure all keys (rebuttal_type, finding_ids, evidence) are present and valid.")
+                sys.exit(1)
+
+            print(f"⚡ AI review bypassed via {used_vector} ({rebuttal_type})")
+
+            log_harness_event({
+                "event_type": "high_risk_gate_override",
+                "severity": "WARNING",
+                "payload": {
+                    "reason": "Developer bypassed high-risk gate",
+                    "skip_reason": bypass_data,
+                    "high_risk_matches": matches
+                }
+            })
+
+            if rebuttal_type == "FALSE_POSITIVE":
+                try:
+                    eval_script = PROJECT_ROOT / ".agent" / "scripts" / "false_positive_to_eval.py"
+                    if eval_script.exists():
+                        fids_arg = ",".join(finding_ids)
+                        subprocess.Popen([
+                            sys.executable,
+                            str(eval_script),
+                            "--finding-id", fids_arg,
+                            "--rebuttal-type", rebuttal_type,
+                            "--evidence", evidence
+                        ])
+                        print("[BYPASS] Triggered false positive logging asynchronously.")
+                except Exception as e:
+                    print(f"⚠️  [BYPASS] Failed to spawn false_positive_to_eval.py: {e}")
+
+            return 0
+        else:
+            print("⚡ AI review skipped (SKIP_AI_REVIEW=1)")
+            return 0
 
     # Allow bypass via sentinel file (for pre-commit env var propagation issues)
     if (PROJECT_ROOT / ".skip-ai-review").exists():
@@ -1368,6 +1707,24 @@ def _run_review() -> int:
 
     # Load config
     config = load_config()
+    
+    # ── T1-G-02: Pre-flight shortcut ──────────────────────────────────────────
+    # Evaluate before any LLM call. If all changes are doc/whitespace/comments,
+    # emit PASS_FAST and exit immediately at zero API cost.
+    preflight = check_preflight_shortcut(diff)
+    if preflight.direct_pass_allowed:
+        fast_verdict = ReviewVerdict(
+            verdict="PASS_FAST",
+            planner_note=preflight.planner_note,
+            model="preflight",
+            token_usage={},
+            verdict_tier="preflight",
+            session_id=session_id,
+        )
+        _persist_verdict(verdict_obj=fast_verdict)
+        print(f"⚡ AI review: PASS_FAST — {preflight.planner_note}")
+        return 0
+
     skip_paths = config.get("skip_paths", [])
 
     # Filter out skipped paths
@@ -1413,23 +1770,9 @@ def _run_review() -> int:
         return 0
     # ─────────────────────────────────────────────────────────────────────────
 
-    # Get commit message, changed files list, PageRank repo map, and ADR context
+    # Get commit message, PageRank repo map, and ADR context
     commit_msg = get_commit_message()
     context = load_review_context(diff)
-
-    # 1. Get changed files list
-    try:
-        res = subprocess.run(
-            ["git", "diff", "--cached", "--name-only"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=str(PROJECT_ROOT),
-        )
-        changed_files = [f.strip() for f in res.stdout.splitlines() if f.strip()]
-    except Exception:
-        changed_files = []
 
     # 2. Generate PageRank Repo Map & Scores (T1-H-01)
     _setup_sys_path()
@@ -1578,24 +1921,51 @@ def _run_review() -> int:
         snapshot = f"sections={active_sections}; adr_domains={active_domains}; repo_map_len={len(repo_map)}; context_chars={len(context)}; is_high_risk={is_hr}"
 
     try:
+        # Ratios & Estimated Token Calculation
+        ratios = _load_token_ratios()
+        tier = "budget" if provider.name == "ollama" else "review"
+        ratio = ratios.get(tier, 4.0 if tier == "review" else 3.5)
+
+        context_load_est = len(context) // ratio
+        repo_map_est = len(repo_map) // ratio
+        adr_injection_est = len(adr_context) // ratio
+
+        actual_tokens = provider.last_token_usage
+        in_tokens = actual_tokens.get("input_tokens", 0)
+        out_tokens = actual_tokens.get("output_tokens", 0)
+
+        token_usage_dict = {
+            "input_tokens": in_tokens,
+            "output_tokens": out_tokens,
+            "context_load_estimated_tokens": int(context_load_est),
+            "repo_map_estimated_tokens": int(repo_map_est),
+            "adr_injection_estimated_tokens": int(adr_injection_est),
+        }
+
         typed_verdict = ReviewVerdict(
             verdict=raw_verdict_str,
             blocking_concern=raw_review.get("blocking_concern"),
             model=provider.model,
-            verdict_tier="local" if provider.name == "ollama" else "cloud",
+            verdict_tier="budget" if provider.name == "ollama" else "review",
             context_snapshot=snapshot,
             intent_alignment=raw_review.get("intent_alignment"),
             summary=raw_review.get("summary"),
             issues=raw_review.get("issues", []),
             route_decision=route_decision,
+            session_id=session_id,
+            token_usage=token_usage_dict,
         )
+        
+        # Verify and suppress confirmed branch-isolated models from ORM roster
+        verify_and_suppress_roster_issues(typed_verdict, route_decision)
+        raw_review["verdict"] = typed_verdict.verdict
+        raw_review["issues"] = typed_verdict.issues
+        raw_review["blocking_concern"] = typed_verdict.blocking_concern
+
     except ValidationError as exc:
-        # Structured fail-open: log the validation error, check risk classification.
         fail_reason = f"ReviewVerdict validation failed: {exc}"
         return _handle_api_unavailable(fail_reason, changed_files, active_domains)
-    # ─────────────────────────────────────────────────────────────────────────
 
-    # Persist the typed verdict and render for the developer.
     _persist_verdict(verdict_obj=typed_verdict, provider_name=provider.name)
     render_review(raw_review, churn_info)
     print(f"  \u23f1\ufe0f  Review completed in {elapsed:.1f}s\n")

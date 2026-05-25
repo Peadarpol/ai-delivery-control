@@ -58,19 +58,21 @@ tech_stack:
   docker_image: "[PROJECT_DOCKER_IMAGE]:latest"
   docker_image_base: "[PROJECT_DOCKER_IMAGE]"
 
-# Model Tiering Configuration
+# Model Tiering Configuration (Role-Based Schema)
 model_routing:
   wiki_compile_provider: ollama
-  local_model: gemma4:26b
-  local_base_url: http://localhost:11434
-  cloud_provider: anthropic
-  cloud_model: claude-sonnet-4-20250514
-  local_tasks:
+  budget_provider: ollama                 # any registered LLMProvider: ollama, anthropic, openai
+  budget_model: gemma4                    # substitution tip: replace with your locally pulled model
+  budget_provider_timeout_seconds: 3
+  budget_base_url: http://localhost:11434
+  budget_tasks:
     - wiki_compile
     - knowledge_lint
     - dream_phase
     - route_classify
     - adr_extract
+  review_provider: anthropic
+  review_model: claude-sonnet-4-20250514
 
 # Universal Capabilities Map
 # Workflows should refer to these keys to avoid hardcoding paths/commands

@@ -6,6 +6,13 @@ Compiles ADRs and other architectural rules into a structured
 wiki using a specified LLM provider (Ollama, Anthropic, Gemini).
 Incremental compilation uses SHA-256 hashes.
 Generates an index.md table of all domains automatically.
+
+─────────────────────────────────────────────────────────────────────────────
+⚠️ WARNING: PURE AST ROSTER COMPILATION
+Roster sidecar compilation is a pure static AST parsing process with ZERO
+LLM involvement. This avoids local LLM invocation, protects against
+token leakage/costs, and executes under 50ms without any network calls.
+─────────────────────────────────────────────────────────────────────────────
 """
 
 import argparse
@@ -194,13 +201,15 @@ def generate_index_md(state: dict) -> None:
 
 
 def call_ollama(client: httpx.Client, prompt: str, routing: dict) -> str:
-    url = f"{routing.get('local_base_url', 'http://localhost:11434').rstrip('/')}/api/generate"
+    url = f"{routing.get('budget_base_url', routing.get('local_base_url', 'http://localhost:11434')).rstrip('/')}/api/generate"
     payload = {
-        "model": routing.get("local_model", "gemma4:26b"),
+        "model": routing.get("budget_model", routing.get("local_model", "gemma4")),
         "prompt": prompt,
         "stream": False,
     }
-    resp = client.post(url, json=payload, timeout=300.0)
+    timeout_val = routing.get("budget_provider_timeout_seconds")
+    timeout = float(timeout_val) if timeout_val is not None else 300.0
+    resp = client.post(url, json=payload, timeout=timeout)
     resp.raise_for_status()
     return resp.json().get("response", "").strip()
 
@@ -216,7 +225,7 @@ def call_anthropic(client: httpx.Client, prompt: str, routing: dict) -> str:
         "content-type": "application/json",
     }
     payload = {
-        "model": routing.get("cloud_model", "claude-haiku-3-5"),
+        "model": routing.get("review_model", routing.get("cloud_model", "claude-haiku-3-5")),
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": prompt}],
     }
@@ -374,6 +383,34 @@ def main() -> None:
         state["domains_compiled"] = len(state["last_source_hashes"])
         generate_index_md(state)
         save_state(state)
+
+    # ── Shared AST Roster compilation ───────────────────────────────────────
+    # We compile the mixin-aware ORM roster strictly via static AST analysis
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+        from roster_builder import build_branch_isolation_roster
+        config_path = Path(".agent/config.yaml")
+        patterns = ["src/**/models.py", "src/**/model.py"]
+        base_classes = ["BranchAwareMixin", "BranchIsolatedMixin"]
+        if config_path.exists():
+            try:
+                import yaml
+                with open(config_path, encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+                bi_cfg = cfg.get("branch_isolation", {})
+                patterns = bi_cfg.get("model_file_patterns", patterns)
+                base_classes = bi_cfg.get("base_classes", base_classes)
+            except Exception:
+                pass
+        
+        roster = build_branch_isolation_roster(patterns, base_classes, Path.cwd())
+        roster_path = Path(".agent/wiki/branch_isolation_roster.json")
+        roster_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(roster_path, "w", encoding="utf-8") as f:
+            json.dump(roster, f, indent=4)
+        print(f"Wiki compile: branch_isolation_roster.json compiled ({len(roster)} models).")
+    except Exception as e:
+        print(f"⚠️  Wiki compile: Failed to compile branch isolation roster sidecar: {e}")
 
     unchanged = len(DOMAIN_REGISTRY) - updated_count
     print(

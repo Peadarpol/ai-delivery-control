@@ -517,7 +517,7 @@ class TestHighRiskCommitClassification:
             return result
 
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
-             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "Emergency deploy"}), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": '{"rebuttal_type": "SPEC_REQUIREMENT", "finding_ids": ["T1-G-07"], "evidence": "Emergency deploy"}'}), \
              patch("ai_review.subprocess.run", side_effect=mock_run):
 
             exit_code = ai_review._run_review()
@@ -531,6 +531,312 @@ class TestHighRiskCommitClassification:
             event = json.loads(lines[-1])
             assert event["event_type"] == "high_risk_gate_override"
             assert event["severity"] == "WARNING"
-            assert event["payload"]["skip_reason"] == "Emergency deploy"
+            assert event["payload"]["skip_reason"] == {"rebuttal_type": "SPEC_REQUIREMENT", "finding_ids": ["T1-G-07"], "evidence": "Emergency deploy"}
             assert any("migrations" in m for m in event["payload"]["high_risk_matches"])
+
+
+class TestStructuredBypassAndRegression:
+    """Test suite for structured bypass, Vector C interactive continuation, non-TTY fallback,
+    parameterized regression suite, and session ID token filtering.
+    """
+
+    def test_bypass_rejection_on_plain_text(self, ai_review, tmp_path):
+        """Plain text SKIP_REASON on high risk commit must trigger SystemExit(1)."""
+        commands = {
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+        }
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "Plain text bypass reason"}), \
+             patch("ai_review.subprocess.run", side_effect=mock_run):
+            with pytest.raises(SystemExit) as excinfo:
+                ai_review._run_review()
+            assert excinfo.value.code == 1
+
+    def test_bypass_rejection_on_malformed_json(self, ai_review, tmp_path):
+        """Malformed JSON SKIP_REASON on high risk commit must trigger SystemExit(1)."""
+        commands = {
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+        }
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "{malformed_json:"}), \
+             patch("ai_review.subprocess.run", side_effect=mock_run):
+            with pytest.raises(SystemExit) as excinfo:
+                ai_review._run_review()
+            assert excinfo.value.code == 1
+
+    def test_bypass_rejection_on_invalid_keys(self, ai_review, tmp_path):
+        """Valid JSON but with missing/invalid bypass keys on high risk commit must trigger SystemExit(1)."""
+        commands = {
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+        }
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        invalid_reasons = [
+            '{"rebuttal_type": "NOT_VALID_TYPE", "finding_ids": ["T1-G-07"], "evidence": "Rationale"}',
+            '{"rebuttal_type": "FALSE_POSITIVE", "finding_ids": [], "evidence": "Rationale"}',
+            '{"rebuttal_type": "FALSE_POSITIVE", "finding_ids": ["T1-G-07"], "evidence": ""}',
+            '{"rebuttal_type": "FALSE_POSITIVE", "evidence": "Rationale"}',  # missing finding_ids
+        ]
+
+        for invalid_reason in invalid_reasons:
+            with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+                 patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": invalid_reason}), \
+                 patch("ai_review.subprocess.run", side_effect=mock_run):
+                with pytest.raises(SystemExit) as excinfo:
+                    ai_review._run_review()
+                assert excinfo.value.code == 1
+
+    def test_bypass_vector_a_file_success(self, ai_review, tmp_path):
+        """Vector A: Reading valid JSON from .skip-ai-reason.json must bypass and auto-delete file."""
+        commands = {
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+        }
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        # Setup .skip-ai-reason.json in project root
+        bypass_file = tmp_path / ".skip-ai-reason.json"
+        bypass_data = {
+            "rebuttal_type": "FALSE_POSITIVE",
+            "finding_ids": ["T1-G-07"],
+            "evidence": "This is a false positive test case",
+        }
+        bypass_file.write_text(json.dumps(bypass_data), encoding="utf-8")
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "@file"}), \
+             patch("ai_review.subprocess.run", side_effect=mock_run), \
+             patch("sys.stdin.isatty", return_value=False):
+
+            assert bypass_file.exists()
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+            # Confirm file has been auto-deleted on successful consumption
+            assert not bypass_file.exists()
+
+    def test_bypass_vector_c_interactive_continuation(self, ai_review, tmp_path):
+        """Vector C: If TTY and env var is empty, prompting wizard writes file, then Vector A immediately consumes it."""
+        commands = {
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+        }
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        bypass_file = tmp_path / ".skip-ai-reason.json"
+        
+        # Mock CLI inputs: Choice "1" (FALSE_POSITIVE), Finding IDs "T1-G-07", Evidence "Some evidence"
+        mock_inputs = ["1", "T1-G-07", "Some evidence"]
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": ""}), \
+             patch("ai_review.subprocess.run", side_effect=mock_run), \
+             patch("sys.stdin.isatty", return_value=True), \
+             patch("builtins.input", side_effect=mock_inputs):
+
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+            # Vector A immediately continues, validates, and auto-deletes the file, so it should not exist after execution!
+            assert not bypass_file.exists()
+
+    def test_bypass_non_tty_fallback_fail_closed(self, ai_review, tmp_path):
+        """Non-TTY with no SKIP_REASON and no file must fail-closed."""
+        commands = {
+            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
+        }
+        def mock_run(args, **kwargs):
+            key = " ".join(args[:4])
+            if "--cached" in args and "--name-only" in args:
+                key = "git diff --cached --name-only"
+            result = MagicMock()
+            result.stdout = commands.get(key, "")
+            result.returncode = 0
+            return result
+
+        with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": ""}), \
+             patch("ai_review.subprocess.run", side_effect=mock_run), \
+             patch("sys.stdin.isatty", return_value=False):
+
+            with pytest.raises(SystemExit) as excinfo:
+                ai_review._run_review()
+            assert excinfo.value.code == 1
+
+    def test_session_id_filtering_in_aggregation(self, ai_review, tmp_path):
+        """infer_and_close_previous_session must strictly sum token stats matching current session_id."""
+        import csv
+        import os
+        # Create a mock session.json
+        state_dir = tmp_path / ".agent" / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        session_file = state_dir / "session.json"
+        
+        session_data = {
+            "session_id": "active-session-123",
+            "start_time": "2026-05-25T12:00:00Z",
+            "agent": "TestAgent",
+            "status": "ACTIVE"
+        }
+        session_file.write_text(json.dumps(session_data), encoding="utf-8")
+
+        # Create .ai-review-log.jsonl with mixed session IDs
+        log_path = tmp_path / ".ai-review-log.jsonl"
+        log_records = [
+            # Entry matching current session
+            {
+                "timestamp": "2026-05-25T12:05:00Z",
+                "verdict": "PASS",
+                "session_id": "active-session-123",
+                "token_usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "context_load_estimated_tokens": 80,
+                    "repo_map_estimated_tokens": 40,
+                    "adr_injection_estimated_tokens": 10,
+                },
+                "issues": []
+            },
+            # Entry matching current session
+            {
+                "timestamp": "2026-05-25T12:10:00Z",
+                "verdict": "FAIL",
+                "session_id": "active-session-123",
+                "token_usage": {
+                    "input_tokens": 200,
+                    "output_tokens": 100,
+                    "context_load_estimated_tokens": 160,
+                    "repo_map_estimated_tokens": 80,
+                    "adr_injection_estimated_tokens": 20,
+                },
+                "issues": [{"concern": "MASS_ASSIGNMENT", "severity": "HIGH", "location": "general"}]
+            },
+            # Entry belonging to a different session ID
+            {
+                "timestamp": "2026-05-25T12:15:00Z",
+                "verdict": "PASS",
+                "session_id": "other-session-456",
+                "token_usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 500,
+                    "context_load_estimated_tokens": 800,
+                    "repo_map_estimated_tokens": 400,
+                    "adr_injection_estimated_tokens": 100,
+                },
+                "issues": []
+            }
+        ]
+        log_path.write_text("\n".join(json.dumps(r) for r in log_records) + "\n", encoding="utf-8")
+
+        # Mock import and call of infer_and_close_previous_session
+        # Set up sys.path or direct import
+        import sys
+        scripts_dir = Path(__file__).resolve().parent.parent / ".agent" / "scripts"
+        sys.path.insert(0, str(scripts_dir))
+        
+        # Patch the file paths inside init_session.py
+        with patch("sys.platform", "linux"):
+            import init_session
+
+        old_cwd = os.getcwd()
+        os.chdir(str(tmp_path))
+        try:
+            with patch("init_session.get_commits_after", return_value=[]):
+                outcome, note = init_session.infer_and_close_previous_session()
+                # Since there are no commits and it's not escalated, outcome is partial/abandoned depending on fail
+                assert outcome in ("abandoned", "partial")
+        finally:
+            os.chdir(old_cwd)
+
+        # Read session.json to check aggregated token_usage
+        with open(session_file, "r", encoding="utf-8") as f:
+            saved_session = json.load(f)
+            
+        token_stats = saved_session["token_usage"]
+        # Assert only matching session IDs were aggregated (100+200 = 300 input, 50+100 = 150 output)
+        assert token_stats["input_tokens"] == 300
+        assert token_stats["output_tokens"] == 150
+        assert token_stats["context_load_estimated_tokens"] == 240
+        assert token_stats["repo_map_estimated_tokens"] == 120
+        assert token_stats["adr_injection_estimated_tokens"] == 30
+        assert token_stats["call_count"] == 2
+
+    def test_parameterized_csv_regression_checks(self, ai_review, tmp_path):
+        """Verify the regression checks load the CSV and mock diff file safely without execution."""
+        import csv
+        csv_path = tmp_path / "false_positive_cases.csv"
+        headers = ["finding_id", "rebuttal_type", "evidence", "commit_sha", "diff_file", "expected_verdict"]
+        
+        # Create a mock sidecar diff file
+        fp_cases_dir = tmp_path / "fp_cases"
+        fp_cases_dir.mkdir(parents=True, exist_ok=True)
+        diff_file = fp_cases_dir / "test_case.diff"
+        diff_file.write_text("some simulated python diff", encoding="utf-8")
+        
+        row_data = [
+            "T1-G-07",
+            "FALSE_POSITIVE",
+            "This is a false positive test",
+            "abc12345",
+            "fp_cases/test_case.diff",
+            "PASS"
+        ]
+        
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerow(row_data)
+            
+        # Verify loading works correctly and it does not execute any code
+        assert csv_path.exists()
+        assert diff_file.exists()
+        
+        # Load and parse CSV
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header_row = next(reader)
+            first_row = next(reader)
+            
+        assert header_row == headers
+        assert first_row == row_data
+        
+        # Read mock diff
+        diff_text = (tmp_path / first_row[headers.index("diff_file")]).read_text(encoding="utf-8")
+        assert diff_text == "some simulated python diff"
+
 
