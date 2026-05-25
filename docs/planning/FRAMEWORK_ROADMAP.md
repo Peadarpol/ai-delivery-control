@@ -2,8 +2,8 @@
 
 **Status**: Active Development
 **Current Version**: 1.1.0
-**Target Release**: v1.2.0
-**Last Updated**: 2026-05-23
+**Target Release**: v1.1.5
+**Last Updated**: 2026-05-25
 
 ---
 
@@ -163,7 +163,89 @@ The dream phase is the mechanism that makes the framework improve over time — 
 
 ---
 
-### v1.2.0 — Outer Loop 🔄 ACTIVE TARGET (Q3 2026)
+### v1.1.5 — Beta Ready 🔄 ACTIVE TARGET (Q2–Q3 2026)
+
+**Goal**: Ship a version that external developers can install, use, and upgrade
+without hand-holding — while closing the two sharpest edges the framework
+currently has (token surprise, gate false positives). Sits between v1.1.0 and
+the Outer Loop milestone; does not pull forward any v1.2.0 outer loop content.
+
+**The gap this addresses**: v1.1.0 delivered a working framework but not yet
+an installable product. Beta testers need a clean upgrade path, a governed token
+ceiling, and a gate that does not frustrate them with false positives before they
+have built any trust in it. A beta tester who hits a $50 session overage or
+cannot upgrade without manual file merging will not continue.
+
+**Success criteria**:
+- A developer with no prior framework knowledge can install, run the onboarding
+  workflow, and make a governed commit in under 30 minutes
+- A v1.1.0 installation upgrades to v1.1.5 without manual file merging
+  (`upgrade.py --dry-run` completes cleanly)
+- A session approaching the token budget ceiling receives a WARN before context
+  exhaustion
+- A gate FAIL on a false positive has a governed resolution path that does not
+  require `SKIP_AI_REVIEW=1`
+- Token consumption per session is visible in `session_ledger` by category
+
+---
+
+#### Theme 1 — Beta Installer Experience
+
+| ID | Item | Effort | Status |
+|----|------|--------|--------|
+| HIB-006 | `bootstrap/upgrade.py` | Medium | ⬜ |
+| T1-B-03 | Onboarding workflow | Low | ⬜ |
+| S0-03 | `CONTRIBUTING.md` | Low | ⬜ |
+| S0-04 | GitHub issue templates | Low | ⬜ |
+| S0-05 | Cut v1.0.0 GitHub release + tag | Low | ⬜ |
+| S0-06 | CI badge | Low | ⬜ |
+| S0-08 | Surface representative skills in docs | Low | ⬜ |
+| S0-09 | Worked example (diff → routing → verdict cycle) | Low | ⬜ |
+
+Human-authored in parallel (no agent session required): T1-M-01 (agent
+operations guide), T1-M-02 (spec writing guide), T1-M-04 (team usage guide).
+
+S0-05 must be cut before any beta invitations are sent.
+
+---
+
+#### Theme 2 — Token Measurement & Calibration
+
+| ID | Item | Effort | Status |
+|----|------|--------|--------|
+| T1-I-02 | Token budget tracking per session | Low | ⬜ |
+| T1-I-07 | Session token budget with WARN/HALT | Low | ⬜ |
+| T1-M-06 | Context compaction template | Low | ⬜ |
+| T1-G-08 | Diff size review strategy | Low | ⬜ |
+
+---
+
+#### Theme 3 — Gate Trust & Calibration
+
+| ID | Item | Effort | Status |
+|----|------|--------|--------|
+| T1-H-08 | Branch-isolated model roster in compiled wiki | Low | ⬜ |
+| T1-G-07 | Structured SKIP_REASON enforcement | Low | ⬜ |
+| T1-L-10 | False positive → eval regression pipeline | Low | ⬜ |
+| T1-G-06 | Structured rebuttal protocol | Medium | ⬜ |
+
+---
+
+#### Recommended Sequencing
+
+**Week 1** — Quick wins and foundation:
+S0-03, S0-04, S0-05, S0-06, S0-08, S0-09 (manual tasks), T1-I-02, T1-G-07,
+T1-L-10, T1-H-08
+
+**Week 2** — Installer and token protection:
+HIB-006, T1-B-03, T1-I-07, T1-M-06
+
+**Week 3** — Gate trust and large diff handling:
+T1-G-06, T1-G-08, T1-M-01, T1-M-02, T1-M-04 (human-authored docs finalised)
+
+---
+
+### v1.2.0 — Outer Loop 📋 PLANNED (Q3 2026)
 
 **Goal**: Govern the full delivery lifecycle from requirement to commit, not just from commit to repository.
 
@@ -331,15 +413,18 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ## Current Sprint Status
 
-**Active milestone**: v1.2.0 (v1.1.0 shipped 2026-05-23)
+**Active milestone**: v1.1.5 (v1.1.0 shipped 2026-05-23)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**Priority order** (after current project work completes):
-1. BUG-01 through BUG-06 — gate and bootstrap fixes (CRITICAL/HIGH)
-2. Sprint 0 quick wins — manual, ~2–3 hours
-3. T1-E-02 — LLMProvider ABC (provider portability)
-4. T1-L-09 — framework self-test suite
-5. T1-M-01/02/05 — agent operations, spec writing, stack coverage docs
+**Priority order for v1.1.5**:
+1. S0-05 — GitHub release (before any beta invitations)
+2. S0-03, S0-04, S0-06, S0-08, S0-09 — remaining Sprint 0 manual tasks
+3. T1-I-02 — token tracking foundation (prerequisite for T1-I-07)
+4. T1-G-07, T1-L-10, T1-H-08 — low-effort gate calibration items
+5. HIB-006 — upgrade script (critical for beta installer experience)
+6. T1-B-03 — onboarding workflow
+7. T1-I-07, T1-M-06, T1-G-08 — token protection and diff strategy
+8. T1-G-06 — structured rebuttal protocol (medium effort, highest gate trust impact)
 
 ---
 
