@@ -322,6 +322,21 @@ class Validator:
         return True, "UNIVERSAL_CONTEXT.md present and contains framework version"
 
     def run_all(self) -> int:
+        # Check if .agent/ exists as the very first check
+        agent_dir = self.project_path / ".agent"
+        if not agent_dir.exists() or not agent_dir.is_dir():
+            print("\n" + "=" * 50)
+            print("         AI DELIVERY CONTROL — ONBOARDING CARD")
+            print("=" * 50)
+            print("⚠️  AI Delivery Control harness is not installed!")
+            print("   Please install the harness before running validation.")
+            print("\n👉 To install and set up, run:")
+            print("   python bootstrap/install.py")
+            print("\n👉 For first-session onboarding steps, refer to:")
+            print("   .agent/workflows/onboarding.md")
+            print("=" * 50 + "\n")
+            return 1
+
         print(f"\n==================================================")
         print(f"🔍 AI Delivery Control — Environment legibility check")
         print(f"==================================================")
