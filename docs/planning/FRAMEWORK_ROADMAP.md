@@ -415,13 +415,9 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 **Active milestone**: v1.1.5 (v1.1.0 shipped 2026-05-23)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**Priority order for v1.1.5** *(T1-B-03, T1-I-02, T1-I-07, T1-M-06, T1-L-10 delivered 2026-05-27)*:
-1. S0-05 — GitHub release (before any beta invitations) ← **next action**
-2. S0-03, S0-04, S0-06, S0-08, S0-09 — remaining Sprint 0 manual tasks
-3. T1-G-07, T1-H-08 — low-effort gate calibration items
-4. HIB-006 — upgrade script (critical for beta installer experience)
-5. T1-G-08 — large diff review strategy
-6. T1-G-06 — structured rebuttal protocol (medium effort, highest gate trust impact)
+**Priority order for v1.1.5** *(all theme items delivered except T1-G-06; verified 2026-05-27)*:
+1. T1-G-06 — structured rebuttal protocol ← **next session**
+2. S0-05 — GitHub release + tag (after T1-G-06; before any beta invitations)
 
 ---
 
