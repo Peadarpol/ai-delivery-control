@@ -123,15 +123,12 @@ Full trigger list in `.agent/governance.md` §2.
 
 ---
 
-## 6. Session Close (MANDATORY — do this before ending any session with code changes)
+## 6. Session Close (do this before ending any session with code changes)
 
-1. **MUST review the task magnitude auto-classification** in `session.json`. You **NEVER downgrade** a session from `major` to `micro` without explicit, documented justification in `session.json` (`task_magnitude_override_reason`).
-2. **MUST run context compaction** (`python .agent/skills/meta/validate.py`) whenever the rolling spent has passed 80% of its budget ceiling.
-3. **ALWAYS complete the compaction/handoff template** `.agent/skills/meta/context-compaction.md` in full prior to close.
-4. **MUST update `.agent/state/active_context.md`** — current task, branch, blockers, immediate next steps.
-5. **MUST update `.agent/state/decisions_log.md`** — document all technical, design, and business decisions made during this session.
-6. **MUST update `.agent/state/last_session_summary.md`** — what was done, what's incomplete, decisions deferred.
-7. **MUST append a row to `.agent/state/session_ledger.jsonl` and `.agent/state/session_ledger.md`** — session ID, date, action summary.
+1. Update `.agent/state/active_context.md` — current task, branch, blockers, immediate next steps.
+2. Update `.agent/state/decisions_log.md` — any architectural or business decisions made.
+3. Update `.agent/state/last_session_summary.md` — what was done, what's incomplete, decisions deferred.
+4. Append a row to `.agent/state/session_ledger.md` — session ID, date, action summary.
 
 ---
 

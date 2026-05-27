@@ -528,14 +528,21 @@ class Installer:
                 capture_output=True,
                 text=True,
             )
+            # Post-commit stage hook (required for session-heartbeat)
+            res4 = subprocess.run(
+                [pc_cmd, "install", "--hook-type", "post-commit"],
+                cwd=str(self.project_path),
+                capture_output=True,
+                text=True,
+            )
             
-            if res1.returncode == 0 and res2.returncode == 0 and res3.returncode == 0:
-                self.log(SYMBOL_SUCCESS, "Git pre-commit, commit-msg, and pre-push hooks successfully wired.")
+            if res1.returncode == 0 and res2.returncode == 0 and res3.returncode == 0 and res4.returncode == 0:
+                self.log(SYMBOL_SUCCESS, "Git pre-commit, commit-msg, pre-push, and post-commit hooks successfully wired.")
             else:
                 self.log(
                     SYMBOL_WARN,
                     f"Pre-commit install completed with warnings.\n"
-                    f"Stderr: {res1.stderr or res2.stderr or res3.stderr}",
+                    f"Stderr: {res1.stderr or res2.stderr or res3.stderr or res4.stderr}",
                 )
         except Exception as e:
             self.log(

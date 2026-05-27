@@ -100,6 +100,8 @@ def setup_fresh_v110_project() -> Path:
     import time
     for attempt in range(5):
         try:
+            # Unstage any files from previous E2E runs in the git cache
+            subprocess.run(["git", "reset", "--", "tests/e2e/test_project"], cwd=str(WORKSPACE_ROOT), capture_output=True)
             safe_rmtree(TEST_PROJECT)
             
             agent_dir = TEST_PROJECT / ".agent"
@@ -160,7 +162,7 @@ domain_constraints:
             (src_scripts / "review_context_universal.md").write_text(_get_git_v110_file("src/scripts/review_context_universal.md"), encoding="utf-8")
             
             # 4. .gitignore and pre-commit-config
-            (TEST_PROJECT / ".gitignore").write_text("/node_modules/\n", encoding="utf-8")
+            (TEST_PROJECT / ".gitignore").write_text("/node_modules/\n/.agent/state/\n", encoding="utf-8")
             (TEST_PROJECT / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
             
             # 5. Git mock directories for onboarding checks
@@ -687,9 +689,231 @@ def migrate(config_path: Path) -> None:
         print_err(f"bootstrap/validate.py reports failure! returncode={res.returncode}\nStdout: {res.stdout}")
         failures += 1
 
+    # ----------------------------------------------------
+    # Scenario 22: Token Budget 80% Warning & 100% Halt E2E Verify
+    # ----------------------------------------------------
+    print_step("Scenario 22: Token Budget 100% Halt and Reset E2E Verify")
+    setup_fresh_v110_project()
+    # Configure token budget of 1000 in config.yaml
+    config_file = TEST_PROJECT / ".agent" / "config.yaml"
+    c_content = config_file.read_text(encoding="utf-8")
+    c_content += "\nsession_token_budget: 1000\n"
+    config_file.write_text(c_content, encoding="utf-8")
+    
+    # Copy ai_review.py and providers.py to the test project
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "ai_review.py", TEST_PROJECT / "src" / "scripts" / "ai_review.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "providers.py", TEST_PROJECT / "src" / "scripts" / "providers.py")
+    shutil.copy2(WORKSPACE_ROOT / ".agent" / "scripts" / "init_session.py", TEST_PROJECT / ".agent" / "scripts" / "init_session.py")
+    
+    # Write session.json with spent = 1050 (over budget)
+    session_file = TEST_PROJECT / ".agent" / "state" / "session.json"
+    session_data = {
+        "session_id": "test-session-id",
+        "start_time": "2026-05-27T19:32:04Z",
+        "status": "ACTIVE",
+        "agent": "Harness",
+        "token_usage": {
+            "input_tokens": 500,
+            "output_tokens": 550,
+            "reasoning_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+    }
+    with open(session_file, "w", encoding="utf-8") as f:
+        json.dump(session_data, f, indent=4)
+        
+    # Stage a dummy Python file with real code to bypass PASS_FAST preflight
+    dummy_code_file = TEST_PROJECT / "src" / "dummy_budget.py"
+    dummy_code_file.parent.mkdir(parents=True, exist_ok=True)
+    dummy_code_file.write_text("print('Bypass preflight to trigger budget enforcement checks.')\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/dummy_budget.py"], cwd=str(TEST_PROJECT), check=True)
+        
+    # Run check_halt.py and ai_review.py
+    # Since we have budget exhaustion, ai_review.py should exit 1 before provider setup
+    res = subprocess.run(
+        [sys.executable, "src/scripts/ai_review.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    
+    halt_file = TEST_PROJECT / ".agent" / "state" / "HALT"
+    has_halt = halt_file.exists()
+    
+    # Reset on new session
+    res_reset = subprocess.run(
+        [sys.executable, ".agent/scripts/init_session.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    halt_cleared = not halt_file.exists()
+    
+    if res.returncode == 1 and "❌ [GATE BLOCKED] SESSION TOKEN BUDGET EXHAUSTED" in res.stdout and has_halt and halt_cleared:
+        print_ok("Token Budget 100% Halt blocked correctly, wrote structured HALT file, and successfully reset on new session.")
+    else:
+        print_err(f"Token Budget Halt failed! returncode={res.returncode}, has_halt={has_halt}, halt_cleared={halt_cleared}\nStdout: {res.stdout}")
+        failures += 1
+
+    # ----------------------------------------------------
+    # Scenario 23: Human-in-the-Loop BYPASS_HALT_REASON Escape Hatch E2E Verify
+    # ----------------------------------------------------
+    print_step("Scenario 23: Human-in-the-Loop BYPASS_HALT_REASON Escape Hatch E2E Verify")
+    setup_fresh_v110_project()
+    
+    # Write a token_budget_exhausted structured HALT file
+    halt_file = TEST_PROJECT / ".agent" / "state" / "HALT"
+    halt_data = {
+        "reason": "token_budget_exhausted",
+        "message": "Token budget exhausted.",
+        "timestamp": "2026-05-27T19:32:04Z"
+    }
+    with open(halt_file, "w", encoding="utf-8") as f:
+        json.dump(halt_data, f, indent=4)
+        
+    # Copy check_halt.py
+    shutil.copy2(WORKSPACE_ROOT / ".agent" / "scripts" / "check_halt.py", TEST_PROJECT / ".agent" / "scripts" / "check_halt.py")
+    
+    # 1. Run without bypass env -> should exit 2
+    res_block = subprocess.run(
+        [sys.executable, ".agent/scripts/check_halt.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    
+    # 2. Run with bypass env -> should exit 0 and append harness event
+    env_with_bypass = os.environ.copy()
+    env_with_bypass["BYPASS_HALT_REASON"] = "emergency-hotfix-P0"
+    res_bypass = subprocess.run(
+        [sys.executable, ".agent/scripts/check_halt.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT),
+        env=env_with_bypass
+    )
+    
+    events_file = TEST_PROJECT / ".agent" / "state" / "harness_events.jsonl"
+    has_event = False
+    if events_file.exists():
+        events_text = events_file.read_text(encoding="utf-8")
+        if "halt_bypass" in events_text and "emergency-hotfix-P0" in events_text:
+            has_event = True
+            
+    if res_block.returncode == 2 and res_bypass.returncode == 0 and has_event:
+        print_ok("Human-in-the-Loop escape hatch bypassed correctly on token budget and logged conforming event.")
+    else:
+        print_err(f"Bypass verification failed! block_rc={res_block.returncode}, bypass_rc={res_bypass.returncode}, has_event={has_event}")
+        print_err(f"res_bypass stdout:\n{res_bypass.stdout}\nres_bypass stderr:\n{res_bypass.stderr}")
+        failures += 1
+
+    # ----------------------------------------------------
+    # Scenario 24: Stratified Review & Thin-Standard Fallback E2E Verify
+    # ----------------------------------------------------
+    print_step("Scenario 24: Stratified Review & Thin-Standard Fallback E2E Verify")
+    setup_fresh_v110_project()
+    
+    # Copy senior-architect scripts
+    dest_skills = TEST_PROJECT / ".agent" / "skills" / "universal" / "senior-architect" / "scripts"
+    dest_skills.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(WORKSPACE_ROOT / ".agent" / "skills" / "universal" / "senior-architect" / "scripts" / "repo_map.py", dest_skills / "repo_map.py")
+    
+    # Add review settings to config.yaml
+    config_file = TEST_PROJECT / ".agent" / "config.yaml"
+    c_content = config_file.read_text(encoding="utf-8")
+    c_content += "\nreview:\n  large_diff_threshold: 10\n  large_diff_strategy: \"stratified\"\n"
+    config_file.write_text(c_content, encoding="utf-8")
+    
+    # Copy ai_review.py and providers.py
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "ai_review.py", TEST_PROJECT / "src" / "scripts" / "ai_review.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "providers.py", TEST_PROJECT / "src" / "scripts" / "providers.py")
+    
+    # Make sure session.json exists
+    session_file = TEST_PROJECT / ".agent" / "state" / "session.json"
+    session_data = {
+        "session_id": "test-session-id",
+        "start_time": "2026-05-27T19:32:04Z",
+        "status": "ACTIVE",
+        "agent": "Harness",
+        "token_usage": {"input_tokens": 0, "output_tokens": 0}
+    }
+    with open(session_file, "w", encoding="utf-8") as f:
+        json.dump(session_data, f, indent=4)
+        
+    # Unset ANTHROPIC_API_KEY to test offline strategy prints and fail-open/fail-closed
+    env_no_api = os.environ.copy()
+    if "ANTHROPIC_API_KEY" in env_no_api:
+        del env_no_api["ANTHROPIC_API_KEY"]
+    if "OPENAI_API_KEY" in env_no_api:
+        del env_no_api["OPENAI_API_KEY"]
+        
+    # 1. Test Thin-Standard Fallback (Low-Risk changes exceeding threshold)
+    # Write a low-risk python file with real code (25 lines) to bypass PASS_FAST
+    low_risk_file = TEST_PROJECT / "tests" / "test_dummy.py"
+    low_risk_file.parent.mkdir(parents=True, exist_ok=True)
+    low_risk_file.write_text("def test_dummy():\n" + "\n".join(f"    print('dummy code line {i}')" for i in range(25)), encoding="utf-8")
+    
+    # Stage the file
+    subprocess.run(["git", "add", "tests/test_dummy.py"], cwd=str(TEST_PROJECT), check=True)
+    
+    res_thin = subprocess.run(
+        [sys.executable, "src/scripts/ai_review.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT),
+        env=env_no_api
+    )
+    
+    # 2. Test Stratified Gating (High-Risk changes exceeding threshold)
+    # Write a high-risk python file (models.py) with 25 lines of dummy code
+    high_risk_file = TEST_PROJECT / "src" / "models.py"
+    high_risk_file.parent.mkdir(parents=True, exist_ok=True)
+    high_risk_file.write_text("class DummyModel:\n" + "\n".join(f"    # dummy high risk {i}" for i in range(25)), encoding="utf-8")
+    
+    subprocess.run(["git", "add", "src/models.py"], cwd=str(TEST_PROJECT), check=True)
+    
+    res_strat = subprocess.run(
+        [sys.executable, "src/scripts/ai_review.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT),
+        env=env_no_api
+    )
+    
+    thin_matched = "Thin-Standard fallback active" in res_thin.stdout
+    strat_matched = "Stratified review active" in res_strat.stdout
+    
+    # Since API is unavailable, thin-standard (low risk) should fail-open (exit 0)
+    # and stratified (high risk) should fail-closed (exit 1)
+    thin_fail_open = res_thin.returncode == 0
+    strat_fail_closed = res_strat.returncode == 1
+    
+    if thin_matched and strat_matched and thin_fail_open and strat_fail_closed:
+        print_ok("Stratified review strategy and Thin-Standard fallback selected correctly, with proper fail-open/fail-closed enforcement.")
+    else:
+        print_err(f"Stratified/Thin test failed!\n"
+                  f"  thin_matched={thin_matched}, strat_matched={strat_matched}\n"
+                  f"  thin_fail_open={thin_fail_open} (rc={res_thin.returncode})\n"
+                  f"  strat_fail_closed={strat_fail_closed} (rc={res_strat.returncode})\n"
+                  f"Stdout thin:\n{res_thin.stdout}\n"
+                  f"Stdout strat:\n{res_strat.stdout}")
+        failures += 1
+
     print_banner("Summary of Manual Verification")
     if failures == 0:
-        print(f"{Colors.GREEN}{Colors.BOLD}🎉 ALL {21} MANUAL VERIFICATION TESTS PASSED SUCCESSFULLY! 🎉{Colors.ENDC}\n")
+        print(f"{Colors.GREEN}{Colors.BOLD}🎉 ALL {24} MANUAL VERIFICATION TESTS PASSED SUCCESSFULLY! 🎉{Colors.ENDC}\n")
     else:
         print(f"{Colors.FAIL}{Colors.BOLD}❌ {failures} MANUAL VERIFICATION TEST(S) FAILED. Please review the errors above. ❌{Colors.ENDC}\n")
         sys.exit(1)

@@ -1,22 +1,63 @@
 import argparse
+import contextlib
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure UTF-8 stdout/stderr on Windows
-if sys.platform == "win32":
+if sys.platform == "win32" and "pytest" not in sys.modules:
     import io
 
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 STATE_DIR = Path(".agent/state")
 SESSION_FILE = STATE_DIR / "session.json"
 LEDGER_FILE = STATE_DIR / "session_ledger.jsonl"
+
+
+@contextlib.contextmanager
+def _lock_session(session_file: Path, timeout: float = 5.0, delay: float = 0.05):
+    """Platform-agnostic, atomic directory-based advisory lock for session.json with stale lock clearance."""
+    lock_path = session_file.with_suffix(".lock")
+    start_time = time.time()
+    acquired = False
+    
+    while time.time() - start_time < timeout:
+        try:
+            lock_path.mkdir(exist_ok=False)
+            acquired = True
+            break
+        except FileExistsError:
+            # Check for stale lock (older than 60 seconds)
+            try:
+                mtime = lock_path.stat().st_mtime
+                if time.time() - mtime > 60.0:
+                    try:
+                        lock_path.rmdir()
+                        print("[LOCK] Cleared stale session lock directory.")
+                        continue
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            time.sleep(delay)
+            
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            try:
+                lock_path.rmdir()
+            except Exception:
+                pass
 
 
 def parse_iso_datetime(dt_str: str) -> datetime:
@@ -57,178 +98,179 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
     if not SESSION_FILE.exists():
         return None, None
 
-    try:
-        with open(SESSION_FILE, "r", encoding="utf-8") as f:
-            prev_data = json.load(f)
-    except Exception:
-        return None, None
-
-    if prev_data.get("status") != "ACTIVE":
-        return None, None
-
-    prev_id = prev_data.get("session_id", "unknown")
-    prev_start = prev_data.get("start_time")
-    prev_agent = prev_data.get("agent", "Agent")
-
-    outcome = "abandoned"
-    source = "inferred"
-    note = "Session closed with no commits."
-    action_str = "No active commits made. Session closed."
-
-    # Aggregate token statistics strictly matching this session_id from .ai-review-log.jsonl
-    input_tokens = 0
-    output_tokens = 0
-    context_load_est = 0
-    repo_map_est = 0
-    adr_injection_est = 0
-    call_count = 0
-    has_fail = False
-
-    REVIEW_LOG_FILE = Path(".ai-review-log.jsonl")
-    if REVIEW_LOG_FILE.exists():
+    with _lock_session(SESSION_FILE):
         try:
-            start_dt = parse_iso_datetime(prev_start)
-            lines = REVIEW_LOG_FILE.read_text(encoding="utf-8").splitlines()
-            for line in lines:
-                if not line.strip():
-                    continue
-                log = json.loads(line)
-
-                # Verify session_id match strictly
-                log_session_id = log.get("session_id")
-                if log_session_id != prev_id:
-                    continue
-
-                call_count += 1
-                usage = log.get("token_usage", {})
-                input_tokens += usage.get("input_tokens", 0)
-                output_tokens += usage.get("output_tokens", 0)
-                context_load_est += usage.get("context_load_estimated_tokens", 0)
-                repo_map_est += usage.get("repo_map_estimated_tokens", 0)
-                adr_injection_est += usage.get("adr_injection_estimated_tokens", 0)
-
-                # Check for FAIL verdict within this session
-                log_time = parse_iso_datetime(log.get("timestamp", ""))
-                if log_time > start_dt and log.get("verdict") == "FAIL":
-                    has_fail = True
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                prev_data = json.load(f)
         except Exception:
-            pass
+            return None, None
 
-    # Support outcome_override in session.json
-    if "outcome_override" in prev_data:
-        outcome = prev_data["outcome_override"]
-        source = prev_data.get("outcome_override_source", "agent_override")
-        note = prev_data.get("outcome_override_note", "Closed via explicit override.")
-    else:
-        # 1. Check for escalation
-        is_escalated = False
-        # A. Check for HALT file
-        if Path(".agent/state/HALT").exists():
-            is_escalated = True
-            note = "Session halted due to active HALT file."
-        # B. Check for halt_event or critical severity in harness_events.jsonl
-        EVENTS_FILE = STATE_DIR / "harness_events.jsonl"
-        if not is_escalated and EVENTS_FILE.exists():
+        if prev_data.get("status") != "ACTIVE":
+            return None, None
+
+        prev_id = prev_data.get("session_id", "unknown")
+        prev_start = prev_data.get("start_time")
+        prev_agent = prev_data.get("agent", "Agent")
+
+        outcome = "abandoned"
+        source = "inferred"
+        note = "Session closed with no commits."
+        action_str = "No active commits made. Session closed."
+
+        # Aggregate token statistics strictly matching this session_id from .ai-review-log.jsonl
+        input_tokens = 0
+        output_tokens = 0
+        context_load_est = 0
+        repo_map_est = 0
+        adr_injection_est = 0
+        call_count = 0
+        has_fail = False
+
+        REVIEW_LOG_FILE = Path(".ai-review-log.jsonl")
+        if REVIEW_LOG_FILE.exists():
             try:
                 start_dt = parse_iso_datetime(prev_start)
-                lines = EVENTS_FILE.read_text(encoding="utf-8").splitlines()
+                lines = REVIEW_LOG_FILE.read_text(encoding="utf-8").splitlines()
                 for line in lines:
                     if not line.strip():
                         continue
-                    evt = json.loads(line)
-                    evt_time = parse_iso_datetime(evt.get("timestamp_utc", ""))
-                    if evt_time > start_dt:
-                        if (
-                            evt.get("event_type") == "halt_event"
-                            or evt.get("severity") == "critical"
-                        ):
-                            is_escalated = True
-                            note = f"Session halted due to critical event: {evt.get('payload', {}).get('detail', 'Unknown error')}"
-                            break
+                    log = json.loads(line)
+
+                    # Verify session_id match strictly
+                    log_session_id = log.get("session_id")
+                    if log_session_id != prev_id:
+                        continue
+
+                    call_count += 1
+                    usage = log.get("token_usage", {})
+                    input_tokens += usage.get("input_tokens", 0)
+                    output_tokens += usage.get("output_tokens", 0)
+                    context_load_est += usage.get("context_load_estimated_tokens", 0)
+                    repo_map_est += usage.get("repo_map_estimated_tokens", 0)
+                    adr_injection_est += usage.get("adr_injection_estimated_tokens", 0)
+
+                    # Check for FAIL verdict within this session
+                    log_time = parse_iso_datetime(log.get("timestamp", ""))
+                    if log_time > start_dt and log.get("verdict") == "FAIL":
+                        has_fail = True
             except Exception:
                 pass
 
-        if is_escalated:
-            outcome = "escalated"
-            action_str = "Session halted due to escalation/critical failure."
+        # Support outcome_override in session.json
+        if "outcome_override" in prev_data:
+            outcome = prev_data["outcome_override"]
+            source = prev_data.get("outcome_override_source", "agent_override")
+            note = prev_data.get("outcome_override_note", "Closed via explicit override.")
         else:
-            # 2. Check for commits made
-            commits = get_commits_after(prev_start)
-            if commits:
-                action_str = f"[COMMIT]: {commits[0]['message']}"
+            # 1. Check for escalation
+            is_escalated = False
+            # A. Check for HALT file
+            if (STATE_DIR / "HALT").exists():
+                is_escalated = True
+                note = "Session halted due to active HALT file."
+            # B. Check for halt_event or critical severity in harness_events.jsonl
+            EVENTS_FILE = STATE_DIR / "harness_events.jsonl"
+            if not is_escalated and EVENTS_FILE.exists():
+                try:
+                    start_dt = parse_iso_datetime(prev_start)
+                    lines = EVENTS_FILE.read_text(encoding="utf-8").splitlines()
+                    for line in lines:
+                        if not line.strip():
+                            continue
+                        evt = json.loads(line)
+                        evt_time = parse_iso_datetime(evt.get("timestamp_utc", ""))
+                        if evt_time > start_dt:
+                            if (
+                                evt.get("event_type") == "halt_event"
+                                or evt.get("severity") == "critical"
+                            ):
+                                is_escalated = True
+                                note = f"Session halted due to critical event: {evt.get('payload', {}).get('detail', 'Unknown error')}"
+                                break
+                except Exception:
+                    pass
 
-                # Check for open tasks in active_context.md
-                has_open_tasks = False
-                CONTEXT_FILE = STATE_DIR / "active_context.md"
-                if CONTEXT_FILE.exists():
-                    try:
-                        content = CONTEXT_FILE.read_text(encoding="utf-8")
-                        if "- [ ]" in content:
-                            has_open_tasks = True
-                    except Exception:
-                        pass
-
-                if not has_fail and not has_open_tasks:
-                    outcome = "success"
-                    note = "All committed changes completed with no pending open tasks."
-                else:
-                    outcome = "partial"
-                    note = f"Changes committed but open tasks or review failures remain. (FAIL reviews: {has_fail}, open tasks: {has_open_tasks})"
+            if is_escalated:
+                outcome = "escalated"
+                action_str = "Session halted due to escalation/critical failure."
             else:
-                # 3. No commits and not escalated => abandoned
-                outcome = "abandoned"
-                note = "Session closed with no commits."
-                action_str = "No active commits made. Session abandoned."
+                # 2. Check for commits made
+                commits = get_commits_after(prev_start)
+                if commits:
+                    action_str = f"[COMMIT]: {commits[0]['message']}"
 
-    # Format date for ledger: prev_start as YYYY-MM-DD HH:MM
-    try:
-        dt = parse_iso_datetime(prev_start)
-        date_str = dt.strftime("%Y-%m-%d %H:%M")
-    except Exception:
-        date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    # Check for open tasks in active_context.md
+                    has_open_tasks = False
+                    CONTEXT_FILE = STATE_DIR / "active_context.md"
+                    if CONTEXT_FILE.exists():
+                        try:
+                            content = CONTEXT_FILE.read_text(encoding="utf-8")
+                            if "- [ ]" in content:
+                                has_open_tasks = True
+                        except Exception:
+                            pass
 
-    # Log to session_ledger.jsonl
-    token_usage_stats = {
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "context_load_estimated_tokens": context_load_est,
-        "repo_map_estimated_tokens": repo_map_est,
-        "adr_injection_estimated_tokens": adr_injection_est,
-        "call_count": call_count,
-    }
+                    if not has_fail and not has_open_tasks:
+                        outcome = "success"
+                        note = "All committed changes completed with no pending open tasks."
+                    else:
+                        outcome = "partial"
+                        note = f"Changes committed but open tasks or review failures remain. (FAIL reviews: {has_fail}, open tasks: {has_open_tasks})"
+                else:
+                    # 3. No commits and not escalated => abandoned
+                    outcome = "abandoned"
+                    note = "Session closed with no commits."
+                    action_str = "No active commits made. Session abandoned."
 
-    ledger_entry = {
-        "session_id": prev_id,
-        "date": date_str,
-        "action": action_str,
-        "startup_checked": True,
-        "agent": prev_agent,
-        "outcome": outcome,
-        "outcome_source": source,
-        "outcome_note": note,
-        "harness_version": "2.0",
-        "token_usage": token_usage_stats,
-    }
+        # Format date for ledger: prev_start as YYYY-MM-DD HH:MM
+        try:
+            dt = parse_iso_datetime(prev_start)
+            date_str = dt.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    try:
-        with open(LEDGER_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(ledger_entry) + "\n")
-    except Exception:
-        pass
+        # Log to session_ledger.jsonl
+        token_usage_stats = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "context_load_estimated_tokens": context_load_est,
+            "repo_map_estimated_tokens": repo_map_est,
+            "adr_injection_estimated_tokens": adr_injection_est,
+            "call_count": call_count,
+        }
 
-    # Update session.json status
-    prev_data["status"] = "COMPLETED"
-    prev_data["outcome"] = outcome
-    prev_data["outcome_source"] = source
-    prev_data["outcome_note"] = note
-    prev_data["token_usage"] = token_usage_stats
-    try:
-        with open(SESSION_FILE, "w", encoding="utf-8") as f:
-            json.dump(prev_data, f, indent=4)
-    except Exception:
-        pass
+        ledger_entry = {
+            "session_id": prev_id,
+            "date": date_str,
+            "action": action_str,
+            "startup_checked": True,
+            "agent": prev_agent,
+            "outcome": outcome,
+            "outcome_source": source,
+            "outcome_note": note,
+            "harness_version": "2.0",
+            "token_usage": token_usage_stats,
+        }
 
-    return outcome, note
+        try:
+            with open(LEDGER_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(ledger_entry) + "\n")
+        except Exception:
+            pass
+
+        # Update session.json status
+        prev_data["status"] = "COMPLETED"
+        prev_data["outcome"] = outcome
+        prev_data["outcome_source"] = source
+        prev_data["outcome_note"] = note
+        prev_data["token_usage"] = token_usage_stats
+        try:
+            with open(SESSION_FILE, "w", encoding="utf-8") as f:
+                json.dump(prev_data, f, indent=4)
+        except Exception:
+            pass
+
+        return outcome, note
 
 
 def load_hot_tier(ledger_path: Path = LEDGER_FILE, n: int = 3) -> list[dict]:
@@ -280,33 +322,154 @@ def orient_agent(prev_outcome: str | None, prev_note: str | None) -> None:
     print("=" * 80 + "\n")
 
 
+def get_current_branch() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+def get_modified_files() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        files = []
+        for line in result.stdout.splitlines():
+            if len(line) > 3:
+                files.append(line[3:].strip())
+        return files
+    except Exception:
+        return []
+
+def classify_task_magnitude() -> str:
+    branch = get_current_branch()
+    files = get_modified_files()
+    file_count = len(files)
+    
+    # 1. Primary Signal: Branch name
+    micro_patterns = [r"hotfix/", r"fix/doc", r"docs?/", r"chore/", r"typo/"]
+    major_patterns = [r"rfc/", r"spec/", r"release/", r"migration/", r"epic/"]
+    
+    magnitude = "standard"
+    for pat in micro_patterns:
+        if re.search(pat, branch, re.IGNORECASE):
+            magnitude = "micro"
+            break
+            
+    for pat in major_patterns:
+        if re.search(pat, branch, re.IGNORECASE):
+            magnitude = "major"
+            break
+            
+    # 2. Secondary Signal: File state
+    code_extensions = {".py", ".js", ".ts", ".go", ".java", ".rs", ".cs"}
+    has_code = False
+    has_migrations = False
+    
+    for f in files:
+        f_lower = f.lower().replace("\\", "/")
+        ext = Path(f).suffix.lower()
+        if ext in code_extensions:
+            has_code = True
+        if "migration" in f_lower or re.search(r"v\d+_\d+_\d+_to_v\d+_\d+_\d+\.py", Path(f).name):
+            has_migrations = True
+            
+    if has_migrations or file_count > 20:  # configurable: magnitude.major_file_threshold
+        magnitude = "major"
+    elif magnitude == "micro" and has_code:
+        magnitude = "standard"
+    elif magnitude == "standard" and file_count > 0 and not has_code:
+        magnitude = "micro"
+        
+    return magnitude
+
+def _should_skip_background_tasks() -> bool:
+    if SESSION_FILE.exists():
+        try:
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("task_magnitude") == "micro"
+        except Exception:
+            pass
+    return False
+
 def initialize_session(agent_name: str = "Harness") -> None:
     """Initializes or updates the current session state."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    session_id = str(uuid.uuid4())
-    start_time = datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
+    with _lock_session(SESSION_FILE):
+        # Clean structured JSON token budget HALT on startup
+        halt_path = STATE_DIR / "HALT"
+        if halt_path.exists():
+            try:
+                halt_data = json.loads(halt_path.read_text(encoding="utf-8"))
+                if halt_data.get("reason") == "token_budget_exhausted":
+                    halt_path.unlink()
+                    print("[INIT] Resetting session token budget halt.")
+            except Exception:
+                pass
 
-    session_data = {
-        "session_id": session_id,
-        "start_time": start_time,
-        "last_activity": start_time,
-        "status": "ACTIVE",
-        "agent": agent_name,
-        "token_usage": {
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "context_load_estimated_tokens": 0,
-            "repo_map_estimated_tokens": 0,
-            "adr_injection_estimated_tokens": 0,
-            "call_count": 0,
+        session_id = str(uuid.uuid4())
+        start_time = datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
+
+        magnitude = "standard"
+        magnitude_source = "auto"
+        
+        if SESSION_FILE.exists():
+            try:
+                with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                    old_data = json.load(f)
+                    if old_data.get("task_magnitude_source") == "agent_override":
+                        magnitude = old_data.get("task_magnitude", "standard")
+                        magnitude_source = "agent_override"
+            except Exception:
+                pass
+                
+        if magnitude_source == "auto":
+            magnitude = classify_task_magnitude()
+
+        session_data = {
+            "session_id": session_id,
+            "start_time": start_time,
+            "last_activity": start_time,
+            "status": "ACTIVE",
+            "agent": agent_name,
+            "task_magnitude": magnitude,
+            "task_magnitude_source": magnitude_source,
+            "token_usage": {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "reasoning_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "context_load_estimated_tokens": 0,
+                "repo_map_estimated_tokens": 0,
+                "adr_injection_estimated_tokens": 0,
+                "call_count": 0,
+            }
         }
-    }
 
-    with open(SESSION_FILE, "w", encoding="utf-8") as f:
-        json.dump(session_data, f, indent=4)
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, indent=4)
 
-    print(f"[INIT] Session {session_id} initialized.")
+        print(f"[INIT] Session {session_id} initialized.")
+        print(f"[MAGNITUDE] Task Magnitude Auto-Classified: {magnitude.upper()} (source: {magnitude_source})")
+        if magnitude == "major":
+            print("\n" + "=" * 80)
+            print("💡 [MAGNITUDE] Major task session initialized. Loading full warm-tier context...")
+            print("   Please review architectural context before execution:")
+            print(f"   {PROJECT_ROOT}/.agent/state/decisions_log.md")
+            print("=" * 80 + "\n")
 
 
 def record_post_commit_heartbeat() -> None:
@@ -376,6 +539,8 @@ def record_post_commit_heartbeat() -> None:
 
 def maybe_run_dream_phase(prev_outcome: str | None) -> None:
     """Evaluate thresholds and cooldowns, then maybe execute the dream phase distillation."""
+    if _should_skip_background_tasks():
+        return
     DREAM_STATE_FILE = STATE_DIR / "dream_phase_state.json"
     last_run_utc = "1970-01-01T00:00:00Z"
 
@@ -496,6 +661,8 @@ def maybe_run_dream_phase(prev_outcome: str | None) -> None:
 
 def maybe_run_wiki_compile() -> None:
     """Evaluate thresholds and execute the wiki compiler if needed."""
+    if _should_skip_background_tasks():
+        return
     WIKI_STATE_FILE = STATE_DIR / "wiki_compile_state.json"
     last_run_utc = "1970-01-01T00:00:00Z"
 
@@ -537,6 +704,8 @@ def maybe_run_wiki_compile() -> None:
 
 def maybe_run_wiki_lint() -> None:
     """Evaluate thresholds and execute the local wiki linter if needed."""
+    if _should_skip_background_tasks():
+        return
     WIKI_LINT_STATE_FILE = STATE_DIR / "wiki_lint_state.json"
     last_run_utc = "1970-01-01T00:00:00Z"
 

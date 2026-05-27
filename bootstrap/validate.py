@@ -257,7 +257,7 @@ class Validator:
             return True, "No active .git/ directory or git hooks directory found (Is git initialized?)"
             
         # Pre-commit install typically populates these files
-        expected_hooks = ["pre-commit", "commit-msg", "pre-push"]
+        expected_hooks = ["pre-commit", "commit-msg", "pre-push", "post-commit"]
         active_hooks = []
         for hook in expected_hooks:
             hook_file = git_hooks_dir / hook
@@ -321,6 +321,48 @@ class Validator:
             return False, "UNIVERSAL_CONTEXT.md exists but is missing a framework version reference"
         return True, "UNIVERSAL_CONTEXT.md present and contains framework version"
 
+    def validate_gitignored_states(self) -> Tuple[bool, str]:
+        """Confirm session.json and all .agent/state/ files are correctly ignored by git."""
+        state_files = [
+            ".agent/state/session.json",
+            ".agent/state/harness_events.jsonl",
+            ".agent/state/HALT",
+        ]
+        
+        not_ignored = []
+        for file_rel in state_files:
+            file_path = self.project_path / file_rel
+            # Ensure parent exists
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Temporary touch if not exists for check-ignore
+            existed = file_path.exists()
+            if not existed:
+                try:
+                    file_path.touch()
+                except Exception:
+                    pass
+                
+            try:
+                res = subprocess.run(
+                    ["git", "check-ignore", "-q", file_rel],
+                    cwd=str(self.project_path),
+                )
+                if res.returncode != 0:
+                    not_ignored.append(file_rel)
+            except Exception:
+                pass
+                
+            if not existed and file_path.exists():
+                try:
+                    file_path.unlink()
+                except Exception:
+                    pass
+                
+        if not_ignored:
+            return False, f"Harness state files are NOT gitignored: {', '.join(not_ignored)}. Check your .gitignore!"
+        return True, "All harness state files are correctly ignored by git."
+
     def run_all(self) -> int:
         # Check if .agent/ exists as the very first check
         agent_dir = self.project_path / ".agent"
@@ -349,6 +391,7 @@ class Validator:
         self.run_check("Universal Context File", self.validate_universal_context)
         self.run_check("Harness Configurations Validity", self.validate_configs)
         self.run_check("Pre-commit Git Hook Layout", self.validate_precommit_setup)
+        self.run_check("Gitignored Harness State Files", self.validate_gitignored_states)
         self.run_check("AI Review Gate Setup", self.validate_ai_review_wiring)
         
         print(f"\n==================================================")
