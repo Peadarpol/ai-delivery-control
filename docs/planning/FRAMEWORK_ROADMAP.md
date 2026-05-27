@@ -3,7 +3,7 @@
 **Status**: Active Development
 **Current Version**: 1.1.0
 **Target Release**: v1.1.5
-**Last Updated**: 2026-05-25
+**Last Updated**: 2026-05-27
 
 ---
 
@@ -194,13 +194,13 @@ cannot upgrade without manual file merging will not continue.
 | ID | Item | Effort | Status |
 |----|------|--------|--------|
 | HIB-006 | `bootstrap/upgrade.py` | Medium | ⬜ |
-| T1-B-03 | Onboarding workflow | Low | ⬜ |
-| S0-03 | `CONTRIBUTING.md` | Low | ⬜ |
-| S0-04 | GitHub issue templates | Low | ⬜ |
-| S0-05 | Cut v1.0.0 GitHub release + tag | Low | ⬜ |
-| S0-06 | CI badge | Low | ⬜ |
-| S0-08 | Surface representative skills in docs | Low | ⬜ |
-| S0-09 | Worked example (diff → routing → verdict cycle) | Low | ⬜ |
+| T1-B-03 | Onboarding workflow | Low | ✅ |
+| S0-03 | `CONTRIBUTING.md` | Low | ✅ |
+| S0-04 | GitHub issue templates | Low | ✅ |
+| S0-05 | Cut v1.1.5 GitHub release + tag | Low | ⬜ |
+| S0-06 | CI badge | Low | ✅ |
+| S0-08 | Surface representative skills in docs | Low | ✅ |
+| S0-09 | Worked example (diff → routing → verdict cycle) | Low | ✅ |
 
 Human-authored in parallel (no agent session required): T1-M-01 (agent
 operations guide), T1-M-02 (spec writing guide), T1-M-04 (team usage guide).
@@ -213,9 +213,9 @@ S0-05 must be cut before any beta invitations are sent.
 
 | ID | Item | Effort | Status |
 |----|------|--------|--------|
-| T1-I-02 | Token budget tracking per session | Low | ⬜ |
-| T1-I-07 | Session token budget with WARN/HALT | Low | ⬜ |
-| T1-M-06 | Context compaction template | Low | ⬜ |
+| T1-I-02 | Token budget tracking per session | Low | ✅ |
+| T1-I-07 | Session token budget with WARN/HALT | Low | ✅ |
+| T1-M-06 | Context compaction template | Low | ✅ |
 | T1-G-08 | Diff size review strategy | Low | ⬜ |
 
 ---
@@ -226,22 +226,24 @@ S0-05 must be cut before any beta invitations are sent.
 |----|------|--------|--------|
 | T1-H-08 | Branch-isolated model roster in compiled wiki | Low | ⬜ |
 | T1-G-07 | Structured SKIP_REASON enforcement | Low | ⬜ |
-| T1-L-10 | False positive → eval regression pipeline | Low | ⬜ |
+| T1-L-10 | False positive → eval regression pipeline | Low | ✅ |
 | T1-G-06 | Structured rebuttal protocol | Medium | ⬜ |
 
 ---
 
 #### Recommended Sequencing
 
-**Week 1** — Quick wins and foundation:
-S0-03, S0-04, S0-05, S0-06, S0-08, S0-09 (manual tasks), T1-I-02, T1-G-07,
-T1-L-10, T1-H-08
+**Completed**: T1-B-03, T1-I-02, T1-I-07, T1-M-06, T1-L-10, S0-03, S0-04,
+S0-06, S0-08, S0-09 ✅
 
-**Week 2** — Installer and token protection:
-HIB-006, T1-B-03, T1-I-07, T1-M-06
+**Remaining**:
+- S0-05 — cut v1.1.5 release ← **next**
+- T1-G-07, T1-H-08 — low-effort gate calibration
+- HIB-006 — upgrade script
+- T1-G-08 — large diff review strategy
+- T1-G-06 — structured rebuttal protocol (medium effort, highest gate trust impact)
 
-**Week 3** — Gate trust and large diff handling:
-T1-G-06, T1-G-08, T1-M-01, T1-M-02, T1-M-04 (human-authored docs finalised)
+Human-authored in parallel: T1-M-01, T1-M-02, T1-M-04
 
 ---
 
@@ -291,31 +293,31 @@ T1-G-06, T1-G-08, T1-M-01, T1-M-02, T1-M-04 (human-authored docs finalised)
 
 **Chain B — Self-Improvement Loop** (implementation sequence from backlog):
 
-| ID | Item | Category |
-|----|------|----------|
-| T1-I-00a | Consolidate audit logs → harness_events.jsonl | Memory prereq |
-| T1-I-00b | Audit audit_logger.py wiring | Memory prereq |
-| T1-D-00 | skill_ownership.yaml — dream phase routing map | Chain B prereq |
-| T1-C-01 | Retrospective session outcome inference + post-commit heartbeat | Chain B foundation |
-| T1-I-03 | Outcome-aware session startup orientation | Chain B |
-| T1-D-03 | Dream phase distillation (distill_dream.py) | Chain B capstone |
-| T1-I-05 | Memory contradiction detector (integrated into T1-D-03) | Chain B |
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| T1-I-00a | Consolidate audit logs → harness_events.jsonl | Memory prereq | ⬜ |
+| T1-I-00b | Audit audit_logger.py wiring | Memory prereq | ⬜ |
+| T1-D-00 | skill_ownership.yaml — dream phase routing map | Chain B prereq | ⬜ |
+| T1-C-01 | Retrospective session outcome inference + post-commit heartbeat | Chain B foundation | ✅ (v1.1.5) |
+| T1-I-03 | Outcome-aware session startup orientation | Chain B | ✅ (v1.1.5) |
+| T1-D-03 | Dream phase distillation (distill_dream.py) | Chain B capstone | ✅ (v1.1.5) |
+| T1-I-05 | Memory contradiction detector (integrated into T1-D-03) | Chain B | ⬜ |
 
 **Memory system & reliability**:
 
-| ID | Item | Category |
-|----|------|----------|
-| T1-I-01 | Memory tiering (hot/warm/cold) | Memory |
-| T1-I-04 | Automated memory staleness detection | Memory |
-| T1-I-06 | Memory retention policy | Memory |
-| T1-C-02 | Structured HITL approval queue | Reliability |
-| T1-C-03 | Harness health alerting | Reliability |
-| T1-B-01 | Universal context file (eliminates three-copy drift) | Environment |
-| T1-B-02 | Harness versioning | Environment |
-| T1-B-03 | Onboarding workflow | Reliability |
-| T1-J-01 | Automatic checkpoint before file changes | Recovery |
-| BUG-07 | Session heartbeat file modification failure | Bug fix |
-| BUG-08 | Deprecated `datetime.utcnow()` in governance_check.py | Bug fix |
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| T1-I-01 | Memory tiering (hot/warm/cold) | Memory | ⬜ |
+| T1-I-04 | Automated memory staleness detection | Memory | ⬜ |
+| T1-I-06 | Memory retention policy | Memory | ⬜ |
+| T1-C-02 | Structured HITL approval queue | Reliability | ⬜ |
+| T1-C-03 | Harness health alerting | Reliability | ⬜ |
+| T1-B-01 | Universal context file (eliminates three-copy drift) | Environment | ⬜ |
+| T1-B-02 | Harness versioning | Environment | ⬜ |
+| T1-B-03 | Onboarding workflow | Reliability | ✅ (v1.1.5) |
+| T1-J-01 | Automatic checkpoint before file changes | Recovery | ⬜ |
+| BUG-07 | Session heartbeat file modification failure | Bug fix | ✅ |
+| BUG-08 | Deprecated `datetime.utcnow()` in governance_check.py | Bug fix | ✅ |
 
 **Future epic — Workflow Engine** *(needs further analysis before implementation)*:
 A data-driven workflow orchestrator replacing prose-driven agent interpretation with machine-readable phase definitions, FSM-backed state transitions, and per-phase completion contracts. Design document: [`workflow-engine-design.md`](file:///c:/projects/ai-delivery-control/docs/design/workflow-engine-design.md). Four components: workflow schema, workflow defaults YAML, `workflow_runner.py` (FSM via `transitions` library), and `ContractEvaluator`. Scope and backlog items to be defined after the Chain B items in this milestone are delivered.
@@ -416,15 +418,13 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 **Active milestone**: v1.1.5 (v1.1.0 shipped 2026-05-23)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**Priority order for v1.1.5**:
-1. S0-05 — GitHub release (before any beta invitations)
+**Priority order for v1.1.5** *(T1-B-03, T1-I-02, T1-I-07, T1-M-06, T1-L-10 delivered 2026-05-27)*:
+1. S0-05 — GitHub release (before any beta invitations) ← **next action**
 2. S0-03, S0-04, S0-06, S0-08, S0-09 — remaining Sprint 0 manual tasks
-3. T1-I-02 — token tracking foundation (prerequisite for T1-I-07)
-4. T1-G-07, T1-L-10, T1-H-08 — low-effort gate calibration items
-5. HIB-006 — upgrade script (critical for beta installer experience)
-6. T1-B-03 — onboarding workflow
-7. T1-I-07, T1-M-06, T1-G-08 — token protection and diff strategy
-8. T1-G-06 — structured rebuttal protocol (medium effort, highest gate trust impact)
+3. T1-G-07, T1-H-08 — low-effort gate calibration items
+4. HIB-006 — upgrade script (critical for beta installer experience)
+5. T1-G-08 — large diff review strategy
+6. T1-G-06 — structured rebuttal protocol (medium effort, highest gate trust impact)
 
 ---
 

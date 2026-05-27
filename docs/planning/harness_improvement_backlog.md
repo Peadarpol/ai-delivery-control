@@ -23,7 +23,7 @@ These feed into `FRAMEWORK_BACKLOG.md` when they mature into formal items.
 **Date**: 2026-05-18
 **Source**: Claude (T1-I-00b diagnostic)
 **Pillar**: Governance / Enforcement
-**Status**: 📅 Backlog — resolve with T1-C-01
+**Status**: ✅ Complete (2026-05-27) — T1-C-01 delivered; circuit breaker limits checked at session start in `init_session.py`
 
 `circuit_breaker.py` has no automatic enforcement — voluntary only. Gate exists in `governance.md` (line 119) as a "SHOULD run before committing" manual agent step but is not wired into the session or commit lifecycle. An agent that skips it faces no consequence from the harness. Pre-commit is the wrong hook stage (circuit breaker checks session-level limits, not commit-level limits).
 
@@ -36,7 +36,7 @@ These feed into `FRAMEWORK_BACKLOG.md` when they mature into formal items.
 **Date**: 2026-05-18
 **Source**: Hermes comparison
 **Pillar**: P7
-**Status**: 📅 Long-horizon — not actionable until dream phase is operational
+**Status**: 📅 Long-horizon — dream phase now operational (T1-D-03 delivered 2026-05-27); actionable once 6+ months of trajectory data accumulates
 
 Once T1-D-03 (dream phase) produces 6+ months of labelled session data, evaluate exporting harness trajectories in ShareGPT format for fine-tuning a codebase-specialist model. Hermes calls this "batch trajectory generation." Not actionable until dream phase is operational and producing quality labelled outcomes.
 
@@ -188,7 +188,7 @@ This is the session-level equivalent of the commit-level pre-flight shortcut (T1
 **Date**: 2026-05-22
 **Source**: Routing gap
 **Pillar**: T1-G-01 fix
-**Status**: 📅 Backlog — BUG-05
+**Status**: ✅ Complete (2026-05-27) — BUG-05 fixed in v1.1.0; canonical ADR domain→capability mapping dict added at `ai_review.py:339`
 
 ADR domain `branch_isolation` detected in `context_snapshot` but capability `BRANCH_ISOLATION` not activated — routing logic not mapping domain names to capability names. Check case/naming convention in `RouteDecision` build logic.
 
@@ -199,7 +199,7 @@ ADR domain `branch_isolation` detected in `context_snapshot` but capability `BRA
 **Date**: 2026-05-22
 **Source**: Gate calibration
 **Pillar**: T1-G-01 calibration
-**Status**: 📅 Backlog — BUG-06
+**Status**: ✅ Complete (2026-05-27) — BUG-06 fixed in v1.1.0; proportionate calibration applied (HIGH→FAIL, MEDIUM→WARN, LOW→info); false-positive guard and citation requirement added
 
 All 4 GymBase gate verdicts are FAIL with none WARN or PASS. Gate is too aggressive — agents bypass a gate that blocks every commit. Review system prompt and verdict thresholds. FAIL should require HIGH severity finding. MEDIUM → WARN. LOW → informational only.
 
@@ -221,7 +221,7 @@ RFC-003 session completed with gate never firing. No log entry, no warning, no v
 **Date**: 2026-05-22
 **Source**: Gate silent failure
 **Pillar**: T1-A-02 fix
-**Status**: 📅 Backlog — BUG-01 (CRITICAL)
+**Status**: ✅ Complete (2026-05-27) — BUG-01 confirmed present since initial commit (19683c2); `pre-commit install --hook-type commit-msg` present in `bootstrap/install.py` Phase 5
 
 AI review gate configured at `commit-msg` stage but `commit-msg` hook not installed = gate never fires. Entire RFC-003 session ran without gate coverage. This creates a security vulnerability, as the gate's protections are bypassed, and the gate fails to enforce its policies.
 
@@ -234,7 +234,7 @@ AI review gate configured at `commit-msg` stage but `commit-msg` hook not instal
 **Date**: 2026-05-22
 **Source**: Validate gap
 **Pillar**: T1-A-03 fix
-**Status**: 📅 Backlog — BUG-02
+**Status**: ✅ Complete (2026-05-27) — BUG-02 confirmed present since initial commit; `commit-msg` hook checked in `bootstrap/validate.py` hook layout validation
 
 `bootstrap/validate.py` checks for `pre-commit` and `pre-push` hooks but not `commit-msg` hook. Gate was absent for entire session and validation reported ✅.
 
@@ -258,7 +258,7 @@ When gate doesn't fire (wrong stage, missing hook, API key absent), no `GATE_SKI
 **Date**: 2026-05-22
 **Source**: commit-msg diff gap
 **Pillar**: T1-G-01 fix
-**Status**: 📅 Backlog — BUG-03
+**Status**: ✅ Complete (2026-05-27) — BUG-03 fixed in v1.1.0; ORIG_HEAD detection added + empty tree fallback for single-commit repos at `commit-msg` stage
 
 Gate reads `git diff --staged` at `commit-msg` stage. For `git commit --amend`, staged diff is empty → pre-flight fires → PASS in 1.57s → no real review. Fix: at `commit-msg` stage, read `git show HEAD` (the commit being created) not `git diff --staged`.
 
@@ -269,7 +269,7 @@ Gate reads `git diff --staged` at `commit-msg` stage. For `git commit --amend`, 
 **Date**: 2026-05-22
 **Source**: PASS not logged
 **Pillar**: T1-G-03 fix
-**Status**: 📅 Backlog — BUG-04
+**Status**: ✅ Complete (2026-05-27) — BUG-04 fixed; `_persist_verdict()` called for all verdict types including PASS_FAST
 
 PASS and PASS_FAST verdicts not written to `.ai-review-log.jsonl`. Only FAIL verdicts visible. Gate history is incomplete — only failures are recorded. Fix logging path for all verdict types.
 
