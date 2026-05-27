@@ -1,0 +1,30 @@
+# AI Delivery Control - Config v1.1.0
+framework:
+  version: "1.1.0"
+  repo: "https://github.com/Peadarpol/ai-delivery-control"
+  installed_at: "2026-05-20"
+
+project:
+  name: "MockProject"
+
+model_routing:
+  local_provider: "ollama"  # local_provider comment
+  local_model: "gemma4"
+  local_tasks:
+    - wiki_compile
+    - knowledge_lint
+  cloud_provider: "anthropic"
+  cloud_model: "claude-sonnet"
+
+token_tracking:
+  some_key: "value"
+
+paths:
+  source_root: "src"
+
+domain_constraints:
+  - "Tenant Isolation"
+
+review:
+  large_diff_threshold: 10
+  large_diff_strategy: "stratified"
