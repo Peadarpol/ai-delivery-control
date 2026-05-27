@@ -73,7 +73,7 @@ README lacks introductory pain point mapping for developers new to agentic workf
 **Date**: 2026-05-21
 **Source**: T1-A-upgrade
 **Pillar**: T1-A series
-**Status**: 📅 Backlog — design spec captured
+**Status**: ✅ Complete (2026-05-27) — `bootstrap/upgrade.py` delivered in Phase 2 (487 lines); migration chain `v1_1_0_to_v1_1_5.py`, manifest, checksums, and downgrade script also delivered
 
 Design specification for `bootstrap/upgrade.py` — safely update an existing AI Delivery Control installation to a newer framework version without overwriting developer customisations.
 

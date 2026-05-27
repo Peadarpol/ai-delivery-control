@@ -224,8 +224,8 @@ S0-05 must be cut before any beta invitations are sent.
 
 | ID | Item | Effort | Status |
 |----|------|--------|--------|
-| T1-H-08 | Branch-isolated model roster in compiled wiki | Low | ⬜ |
-| T1-G-07 | Structured SKIP_REASON enforcement | Low | ⬜ |
+| T1-H-08 | Branch-isolated model roster in compiled wiki | Low | ✅ |
+| T1-G-07 | Structured SKIP_REASON enforcement | Low | ✅ |
 | T1-L-10 | False positive → eval regression pipeline | Low | ✅ |
 | T1-G-06 | Structured rebuttal protocol | Medium | ⬜ |
 
@@ -233,15 +233,12 @@ S0-05 must be cut before any beta invitations are sent.
 
 #### Recommended Sequencing
 
-**Completed**: T1-B-03, T1-I-02, T1-I-07, T1-M-06, T1-L-10, S0-03, S0-04,
-S0-06, S0-08, S0-09 ✅
+**Completed**: T1-B-03, T1-I-02, T1-I-07, T1-M-06, T1-L-10, T1-G-07, T1-G-08,
+T1-H-08, HIB-006, S0-03, S0-04, S0-06, S0-08, S0-09 ✅
 
 **Remaining**:
 - S0-05 — cut v1.1.5 release ← **next**
-- T1-G-07, T1-H-08 — low-effort gate calibration
-- HIB-006 — upgrade script
-- T1-G-08 — large diff review strategy
-- T1-G-06 — structured rebuttal protocol (medium effort, highest gate trust impact)
+- T1-G-06 — structured rebuttal protocol (medium effort; second LLM pass on FAIL findings, REBUTTAL_ACCEPTED/REJECTED verdicts)
 
 Human-authored in parallel: T1-M-01, T1-M-02, T1-M-04
 
