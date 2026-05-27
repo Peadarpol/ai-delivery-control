@@ -193,7 +193,7 @@ cannot upgrade without manual file merging will not continue.
 
 | ID | Item | Effort | Status |
 |----|------|--------|--------|
-| HIB-006 | `bootstrap/upgrade.py` | Medium | ⬜ |
+| HIB-006 | `bootstrap/upgrade.py` | Medium | ✅ |
 | T1-B-03 | Onboarding workflow | Low | ✅ |
 | S0-03 | `CONTRIBUTING.md` | Low | ✅ |
 | S0-04 | GitHub issue templates | Low | ✅ |
