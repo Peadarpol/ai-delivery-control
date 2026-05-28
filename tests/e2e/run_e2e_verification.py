@@ -290,13 +290,13 @@ def main():
     # Verifications
     has_budget_provider = "budget_provider:" in config_text
     has_budget_model = "budget_model:" in config_text
-    version_bumped = 'version: "1.1.5.1"' in config_text
+    version_bumped = 'version: "1.1.5.2"' in config_text
     session_token_budget_null = "session_token_budget: null" in config_text
     has_comments = "# local_provider comment" in config_text
     state_file_written = state_file.exists()
     
     if has_budget_provider and has_budget_model and version_bumped and session_token_budget_null and has_comments and state_file_written:
-        print_ok("Upgrade successfully migrated configurations, bumped version to 1.1.5.1, kept comments, and wrote state file.")
+        print_ok("Upgrade successfully migrated configurations, bumped version to 1.1.5.2, kept comments, and wrote state file.")
         # Print a snippet of the migrated config
         print("Migrated config.yaml snippet:")
         for line in config_text.splitlines()[10:20]:
@@ -305,7 +305,7 @@ def main():
         print_err(f"Upgrade verification failed! Injections:\n"
                   f"  budget_provider: {has_budget_provider}\n"
                   f"  budget_model: {has_budget_model}\n"
-                  f"  version: 1.1.5.1: {version_bumped}\n"
+                  f"  version: 1.1.5.2: {version_bumped}\n"
                   f"  session_token_budget=null: {session_token_budget_null}\n"
                   f"  comment intact: {has_comments}\n"
                   f"  state file: {state_file_written}")
@@ -359,11 +359,11 @@ def main():
     gov_file.write_text("Modified governance contents!", encoding="utf-8")
     
     res = run_command([sys.executable, "bootstrap/upgrade.py", "--project-path", str(TEST_PROJECT), "--force"])
-    sidecar_exists = (TEST_PROJECT / ".agent" / "governance.md.framework-v1.1.5.1").exists()
+    sidecar_exists = (TEST_PROJECT / ".agent" / "governance.md.framework-v1.1.5.2").exists()
     gov_preserved = gov_file.read_text(encoding="utf-8") == "Modified governance contents!"
     
     if sidecar_exists and gov_preserved:
-        print_ok("Conflict trigger successfully detected modifications, wrote framework-v1.1.5.1 sidecar, and preserved original file.")
+        print_ok("Conflict trigger successfully detected modifications, wrote framework-v1.1.5.2 sidecar, and preserved original file.")
     else:
         print_err(f"Conflict trigger failed! Sidecar exists: {sidecar_exists}, Original preserved: {gov_preserved}")
         failures += 1
@@ -393,12 +393,12 @@ def main():
     # 2. Modify config.yaml framework.version to 1.1.0
     config_file = TEST_PROJECT / ".agent" / "config.yaml"
     c_content = config_file.read_text(encoding="utf-8")
-    c_content = re.sub(r'version: "1.1.5.1"', 'version: "1.1.0"', c_content)
+    c_content = re.sub(r'version: "1.1.5.2"', 'version: "1.1.0"', c_content)
     config_file.write_text(c_content, encoding="utf-8")
     
     # 3. Run upgrade again, check if it triggers re-verify mode
     res = run_command([sys.executable, "bootstrap/upgrade.py", "--project-path", str(TEST_PROJECT), "--force"])
-    if "Project is already at version 1.1.5.1. Entering non-destructive verification pass." in res.stdout:
+    if "Project is already at version 1.1.5.2. Entering non-destructive verification pass." in res.stdout:
         print_ok("Idempotency checks out: state file version took precedence and triggered re-verify mode.")
     else:
         print_err(f"Idempotency test failed! Output:\n{res.stdout}")
@@ -417,10 +417,10 @@ def main():
     config_file.write_text(c_content, encoding="utf-8")
     
     # Write a temporary crashing migration module in bootstrap/migrations/ that starts from 1.1.4
-    crashing_migration_file = WORKSPACE_ROOT / "bootstrap" / "migrations" / "v1_1_4_to_v1_1_5_1.py"
+    crashing_migration_file = WORKSPACE_ROOT / "bootstrap" / "migrations" / "v1_1_4_to_v1_1_5_2.py"
     crashing_content = """from pathlib import Path
 from_version = "1.1.4"
-to_version = "1.1.5.1"
+to_version = "1.1.5.2"
 
 def migrate(config_path: Path) -> None:
     raise RuntimeError('INJECTED MIGRATION CRASH')
@@ -618,7 +618,7 @@ def migrate(config_path: Path) -> None:
     print_step("Scenario 19: Budget provider reachability warning when Ollama is stopped")
     setup_fresh_v110_project()
     
-    # Run upgrade first to prepare the framework-v1.1.5.1 state
+    # Run upgrade first to prepare the framework-v1.1.5.2 state
     run_command([sys.executable, "bootstrap/upgrade.py", "--project-path", str(TEST_PROJECT), "--force"])
     
     # Configure Ollama with a fake stopped port directly in the upgraded config.yaml
@@ -675,15 +675,15 @@ def migrate(config_path: Path) -> None:
     # Scenario 21: Sanity Validate on upgraded project
     # ----------------------------------------------------
     print_step("Scenario 21: Sanity Validate on upgraded project")
-    # Upgrade project to 1.1.5.1 cleanly
+    # Upgrade project to 1.1.5.2 cleanly
     setup_fresh_v110_project()
     run_command([sys.executable, "bootstrap/upgrade.py", "--project-path", str(TEST_PROJECT), "--force"])
     
-    # Create the files expected by validate.py in their final 1.1.5.1 state
+    # Create the files expected by validate.py in their final 1.1.5.2 state
     # validate.py looks at:
     # - ai_review.py, review_context_universal.md, and review_context_project.md under source_root/scripts/
     (TEST_PROJECT / "src" / "scripts" / "review_context_project.md").write_text("# Project Invariants", encoding="utf-8")
-    (TEST_PROJECT / ".agent" / "UNIVERSAL_CONTEXT.md").write_text("Framework version: 1.1.5.1", encoding="utf-8")
+    (TEST_PROJECT / ".agent" / "UNIVERSAL_CONTEXT.md").write_text("Framework version: 1.1.5.2", encoding="utf-8")
     
     # Simulate install.py behavior by customising EXPECTED_REPO in check_repo.py
     check_repo_file = TEST_PROJECT / ".agent" / "scripts" / "check_repo.py"

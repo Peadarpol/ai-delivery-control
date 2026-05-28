@@ -69,7 +69,7 @@ class UpgradeManager:
         self.backup_path = self.project_path / ".agent_backup_upgrade"
         self.state_file_path = self.project_path / ".agent" / ".framework_migration_state"
         self.config_path = self.project_path / ".agent" / "config.yaml"
-        self.target_version = "1.1.5.1"
+        self.target_version = "1.1.5.2"
 
     def validate_project(self):
         """Ensure the project directory carries an active .agent folder."""

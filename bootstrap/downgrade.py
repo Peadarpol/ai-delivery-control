@@ -61,7 +61,7 @@ class DowngradeManager:
         if self.state_file_path.exists():
             try:
                 state = json.loads(self.state_file_path.read_text(encoding="utf-8"))
-                return state.get("current_version", "1.1.5.1")
+                return state.get("current_version", "1.1.5.2")
             except Exception:
                 pass
         
@@ -75,7 +75,7 @@ class DowngradeManager:
             except Exception:
                 pass
         
-        return "1.1.5.1"
+        return "1.1.5.2"
 
     def discover_migrations(self) -> list[tuple[tuple[int, ...], tuple[int, ...], Path]]:
         migrations_dir = self.framework_path / "bootstrap" / "migrations"

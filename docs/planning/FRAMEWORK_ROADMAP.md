@@ -316,6 +316,16 @@ Human-authored in parallel: T1-M-01, T1-M-02, T1-M-04
 | BUG-07 | Session heartbeat file modification failure | Bug fix | ✅ |
 | BUG-08 | Deprecated `datetime.utcnow()` in governance_check.py | Bug fix | ✅ |
 
+**Architecture**:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| T1-E-01 | Formalise skills as Tool ABC subclasses | Architecture | ⬜ |
+
+T1-E-01 is sequenced here for two reasons: (1) T1-D-03 (dream phase distillation) ships with a documented verification gap — executable verification of proposed rules against session evidence requires the Tool ABC and SkillRegistry to be in place; closing that gap while the dream phase is being established avoids it staying open for over a year. (2) Formalising skills as Tool subclasses discovered via SkillRegistry pulls skill execution responsibility out of `ai_review.py`, directly addressing the structural coupling that accumulates when all skill dispatch is centralised. The Workflow Engine epic that follows also benefits from skills being proper Tool objects.
+
+**Self-governance note**: `ai_review.py` has 32 imports accumulated across six development phases (review gate, diff classifier, budget enforcer, rebuttal handler, PageRank router, roster checker). A CI ratchet test (`tests/test_ai_review.py::TestAiReviewImportCount`) enforces the current count as a ceiling — it must not grow further. The T1-E-01 refactoring should bring it to ≤25 by extracting skill responsibilities into separate modules. Lower the ratchet ceiling from 32 to 25 when that work is complete.
+
 **Future epic — Workflow Engine** *(needs further analysis before implementation)*:
 A data-driven workflow orchestrator replacing prose-driven agent interpretation with machine-readable phase definitions, FSM-backed state transitions, and per-phase completion contracts. Design document: [`workflow-engine-design.md`](file:///c:/projects/ai-delivery-control/docs/design/workflow-engine-design.md). Four components: workflow schema, workflow defaults YAML, `workflow_runner.py` (FSM via `transitions` library), and `ContractEvaluator`. Scope and backlog items to be defined after the Chain B items in this milestone are delivered.
 
@@ -360,7 +370,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ### v1.5.0 — Skill Quality & Developer Experience 📋 PLANNED (Q2 2027)
 
-**Goal**: Skills become first-class managed artefacts with quality enforcement, deprecation lifecycle, and self-service authoring. Remaining developer experience improvements round out the Tier 1 feature set before the transition to multi-machine operation in v2.0.0.
+**Goal**: Skills become first-class managed artefacts with quality enforcement, deprecation lifecycle, and self-service authoring. Remaining developer experience improvements round out the Tier 1 feature set before the transition to multi-machine operation in v2.0.0. T1-B-04/05/06/07 depend on T1-E-01 (Tool ABC), which is delivered in v1.3.0 — the sequencing is now correct.
 
 **Planned items**:
 
@@ -370,7 +380,6 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-B-05 | Self-service skill authoring (`/create-skill` workflow) | Skill management |
 | T1-B-06 | Skill length diagnostic audit | Skill quality |
 | T1-B-07 | Skill decomposition and remediation | Skill quality |
-| T1-E-01 | Formalise skills as Tool ABC subclasses | Architecture |
 | T1-G-05 | Restricted globals sandbox for eval_runner.py | Security |
 | T1-H-04 | Auto-generated context files at install time | Install experience |
 | T1-H-05 | Dead-code confidence scoring | Repo intelligence |

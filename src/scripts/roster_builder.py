@@ -11,9 +11,8 @@ from __future__ import annotations
 import ast
 import glob
 import json
-import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 def log_harness_event(event_dict: Dict[str, Any], project_root: Path) -> None:
@@ -154,7 +153,6 @@ def build_branch_isolation_roster(
 
             class_name = node.name
             is_isolated = False
-            has_branch_id_col = False
             nullable = True
             fk = "branches.id"
 
@@ -187,7 +185,6 @@ def build_branch_isolation_roster(
                         target_node = stmt
 
                 if is_assign and target_node:
-                    has_branch_id_col = True
                     is_isolated = True
                     # Extract nullable and fk from argument calls
                     parsed_nullable, parsed_fk = _extract_fk_and_nullable(target_node)

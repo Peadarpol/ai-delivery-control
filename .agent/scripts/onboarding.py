@@ -4,7 +4,6 @@ Runs environment diagnostics, reachability checks, test suites, and outputs a da
 """
 
 import datetime
-import json
 import os
 import re
 import subprocess
@@ -19,6 +18,10 @@ if sys.platform == "win32":
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
     if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+
+def log_success(msg: str):
+    """Log success helper."""
+    print(f"✅ {msg}")
 
 def get_cli_version(args: list[str]) -> str:
     """Run a CLI command and return its version output."""
@@ -125,7 +128,6 @@ def main():
     tests_failed = "UNKNOWN"
     
     if test_run.returncode == 0:
-        tests_ok = True
         print("✅ All internal unit tests passed successfully.")
         # Parse test outcomes e.g. "83 passed in 0.85s"
         match = re.search(r"===+ (\d+) passed in", test_run.stdout)
@@ -133,7 +135,6 @@ def main():
             tests_passed = match.group(1)
             tests_failed = "0"
     else:
-        tests_ok = False
         print("❌ Internal test suite failures detected!")
         # Try to parse counts
         passed_match = re.search(r"(\d+) passed", test_run.stdout)
@@ -147,7 +148,7 @@ def main():
     skill_validations = []
     
     if skills_dir.exists():
-        for root, dirs, files in os.walk(skills_dir):
+        for root, _, files in os.walk(skills_dir):
             if "validate.py" in files:
                 val_script = Path(root) / "validate.py"
                 rel_val = val_script.relative_to(project_root)
@@ -213,7 +214,7 @@ This report establishes the baseline diagnostic capture for the AI Delivery Cont
 """
 
     baseline_path.write_text(baseline_content, encoding="utf-8")
-    print(f"\n==================================================")
+    print("\n==================================================")
     log_success(f"Generated Onboarding Baseline Report at {baseline_filename}")
     print("==================================================\n")
 

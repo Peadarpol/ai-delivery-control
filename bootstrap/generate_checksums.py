@@ -104,13 +104,15 @@ def run_generate(version: str, framework_root: Path, bootstrap_dir: Path):
     version_var = f"V{format_version_var(version)}"
     all_versions[version_var] = version_digests
     
-    # Ensure always having V1_1_0, V1_1_5 and V1_1_5_1 initialized as dicts if missing
+    # Ensure always having V1_1_0, V1_1_5, V1_1_5_1 and V1_1_5_2 initialized as dicts if missing
     if "V1_1_0" not in all_versions:
         all_versions["V1_1_0"] = {}
     if "V1_1_5" not in all_versions:
         all_versions["V1_1_5"] = {}
     if "V1_1_5_1" not in all_versions:
         all_versions["V1_1_5_1"] = {}
+    if "V1_1_5_2" not in all_versions:
+        all_versions["V1_1_5_2"] = {}
 
     # Write out to checksums.py
     with open(checksums_path, "w", encoding="utf-8", newline="\n") as f:
@@ -142,13 +144,13 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
         print(f"Error: Failed to import bootstrap.checksums ({e})", file=sys.stderr)
         sys.exit(1)
         
-    # Check 1: Digest match against what is currently on disk for V1_1_5_1
-    v1_1_5_1_var = "V1_1_5_1"
-    if not hasattr(checksums, v1_1_5_1_var):
-        print(f"Error: {v1_1_5_1_var} not found in checksums.py!", file=sys.stderr)
+    # Check 1: Digest match against what is currently on disk for V1_1_5_2
+    v1_1_5_2_var = "V1_1_5_2"
+    if not hasattr(checksums, v1_1_5_2_var):
+        print(f"Error: {v1_1_5_2_var} not found in checksums.py!", file=sys.stderr)
         sys.exit(1)
         
-    v1_1_5_1_dict = getattr(checksums, v1_1_5_1_var)
+    v1_1_5_2_dict = getattr(checksums, v1_1_5_2_var)
     current_files = expand_patterns(framework_root, manifest.FRAMEWORK_OWNED)
     
     # Calculate digests on disk and compare
@@ -159,9 +161,9 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
         full_path = framework_root / f
         current_digest = compute_sha256(full_path)
         
-        expected_digest = v1_1_5_1_dict.get(rel_path)
+        expected_digest = v1_1_5_2_dict.get(rel_path)
         if expected_digest is None:
-            print(f"MISMATCH: File '{rel_path}' exists on disk but is not recorded in {v1_1_5_var} checksums.", file=sys.stderr)
+            print(f"MISMATCH: File '{rel_path}' exists on disk but is not recorded in {v1_1_5_2_var} checksums.", file=sys.stderr)
             failures += 1
         elif current_digest != expected_digest:
             print(f"MISMATCH: File '{rel_path}' digest on disk ({current_digest}) does not match recorded ({expected_digest}).", file=sys.stderr)
@@ -170,10 +172,10 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
             checked += 1
             
     # Check if files in checksum dict are missing on disk
-    for rel_path in v1_1_5_1_dict.keys():
+    for rel_path in v1_1_5_2_dict.keys():
         full_path = framework_root / rel_path
         if not full_path.exists():
-            print(f"MISMATCH: File '{rel_path}' recorded in {v1_1_5_1_var} but does not exist on disk.", file=sys.stderr)
+            print(f"MISMATCH: File '{rel_path}' recorded in {v1_1_5_2_var} but does not exist on disk.", file=sys.stderr)
             failures += 1
             
     # Check 2: Non-empty assertion for versions referenced in migration chain

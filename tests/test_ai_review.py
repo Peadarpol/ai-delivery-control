@@ -1292,3 +1292,36 @@ class TestStructuredRebuttal:
                 assert res == 1
 
 
+# ── Self-governance: import count ratchet ────────────────────────────────────
+
+
+class TestAiReviewImportCount:
+    """
+    The framework enforces import-count ceilings on target projects; it must
+    apply the same discipline to itself.
+
+    Ceiling: 32 (current count — ratchet to prevent further growth).
+    Target: ≤25 after the T1-E-01 Tool ABC refactoring in v1.3.0, at which
+    point skill responsibilities are pulled out of ai_review.py into separate
+    modules discovered via SkillRegistry. Lower this assertion at that point.
+    """
+
+    def test_import_count_does_not_exceed_ceiling(self):
+        import ast
+
+        source = (
+            Path(__file__).resolve().parents[1] / "src" / "scripts" / "ai_review.py"
+        )
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        count = sum(
+            1 for node in ast.walk(tree)
+            if isinstance(node, (ast.Import, ast.ImportFrom))
+        )
+        ceiling = 32  # ratchet — do not raise; lower to 25 after T1-E-01
+        assert count <= ceiling, (
+            f"ai_review.py has {count} imports (ceiling {ceiling}). "
+            "Add imports only if unavoidable, and open a refactoring task to "
+            "push the count below 25 as part of T1-E-01 (v1.3.0)."
+        )
+
+
