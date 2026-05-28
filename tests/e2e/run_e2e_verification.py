@@ -101,6 +101,7 @@ def setup_fresh_v110_project() -> Path:
     for attempt in range(5):
         try:
             # Unstage any files from previous E2E runs in the git cache
+            subprocess.run(["git", "rm", "--cached", "-r", "--force", "tests/e2e/test_project"], cwd=str(WORKSPACE_ROOT), capture_output=True)
             subprocess.run(["git", "reset", "--", "tests/e2e/test_project"], cwd=str(WORKSPACE_ROOT), capture_output=True)
             safe_rmtree(TEST_PROJECT)
             
@@ -188,6 +189,15 @@ def run_command(args: list[str], input_str: str = None) -> subprocess.CompletedP
         errors="replace",
         cwd=str(WORKSPACE_ROOT)
     )
+
+def _init_isolated_git_project():
+    """Initialize a real isolated git repo in TEST_PROJECT so scenarios are independent of WORKSPACE_ROOT staging."""
+    safe_rmtree(TEST_PROJECT / ".git")
+    subprocess.run(["git", "init", "-b", "main"], cwd=str(TEST_PROJECT), capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=str(TEST_PROJECT), capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=str(TEST_PROJECT), capture_output=True)
+    subprocess.run(["git", "add", "."], cwd=str(TEST_PROJECT), capture_output=True)
+    subprocess.run(["git", "commit", "-m", "Initial scaffold"], cwd=str(TEST_PROJECT), capture_output=True)
 
 def has_v110_tag() -> bool:
     """Check if the v1.1.0 tag exists in the workspace repository."""
@@ -694,6 +704,7 @@ def migrate(config_path: Path) -> None:
     # ----------------------------------------------------
     print_step("Scenario 22: Token Budget 100% Halt and Reset E2E Verify")
     setup_fresh_v110_project()
+    safe_rmtree(TEST_PROJECT / ".git")
     # Configure token budget of 1000 in config.yaml
     config_file = TEST_PROJECT / ".agent" / "config.yaml"
     c_content = config_file.read_text(encoding="utf-8")
@@ -726,7 +737,7 @@ def migrate(config_path: Path) -> None:
     dummy_code_file = TEST_PROJECT / "src" / "dummy_budget.py"
     dummy_code_file.parent.mkdir(parents=True, exist_ok=True)
     dummy_code_file.write_text("print('Bypass preflight to trigger budget enforcement checks.')\n", encoding="utf-8")
-    subprocess.run(["git", "add", "src/dummy_budget.py"], cwd=str(TEST_PROJECT), check=True)
+    subprocess.run(["git", "add", "tests/e2e/test_project/src/dummy_budget.py"], cwd=str(WORKSPACE_ROOT), check=True)
         
     # Run check_halt.py and ai_review.py
     # Since we have budget exhaustion, ai_review.py should exit 1 before provider setup
@@ -820,7 +831,7 @@ def migrate(config_path: Path) -> None:
     # ----------------------------------------------------
     print_step("Scenario 24: Stratified Review & Thin-Standard Fallback E2E Verify")
     setup_fresh_v110_project()
-    
+
     # Copy senior-architect scripts
     dest_skills = TEST_PROJECT / ".agent" / "skills" / "universal" / "senior-architect" / "scripts"
     dest_skills.mkdir(parents=True, exist_ok=True)
@@ -847,22 +858,26 @@ def migrate(config_path: Path) -> None:
     }
     with open(session_file, "w", encoding="utf-8") as f:
         json.dump(session_data, f, indent=4)
-        
+
+    # Init isolated git repo so the staged diff is independent of WORKSPACE_ROOT staging
+    _init_isolated_git_project()
+
     # Unset ANTHROPIC_API_KEY to test offline strategy prints and fail-open/fail-closed
     env_no_api = os.environ.copy()
     if "ANTHROPIC_API_KEY" in env_no_api:
         del env_no_api["ANTHROPIC_API_KEY"]
     if "OPENAI_API_KEY" in env_no_api:
         del env_no_api["OPENAI_API_KEY"]
-        
+
     # 1. Test Thin-Standard Fallback (Low-Risk changes exceeding threshold)
     # Write a low-risk python file with real code (25 lines) to bypass PASS_FAST
     low_risk_file = TEST_PROJECT / "tests" / "test_dummy.py"
     low_risk_file.parent.mkdir(parents=True, exist_ok=True)
     low_risk_file.write_text("def test_dummy():\n" + "\n".join(f"    print('dummy code line {i}')" for i in range(25)), encoding="utf-8")
-    
-    # Stage the file
-    subprocess.run(["git", "add", "tests/test_dummy.py"], cwd=str(TEST_PROJECT), check=True)
+
+    # Stage the file within the isolated TEST_PROJECT git repo
+    res_add1 = subprocess.run(["git", "add", "tests/test_dummy.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
+    print(f"[DEBUG] git add thin output: rc={res_add1.returncode}, stdout={repr(res_add1.stdout)}, stderr={repr(res_add1.stderr)}")
     
     res_thin = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
@@ -880,7 +895,8 @@ def migrate(config_path: Path) -> None:
     high_risk_file.parent.mkdir(parents=True, exist_ok=True)
     high_risk_file.write_text("class DummyModel:\n" + "\n".join(f"    # dummy high risk {i}" for i in range(25)), encoding="utf-8")
     
-    subprocess.run(["git", "add", "src/models.py"], cwd=str(TEST_PROJECT), check=True)
+    res_add2 = subprocess.run(["git", "add", "src/models.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
+    print(f"[DEBUG] git add strat output: rc={res_add2.returncode}, stdout={repr(res_add2.stdout)}, stderr={repr(res_add2.stderr)}")
     
     res_strat = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
@@ -911,12 +927,226 @@ def migrate(config_path: Path) -> None:
                   f"Stdout strat:\n{res_strat.stdout}")
         failures += 1
 
+    # ----------------------------------------------------
+    # Scenario 25: Structured Rebuttal Protocol E2E Verify
+    # ----------------------------------------------------
+    print_step("Scenario 25: Structured Rebuttal Protocol E2E Verify")
+    setup_fresh_v110_project()
+
+    # Copy senior-architect scripts and universal review context
+    dest_skills = TEST_PROJECT / ".agent" / "skills" / "universal" / "senior-architect" / "scripts"
+    dest_skills.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(WORKSPACE_ROOT / ".agent" / "skills" / "universal" / "senior-architect" / "scripts" / "repo_map.py", dest_skills / "repo_map.py")
+
+    # Copy ai_review.py and providers.py
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "ai_review.py", TEST_PROJECT / "src" / "scripts" / "ai_review.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "providers.py", TEST_PROJECT / "src" / "scripts" / "providers.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "review_context_universal.md", TEST_PROJECT / "src" / "scripts" / "review_context_universal.md")
+
+    # Make sure session.json exists
+    session_file = TEST_PROJECT / ".agent" / "state" / "session.json"
+    session_data = {
+        "session_id": "e2e-rebuttal-session",
+        "start_time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "status": "ACTIVE",
+        "agent": "Harness",
+        "token_usage": {"input_tokens": 0, "output_tokens": 0}
+    }
+    with open(session_file, "w", encoding="utf-8") as f:
+        json.dump(session_data, f, indent=4)
+
+    # Init isolated git repo (baseline commit) before staging the test-specific file
+    _init_isolated_git_project()
+
+    # Write a bad diff (calling uow.commit() in a repository)
+    bad_code_file = TEST_PROJECT / "src" / "repositories" / "user.py"
+    bad_code_file.parent.mkdir(parents=True, exist_ok=True)
+    bad_code_file.write_text("class UserRepository:\n    def save(self):\n        self.uow.commit() # violation of TRANSACTIONAL_INTEGRITY\n", encoding="utf-8")
+
+    # Stage the file within the isolated TEST_PROJECT git repo
+    subprocess.run(["git", "add", "src/repositories/user.py"], cwd=str(TEST_PROJECT), check=True)
+    
+    # Mock LLM provider for standard review to FAIL with high-severity TRANSACTIONAL_INTEGRITY issue
+    mock_review_verdict = {
+        "verdict": "FAIL",
+        "blocking_concern": "TRANSACTIONAL_INTEGRITY",
+        "intent_alignment": "Bugs found.",
+        "issues": [
+            {
+                "severity": "HIGH",
+                "concern": "TRANSACTIONAL_INTEGRITY",
+                "location": "src/repositories/user.py:3",
+                "description": "Repositories must NEVER call commit() directly; must use Unit of Work context manager.",
+                "remediation": "Move uow.commit() call to service layer."
+            }
+        ],
+        "summary": "Repository calls commit directly."
+    }
+    
+    mock_providers_content = """import json
+class MockProvider:
+    name = "anthropic"
+    model = "claude-sonnet"
+    last_token_usage = {"input_tokens": 100, "output_tokens": 50}
+    def is_available(self):
+        return True
+    def review(self, system, user_content):
+        return {
+            "verdict": "FAIL",
+            "blocking_concern": "TRANSACTIONAL_INTEGRITY",
+            "intent_alignment": "Bugs found.",
+            "issues": [
+                {
+                    "severity": "HIGH",
+                    "concern": "TRANSACTIONAL_INTEGRITY",
+                    "location": "src/repositories/user.py:3",
+                    "description": "Repositories must NEVER call commit() directly.",
+                    "remediation": "Move uow.commit()."
+                }
+            ],
+            "summary": "Repository calls commit."
+        }
+    def raw_completion(self, system, user_content):
+        return json.dumps({
+            "rebuttal_verdict": "PASS",
+            "findings": [
+                {
+                    "finding_id": "FID-1",
+                    "verdict": "REBUTTAL_ACCEPTED",
+                    "rationale": "Indisputable structural context."
+                }
+            ]
+        })
+
+def get_provider(provider_name=None, model=None):
+    return MockProvider()
+"""
+    (TEST_PROJECT / "src" / "scripts" / "providers.py").write_text(mock_providers_content, encoding="utf-8")
+    
+    # 1. Run standard review -> should FAIL
+    res_fail = subprocess.run(
+        [sys.executable, "src/scripts/ai_review.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    
+    # Read the log to get the generated session ID, timestamp, and diff hash
+    log_path = TEST_PROJECT / ".ai-review-log.jsonl"
+    with open(log_path, "r", encoding="utf-8") as f:
+        last_log = json.loads(f.readline().strip())
+        
+    original_session_id = last_log.get("session_id")
+    original_timestamp = last_log.get("timestamp")
+    
+    # Real hash check using _get_normalized_diff_hash directly:
+    sys.path.insert(0, str(WORKSPACE_ROOT / "src" / "scripts"))
+    import ai_review as root_ai_review
+    res_diff = subprocess.run(
+        ["git", "diff", "--cached"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    print(f"[DEBUG] res_diff CompletedProcess: {res_diff}")
+    print(f"[DEBUG] res_diff stdout: {repr(res_diff.stdout)}")
+    print(f"[DEBUG] res_diff stderr: {repr(res_diff.stderr)}")
+    diff_hash = root_ai_review._get_normalized_diff_hash(res_diff.stdout or "")
+    
+    # 2. Write gate_rebuttal.json
+    gate_rebuttal_file = TEST_PROJECT / ".agent" / "state" / "gate_rebuttal.json"
+    rebuttal_json = {
+        "original_fail_session_id": original_session_id,
+        "original_fail_timestamp": original_timestamp,
+        "normalized_diff_hash": diff_hash,
+        "findings": [
+            {
+                "finding_id": "FID-1",
+                "rebuttal_type": "FALSE_POSITIVE",
+                "evidence": "This is a false positive."
+            }
+        ]
+    }
+    with open(gate_rebuttal_file, "w", encoding="utf-8") as f:
+        json.dump(rebuttal_json, f, indent=4)
+        
+    # 3. Run --rebuttal (human mode) -> should PASS, delete gate_rebuttal.json, and write rebuttal_pass.json
+    res_rebut = subprocess.run(
+        [sys.executable, "src/scripts/ai_review.py", "--rebuttal"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    
+    rebuttal_pass_file = TEST_PROJECT / ".agent" / "state" / "rebuttal_pass.json"
+    rebut_pass_exists = rebuttal_pass_file.exists()
+    rebuttal_file_deleted = not gate_rebuttal_file.exists()
+    
+    # 4. Run standard review again -> should bypass via rebuttal_pass.json and return 0
+    res_bypass = subprocess.run(
+        [sys.executable, "src/scripts/ai_review.py"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    
+    bypass_success = res_bypass.returncode == 0
+    rebut_pass_consumed = not rebuttal_pass_file.exists()
+    
+    # 5. Rate Limiter Verify:
+    mock_providers_content_rejected = mock_providers_content.replace("REBUTTAL_ACCEPTED", "REBUTTAL_REJECTED")
+    (TEST_PROJECT / "src" / "scripts" / "providers.py").write_text(mock_providers_content_rejected, encoding="utf-8")
+    
+    # Write new gate_rebuttal.json
+    with open(gate_rebuttal_file, "w", encoding="utf-8") as f:
+        json.dump(rebuttal_json, f, indent=4)
+        
+    # Run rebuttal to reject it
+    subprocess.run([sys.executable, "src/scripts/ai_review.py", "--rebuttal"], cwd=str(TEST_PROJECT), capture_output=True)
+    
+    # Run a second time -> should block via limiter and exit 1 immediately
+    res_limit = subprocess.run(
+        [sys.executable, "src/scripts/ai_review.py", "--rebuttal"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(TEST_PROJECT)
+    )
+    
+    limiter_blocked = "❌ [LIMITER]" in res_limit.stdout or "Rebuttal already rejected for this finding" in res_limit.stdout
+    
+    if res_fail.returncode == 1 and rebut_pass_exists and rebuttal_file_deleted and bypass_success and rebut_pass_consumed and limiter_blocked:
+        print_ok("Scenario 25 PASS: Rebuttal audited, pass token written, normal review bypassed, pass token consumed, rate-limiter blocked.")
+    else:
+        print_err(f"Scenario 25 failed!\n"
+                  f"  res_fail.rc={res_fail.returncode} (expected 1)\n"
+                  f"  rebut_pass_exists={rebut_pass_exists} (expected True)\n"
+                  f"  rebuttal_file_deleted={rebuttal_file_deleted} (expected True)\n"
+                  f"  bypass_success={bypass_success} (expected True, rc={res_bypass.returncode})\n"
+                  f"  rebut_pass_consumed={rebut_pass_consumed} (expected True)\n"
+                  f"  limiter_blocked={limiter_blocked} (expected True)\n"
+                  f"Stdout fail:\n{res_fail.stdout}\n"
+                  f"Stdout rebut:\n{res_rebut.stdout}\n"
+                  f"Stdout bypass:\n{res_bypass.stdout}\n"
+                  f"Stdout limit:\n{res_limit.stdout}")
+        failures += 1
+
     print_banner("Summary of Manual Verification")
     if failures == 0:
-        print(f"{Colors.GREEN}{Colors.BOLD}🎉 ALL {24} MANUAL VERIFICATION TESTS PASSED SUCCESSFULLY! 🎉{Colors.ENDC}\n")
+        print(f"{Colors.GREEN}{Colors.BOLD}🎉 ALL {25} E2E VERIFICATION TESTS PASSED SUCCESSFULLY! 🎉{Colors.ENDC}\n")
     else:
-        print(f"{Colors.FAIL}{Colors.BOLD}❌ {failures} MANUAL VERIFICATION TEST(S) FAILED. Please review the errors above. ❌{Colors.ENDC}\n")
+        print(f"{Colors.FAIL}{Colors.BOLD}❌ {failures} E2E VERIFICATION TEST(S) FAILED. Please review the errors above. ❌{Colors.ENDC}\n")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

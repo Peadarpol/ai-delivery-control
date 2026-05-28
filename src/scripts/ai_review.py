@@ -29,7 +29,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, get_args
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -774,6 +774,46 @@ class PlanOutput(BaseModel):
     planner_note: str
 
 
+# ── Structured Rebuttal Models (T1-G-06) ──────────────────────────────────────
+
+RebuttalType = Literal["FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE"]
+VALID_REBUTTAL_TYPES = get_args(RebuttalType)
+
+
+class RebuttedFinding(BaseModel):
+    finding_id: str
+    rebuttal_type: RebuttalType
+    verdict: Literal["REBUTTAL_ACCEPTED", "REBUTTAL_REJECTED"]
+    rationale: str
+
+
+class RebuttedVerdict(BaseModel):
+    verdict: Literal["PASS", "FAIL"]
+    original_fail_session_id: str
+    original_fail_timestamp: str
+    normalized_diff_hash: str
+    findings: List[RebuttedFinding]
+    model: str
+    token_usage: Dict[str, int] = Field(default_factory=dict)
+    session_id: Optional[str] = None
+    strategy: Literal["rebuttal"] = "rebuttal"
+    rebuttal_actor: Literal["agent", "human"] = "human"
+
+
+class DeveloperRebuttalFinding(BaseModel):
+    finding_id: str
+    rebuttal_type: RebuttalType
+    spec_reference: Optional[str] = None
+    evidence: str
+
+
+class DeveloperRebuttal(BaseModel):
+    original_fail_session_id: str
+    original_fail_timestamp: str
+    normalized_diff_hash: str
+    findings: List[DeveloperRebuttalFinding]
+
+
 def _find_project_root() -> Path:
     """Find the git repository root (works regardless of where script lives)."""
     try:
@@ -798,6 +838,133 @@ def _find_project_root() -> Path:
 
 
 PROJECT_ROOT = _find_project_root()
+
+
+def _get_normalized_diff_hash(diff: str) -> str:
+    """Compute the SHA-256 hash of a normalized diff.
+    Normalizes line endings to \n, strips git diff metadata headers, and strips trailing whitespace.
+    """
+    lines = []
+    for line in diff.splitlines():
+        if line.startswith(("diff --git", "index ", "--- ", "+++ ")):
+            continue
+        lines.append(line.rstrip())
+    normalized = "\n".join(lines)
+    import hashlib
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _scan_logs_for_rebuttal(diff_hash: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Scan .ai-review-log.jsonl backwards in chunks to find:
+    1. The last standard FAIL verdict (to serve as original_fail).
+    2. Any prior rebuttal attempts matching the active diff_hash (to check for rate-limiting).
+    """
+    log_path = PROJECT_ROOT / ".ai-review-log.jsonl"
+    if not log_path.exists():
+        return None, []
+
+    max_lines = 500
+    config = load_config()
+    if "review" in config and isinstance(config["review"], dict):
+        max_lines = config["review"].get("rebuttal_scan_max_lines", 500)
+    
+    records = []
+    remainder = ""
+    chunk_size = 4096
+    
+    with open(log_path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        file_size = f.tell()
+        position = file_size
+        
+        line_count = 0
+        while position > 0 and line_count < max_lines:
+            to_read = min(chunk_size, position)
+            position -= to_read
+            f.seek(position, os.SEEK_SET)
+            chunk = f.read(to_read).decode("utf-8", errors="replace")
+            
+            data = chunk + remainder
+            lines = data.splitlines()
+            
+            if position > 0 and len(lines) > 1:
+                remainder = lines[0]
+                lines_to_process = lines[1:]
+            else:
+                remainder = ""
+                lines_to_process = lines
+            
+            for line in reversed(lines_to_process):
+                if not line.strip():
+                    continue
+                try:
+                    rec = json.loads(line)
+                    records.append(rec)
+                    line_count += 1
+                    if line_count >= max_lines:
+                        break
+                except json.JSONDecodeError:
+                    continue
+                    
+        if remainder.strip() and line_count < max_lines:
+            try:
+                rec = json.loads(remainder)
+                records.append(rec)
+            except json.JSONDecodeError:
+                pass
+
+    last_fail = None
+    prior_rebuttals = []
+    
+    for rec in records:
+        if last_fail is None and rec.get("verdict") == "FAIL" and rec.get("strategy") != "rebuttal":
+            last_fail = rec
+        
+        if rec.get("strategy") == "rebuttal" and rec.get("normalized_diff_hash") == diff_hash:
+            prior_rebuttals.append(rec)
+            
+    return last_fail, prior_rebuttals
+
+
+def _load_rebuttal_timeout() -> int:
+    """Load rebuttal_pass_timeout_minutes from .agent/config.yaml.
+    Defaults to 15 minutes.
+    """
+    timeout = 15
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return timeout
+
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        in_review = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if stripped == "review:":
+                in_review = True
+                continue
+
+            if in_review:
+                indent = len(line) - len(line.lstrip())
+                if indent == 0:
+                    in_review = False
+                    continue
+
+                if ":" in stripped:
+                    key_part, val_part = stripped.split(":", 1)
+                    key = key_part.strip().strip("\"'")
+                    val = val_part.split("#", 1)[0].strip()
+                    if key == "rebuttal_pass_timeout_minutes":
+                        try:
+                            return int(val)
+                        except ValueError:
+                            pass
+    except Exception:
+        pass
+    return timeout
 UNIVERSAL_CONTEXT_FILE = SCRIPT_DIR / "review_context_universal.md"
 PROJECT_CONTEXT_FILE = SCRIPT_DIR / "review_context_project.md"
 CONFIG_FILE = PROJECT_ROOT / ".ai-review-config.json"
@@ -872,6 +1039,32 @@ Respond ONLY with valid JSON. No preamble, no markdown fences, no explanation ou
     }
   ],
   "summary": "2-3 sentence overall assessment"
+}"""
+
+# ── Rebuttal System Prompt (T1-G-06) ──────────────────────────────────────────
+
+REBUTTAL_SYSTEM_PROMPT = """You are a principal engineer performing an independent, highly critical audit of a developer's rebuttal to a failed review gate finding.
+
+Your mindset must be ADVERSARIAL TOWARD THE REBUTTAL. Assume the original review finding was correct, and that developer bias and self-interest are high. Treat all rebuttal arguments with extreme skepticism.
+
+You should ACCEPT a rebuttal (REBUTTAL_ACCEPTED) ONLY when presented with indisputable, objective technical facts, explicit specification requirements, or verified architectural patterns showing that the flagged issue is indeed a false positive or is physically impossible in the codebase.
+
+Reject the rebuttal (REBUTTAL_REJECTED) if:
+- The argument is speculative, stylistic, or a matter of personal preference.
+- The developer is trying to defer fixing a real bug, error path, or security issue.
+- The evidence is weak or does not directly address the citation.
+- For SPEC_REQUIREMENT or ARCHITECTURAL_INVARIANT categories, if the spec_reference is missing, incomplete, or invalid.
+
+Respond ONLY with a valid JSON object. No preamble, no markdown fences, no explanation outside the JSON.
+{
+  "rebuttal_verdict": "PASS or FAIL",
+  "findings": [
+    {
+      "finding_id": "FID-1",
+      "verdict": "REBUTTAL_ACCEPTED or REBUTTAL_REJECTED",
+      "rationale": "one-sentence highly critical engineering justification of your decision"
+    }
+  ]
 }"""
 
 # ── Pre-flight Shortcut (T1-G-02) ────────────────────────────────────────────
@@ -1105,6 +1298,7 @@ def _write_halt_file(msg: str):
 
 def get_high_risk_files(changed_files: List[str]) -> List[str]:
     """Identify high-risk files from changed_files using high-risk patterns."""
+    print(f"[DEBUG] get_high_risk_files input changed_files: {changed_files}")
     import fnmatch
     cfg = _load_high_risk_patterns()
     paths = list(HIGH_RISK_PATTERNS["paths"]) + cfg.get("paths", [])
@@ -1453,13 +1647,16 @@ def get_commit_message() -> str:
     hook_stage = os.environ.get("PRE_COMMIT_HOOK_STAGE", "pre-commit")
 
     # 1. CLI argument — in commit-msg stage pre-commit passes the COMMIT_EDITMSG
-    #    file path as argv[1]; read the file rather than returning the path string.
-    if len(sys.argv) > 1:
-        arg = sys.argv[1]
+    #    file path; read the file rather than returning the path string.
+    for arg in sys.argv[1:]:
+        if arg.startswith("-"):
+            continue
         arg_path = Path(arg)
         if arg_path.exists() and arg_path.is_file():
-            return arg_path.read_text(encoding="utf-8").strip()
-        return arg
+            try:
+                return arg_path.read_text(encoding="utf-8").strip()
+            except OSError:
+                pass
 
     # 2. Fallback direct read — only valid outside pre-commit stage
     if hook_stage != "pre-commit":
@@ -1642,11 +1839,40 @@ def render_review(review: Dict[str, Any], churn_info: str) -> None:
             loc = issue.get("location", "general")
             desc = issue.get("description", "")
             remediation = issue.get("remediation", "")
-            print(f"  {SEV_ICONS.get(sev, '⚪')} [{sev}] <{concern}> {loc}")
+            finding_id_str = f" [ID: {issue['finding_id']}]" if "finding_id" in issue else ""
+            print(f"  {SEV_ICONS.get(sev, '⚪')} [{sev}] <{concern}> {loc}{finding_id_str}")
             print(f"     {desc}")
             if remediation:
                 print(f"     💡 Fix: {remediation}")
             print()
+            
+        if verdict == "FAIL":
+            # Generate scaffolding template
+            try:
+                staged_diff = get_staged_diff()
+                diff_hash = _get_normalized_diff_hash(staged_diff)
+            except Exception:
+                diff_hash = "active-staged-diff-hash"
+            session_id = _get_active_session_id() or "unknown-session"
+            timestamp = datetime.datetime.now().isoformat()
+            
+            scaffold = {
+                "original_fail_session_id": session_id,
+                "original_fail_timestamp": timestamp,
+                "normalized_diff_hash": diff_hash,
+                "findings": [
+                    {
+                        "finding_id": issue.get("finding_id", "FID-X"),
+                        "rebuttal_type": "FALSE_POSITIVE",
+                        "spec_reference": "",
+                        "evidence": "Provide technical evidence here..."
+                    }
+                    for issue in issues if issue.get("severity") == "HIGH"
+                ]
+            }
+            print("💡 [REBUTTAL] Copy-paste this scaffolding into .agent/state/gate_rebuttal.json to contest:")
+            print(json.dumps(scaffold, indent=2))
+            print("   Then have the human run: python src/scripts/ai_review.py --rebuttal\n")
     else:
         print("  No issues found.\n")
 
@@ -1708,12 +1934,357 @@ def _persist_verdict(
         pass  # Never block a commit due to logging failure
 
 
+def _run_rebuttal(args) -> int:
+    """Evaluate a structured rebuttal from .agent/state/gate_rebuttal.json.
+    Adheres strictly to the structural rate limiter, non-empty spec references,
+    adversarial auditor prompt framing, atomic session budget locking/expenditure,
+    iterative retention of the rebuttal JSON, and async evaluative logging.
+    """
+    rebuttal_actor = "agent" if args.rebutted_by_agent else "human"
+    
+    rebuttal_file = PROJECT_ROOT / ".agent" / "state" / "gate_rebuttal.json"
+    if not rebuttal_file.exists():
+        print("❌ [REBUTTAL] Rebuttal file not found: .agent/state/gate_rebuttal.json")
+        return 1
+        
+    try:
+        with open(rebuttal_file, "r", encoding="utf-8") as f:
+            rebuttal_data = json.load(f)
+        dev_rebuttal = DeveloperRebuttal.model_validate(rebuttal_data)
+    except ValidationError as exc:
+        print(f"❌ [REBUTTAL] Validation failed for gate_rebuttal.json: {exc}")
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"❌ [REBUTTAL] Malformed JSON in gate_rebuttal.json: {exc}")
+        return 1
+    except Exception as exc:
+        print(f"❌ [REBUTTAL] Error reading gate_rebuttal.json: {exc}")
+        return 1
+        
+    # Enforce non-empty spec_reference for all architectural/spec-related rebuttals
+    for finding in dev_rebuttal.findings:
+        if finding.rebuttal_type in ("SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT"):
+            if not finding.spec_reference or not finding.spec_reference.strip():
+                print(f"❌ [REBUTTAL] spec_reference must be a non-empty string for rebuttal type '{finding.rebuttal_type}' (finding {finding.finding_id})")
+                return 1
+
+    # Get the active staged diff
+    staged_diff = get_staged_diff()
+    if not staged_diff.strip():
+        print("❌ [REBUTTAL] No staged changes found to rebut.")
+        return 1
+    diff_hash = _get_normalized_diff_hash(staged_diff)
+    
+    # Verify diff hash matches rebuttal file
+    if dev_rebuttal.normalized_diff_hash != diff_hash:
+        print(f"❌ [REBUTTAL] Diff hash mismatch!")
+        print(f"   Rebuttal file specifies: {dev_rebuttal.normalized_diff_hash}")
+        print(f"   Active staged diff hash: {diff_hash}")
+        print("   Please update gate_rebuttal.json with the active staged diff hash.")
+        return 1
+
+    # Scan logs backwards for last FAIL and prior rebuttals
+    last_fail, prior_rebuttals = _scan_logs_for_rebuttal(diff_hash)
+    if not last_fail:
+        print("❌ [REBUTTAL] No prior failed review found in logs.")
+        return 1
+        
+    # Recency check: Warn if older than 24 hours
+    try:
+        fail_time_str = last_fail.get("timestamp")
+        if fail_time_str:
+            fail_dt = datetime.datetime.fromisoformat(fail_time_str)
+            if fail_dt.tzinfo is None:
+                fail_dt = fail_dt.replace(tzinfo=datetime.timezone.utc)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if (now - fail_dt).total_seconds() > 24 * 3600:
+                print("⚠️  [REBUTTAL] Warning: The last failed review is older than 24 hours.")
+    except Exception:
+        pass
+        
+    # Verify original fail session ID matches
+    if last_fail.get("session_id") != dev_rebuttal.original_fail_session_id:
+        print(f"❌ [REBUTTAL] Session ID mismatch!")
+        print(f"   Rebuttal file: {dev_rebuttal.original_fail_session_id}")
+        print(f"   Last failed review: {last_fail.get('session_id')}")
+        return 1
+        
+    # Legacy check
+    original_issues = last_fail.get("issues", [])
+    has_finding_ids = any("finding_id" in issue for issue in original_issues)
+    if not has_finding_ids:
+        print("❌ [REBUTTAL] This FAIL predates the structured rebuttal protocol. Use SKIP_AI_REVIEW=1 with SKIP_REASON instead.")
+        return 1
+        
+    # Diff-Hash Rate Limiter: check if a prior rebuttal attempt for this diff_hash was rejected
+    for rebuttal in prior_rebuttals:
+        for rejected_finding in rebuttal.get("findings", []):
+            if rejected_finding.get("verdict") == "REBUTTAL_REJECTED":
+                for target in dev_rebuttal.findings:
+                    if target.finding_id == rejected_finding.get("finding_id"):
+                        print("\033[91;1m❌ [LIMITER] Rebuttal already rejected for this finding and diff hash. You must fix the code violation directly; second attempts on the same diff are blocked.\033[0m")
+                        return 1
+
+    # Select high-performance review tier provider (Sonnet)
+    try:
+        from providers import get_provider
+        provider = get_provider(provider_name="anthropic")
+    except RuntimeError as e:
+        print(f"❌ [REBUTTAL] Rebuttal auditor provider setup failed: {e}")
+        return 1
+
+    # Check budget before execution
+    session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
+    budget = _load_session_token_budget()
+    spent = 0
+    if session_file.exists():
+        with _lock_session(session_file):
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    sdata = json.load(f)
+                    usage = sdata.get("token_usage", {})
+                    spent = (
+                        usage.get("input_tokens", 0)
+                        + usage.get("output_tokens", 0)
+                        + usage.get("reasoning_tokens", 0)
+                        + usage.get("cache_read_input_tokens", 0)
+                    )
+            except Exception:
+                pass
+                
+    if budget is not None and spent >= budget:
+        msg = f"Your session has passed 100% of its token budget ({spent} / {budget} tokens). Run context compaction before starting your next session."
+        _write_halt_file(msg)
+        print("\n\033[91m" + "=" * 60 + "\033[0m")
+        print("\033[91;1m  ❌ [GATE BLOCKED] SESSION TOKEN BUDGET EXHAUSTED  \033[0m")
+        print(f"  Spent: {spent} tokens | Budget Limit: {budget} tokens")
+        print("\033[91m" + "=" * 60 + "\033[0m\n")
+        return 1
+
+    # Format adversarial audit query
+    user_parts = []
+    user_parts.append(f"## Active Staged Diff\n```diff\n{staged_diff}\n```")
+    user_parts.append(f"## Original Failed Review Session ID\n{last_fail.get('session_id')}")
+    user_parts.append("## Flagged Issues Under Contest:")
+    for issue in original_issues:
+        fid = issue.get("finding_id")
+        contested = any(f.finding_id == fid for f in dev_rebuttal.findings)
+        status = "[CONTESTED]" if contested else "[UNCONTESTED]"
+        user_parts.append(
+            f"- {status} ID: {fid}\n"
+            f"  Severity: {issue.get('severity')}\n"
+            f"  Concern: {issue.get('concern')}\n"
+            f"  Location: {issue.get('location')}\n"
+            f"  Description: {issue.get('description')}\n"
+            f"  Remediation: {issue.get('remediation')}\n"
+        )
+    user_parts.append("## Developer Rebuttal Arguments:")
+    for finding in dev_rebuttal.findings:
+        spec_ref_str = f"\n  Spec Reference: {finding.spec_reference}" if finding.spec_reference else ""
+        user_parts.append(
+            f"- Contesting ID: {finding.finding_id}\n"
+            f"  Rebuttal Type: {finding.rebuttal_type}{spec_ref_str}\n"
+            f"  Evidence: {finding.evidence}\n"
+        )
+    user_content = "\n\n".join(user_parts)
+
+    print("\n🔍 Evaluating structured rebuttal with adversarial principal engineer auditor...")
+    
+    start_time = time.time()
+    try:
+        # Call provider raw completion (returns raw string)
+        raw_response = provider.raw_completion(REBUTTAL_SYSTEM_PROMPT, user_content)
+        
+        # Load and validate auditor's JSON response
+        audit_data = json.loads(raw_response)
+        
+        # Parse into Pydantic models
+        rebutted_findings = []
+        for finding in audit_data.get("findings", []):
+            rebutted_findings.append(RebuttedFinding(
+                finding_id=finding["finding_id"],
+                rebuttal_type=next((df.rebuttal_type for df in dev_rebuttal.findings if df.finding_id == finding["finding_id"]), "FALSE_POSITIVE"),
+                verdict=finding["verdict"],
+                rationale=finding["rationale"]
+            ))
+            
+        # Determine overall verdict
+        original_issues_map = {issue["finding_id"]: issue for issue in original_issues if "finding_id" in issue}
+        rejected_any_high = False
+        for rf in rebutted_findings:
+            orig_issue = original_issues_map.get(rf.finding_id)
+            if orig_issue and orig_issue.get("severity") == "HIGH" and rf.verdict == "REBUTTAL_REJECTED":
+                rejected_any_high = True
+                
+        overall_verdict = "FAIL" if rejected_any_high else "PASS"
+        
+        actual_tokens = provider.last_token_usage
+        in_tokens = actual_tokens.get("input_tokens", 0)
+        out_tokens = actual_tokens.get("output_tokens", 0)
+        reas_tokens = actual_tokens.get("reasoning_tokens", 0)
+        cache_tokens = actual_tokens.get("cache_read_input_tokens", 0)
+        
+        token_usage_dict = {
+            "input_tokens": in_tokens,
+            "output_tokens": out_tokens,
+            "reasoning_tokens": reas_tokens,
+            "cache_read_input_tokens": cache_tokens,
+        }
+        
+        # Create RebuttedVerdict delta record
+        session_id = _get_active_session_id()
+        rebutted_verdict = RebuttedVerdict(
+            verdict=overall_verdict,
+            original_fail_session_id=dev_rebuttal.original_fail_session_id,
+            original_fail_timestamp=dev_rebuttal.original_fail_timestamp,
+            normalized_diff_hash=diff_hash,
+            findings=rebutted_findings,
+            model=provider.model,
+            token_usage=token_usage_dict,
+            session_id=session_id,
+            strategy="rebuttal",
+            rebuttal_actor=rebuttal_actor
+        )
+        
+        # Update session.json token spending atomically
+        if session_file.exists():
+            with _lock_session(session_file):
+                try:
+                    with open(session_file, "r", encoding="utf-8") as f:
+                        sdata = json.load(f)
+                    
+                    usage = sdata.setdefault("token_usage", {})
+                    usage["input_tokens"] = usage.get("input_tokens", 0) + in_tokens
+                    usage["output_tokens"] = usage.get("output_tokens", 0) + out_tokens
+                    usage["reasoning_tokens"] = usage.get("reasoning_tokens", 0) + reas_tokens
+                    usage["cache_read_input_tokens"] = usage.get("cache_read_input_tokens", 0) + cache_tokens
+                    usage["call_count"] = usage.get("call_count", 0) + 1
+                    
+                    with open(session_file, "w", encoding="utf-8") as f:
+                        json.dump(sdata, f, indent=4)
+                        
+                    new_spent = (
+                        usage["input_tokens"]
+                        + usage["output_tokens"]
+                        + usage["reasoning_tokens"]
+                        + usage.get("cache_read_input_tokens", 0)
+                    )
+                    
+                    if budget is not None:
+                        if new_spent >= budget:
+                            msg = f"Your session has passed 100% of its token budget ({new_spent} / {budget} tokens). Run context compaction before starting your next session."
+                            _write_halt_file(msg)
+                            print("\n\033[91m" + "=" * 60 + "\033[0m")
+                            print("\033[91;1m  ⚠️ [GATE WARNING] SESSION TOKEN BUDGET EXHAUSTED  \033[0m")
+                            print(f"  Total Spent: {new_spent} tokens | Budget: {budget} tokens")
+                            print("\033[91m" + "=" * 60 + "\033[0m\n")
+                        elif new_spent >= 0.8 * budget:
+                            print("\n\033[93m" + "=" * 60 + "\033[0m")
+                            print("\033[93;1m  ⚠️  [GATE] BUDGET WARNING: SESSION NEAR CEILING  \033[0m")
+                            print(f"  Spent: {new_spent} tokens | Budget: {budget} tokens (>= 80% limit)")
+                            print("\033[93m" + "=" * 60 + "\033[0m\n")
+                except Exception:
+                    pass
+
+    except Exception as e:
+        print(f"❌ [REBUTTAL] Auditor failed or response malformed: {e}")
+        return 1
+        
+    elapsed = time.time() - start_time
+    
+    # Persist the verdict to .ai-review-log.jsonl
+    try:
+        log_path = PROJECT_ROOT / ".ai-review-log.jsonl"
+        record = rebutted_verdict.model_dump()
+        record["timestamp"] = datetime.datetime.now().isoformat()
+        record["provider"] = provider.name
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+        
+    # Console presentation
+    print("\n" + "─" * 60)
+    print("📋 REBUTTAL AUDIT RESULTS")
+    print("─" * 60)
+    for rf in rebutted_findings:
+        color = "\033[92m" if rf.verdict == "REBUTTAL_ACCEPTED" else "\033[91m"
+        symbol = "✅" if rf.verdict == "REBUTTAL_ACCEPTED" else "❌"
+        print(f"  {color}{symbol} [{rf.verdict}] ID: {rf.finding_id}\033[0m")
+        print(f"     Rationale: {rf.rationale}")
+        print()
+    print("─" * 60)
+    print(f"  Audit completed in {elapsed:.1f}s\n")
+    
+    # Spawn FP evaluation logger asynchronously
+    accepted_fps = []
+    for rf in rebutted_findings:
+        if rf.verdict == "REBUTTAL_ACCEPTED":
+            dev_finding = next((df for df in dev_rebuttal.findings if df.finding_id == rf.finding_id), None)
+            if dev_finding and dev_finding.rebuttal_type == "FALSE_POSITIVE":
+                if re.match(r"^FID-\d+$", rf.finding_id):
+                    accepted_fps.append(rf.finding_id)
+                    
+    if accepted_fps:
+        try:
+            eval_script = PROJECT_ROOT / ".agent" / "scripts" / "false_positive_to_eval.py"
+            if eval_script.exists():
+                fids_arg = ",".join(accepted_fps)
+                subprocess.Popen([
+                    sys.executable,
+                    str(eval_script),
+                    "--finding-id", fids_arg,
+                    "--rebuttal-type", "FALSE_POSITIVE",
+                    "--evidence", "Structured Rebuttal accepted by LLM Auditor"
+                ])
+                print("⚡ [REBUTTAL] Triggered false positive logging asynchronously.")
+        except Exception as e:
+            print(f"⚠️  [REBUTTAL] Failed to spawn false_positive_to_eval.py: {e}")
+
+    # Retention controls
+    if overall_verdict == "PASS":
+        try:
+            rebuttal_file.unlink()
+        except Exception:
+            pass
+            
+        rebuttal_pass_file = PROJECT_ROOT / ".agent" / "state" / "rebuttal_pass.json"
+        rebuttal_pass_file.parent.mkdir(parents=True, exist_ok=True)
+        pass_data = {
+            "diff_hash": diff_hash,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        }
+        try:
+            with open(rebuttal_pass_file, "w", encoding="utf-8") as f:
+                json.dump(pass_data, f, indent=4)
+        except Exception as e:
+            print(f"⚠️  [REBUTTAL] Failed to write rebuttal pass file: {e}")
+            
+        print("\033[92;1m✅ [REBUTTAL] Rebuttal Accepted — commit is unblocked!\033[0m")
+        print("   Run standard git commit again to complete your action.")
+        return 0
+    else:
+        print("\033[91;1m❌ [REBUTTAL] Your rebuttal was rejected — update gate_rebuttal.json with stronger evidence and run --rebuttal again.\033[0m")
+        return 1
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
 def main() -> int:
     """Run the adversarial review gate. Returns 0 (pass) or 1 (fail)."""
     try:
+        # Lazy load argparse for performance (pre-flight shortcut efficiency)
+        import argparse
+        parser = argparse.ArgumentParser(description="AI Adversarial Review Gate")
+        parser.add_argument("--rebuttal", action="store_true", help="Evaluate a structured rebuttal from .agent/state/gate_rebuttal.json")
+        parser.add_argument("--rebutted-by-agent", action="store_true", help="Signal that the rebuttal was executed by an agent rather than a human operator")
+        parser.add_argument("commit_msg_file", nargs="?", help="Path to the COMMIT_EDITMSG file (passed by pre-commit)")
+        args = parser.parse_args()
+
+        if args.rebuttal:
+            return _run_rebuttal(args)
+
         return _run_review()
     except Exception as e:
         # FAIL-OPEN: a reviewer crash must never block a commit
@@ -1819,7 +2390,6 @@ def _run_review() -> int:
                 if bypass_file.exists():
                     try:
                         mtime = bypass_file.stat().st_mtime
-                        import datetime
                         if session_start_time:
                             session_dt = datetime.datetime.fromisoformat(session_start_time.replace("Z", "+00:00"))
                             file_dt = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc)
@@ -1854,9 +2424,7 @@ def _run_review() -> int:
             finding_ids = bypass_data.get("finding_ids")
             evidence = bypass_data.get("evidence")
 
-            valid_rebuttals = ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE")
-
-            if (rebuttal_type not in valid_rebuttals or 
+            if (rebuttal_type not in VALID_REBUTTAL_TYPES or 
                 not isinstance(finding_ids, list) or not finding_ids or 
                 not isinstance(evidence, str) or not evidence.strip()):
                 print("❌ [BYPASS] Validation failed for structured bypass reason!")
@@ -1927,6 +2495,63 @@ def _run_review() -> int:
         _persist_verdict(verdict_obj=fast_verdict)
         print(f"⚡ AI review: PASS_FAST — {preflight.planner_note}")
         return 0
+
+    # ── T1-G-06: Rebuttal Pass Token Check ──
+    rebuttal_pass_file = PROJECT_ROOT / ".agent" / "state" / "rebuttal_pass.json"
+    if rebuttal_pass_file.exists():
+        try:
+            # 1. Ensure rebuttal_pass.json is NOT staged in git
+            staged_files_res = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=str(PROJECT_ROOT),
+            )
+            staged_files = [f.strip() for f in staged_files_res.stdout.splitlines() if f.strip()]
+            staged_normalized = [f.replace("\\", "/") for f in staged_files]
+            token_rel_path = ".agent/state/rebuttal_pass.json"
+            
+            if token_rel_path in staged_normalized:
+                print("❌ [GATE] Security block: rebuttal_pass.json must not be staged in the commit!")
+                log_harness_event({
+                    "event_type": "rebuttal_token_staged_security_violation",
+                    "severity": "HIGH",
+                    "payload": {
+                        "reason": "Developer or script tried to stage rebuttal_pass.json"
+                    }
+                })
+            else:
+                with open(rebuttal_pass_file, "r", encoding="utf-8") as f:
+                    pass_data = json.load(f)
+                
+                pass_diff_hash = pass_data.get("diff_hash")
+                pass_timestamp_str = pass_data.get("timestamp")
+                
+                current_diff_hash = _get_normalized_diff_hash(diff)
+                
+                if current_diff_hash == pass_diff_hash:
+                    pass_dt = datetime.datetime.fromisoformat(pass_timestamp_str)
+                    if pass_dt.tzinfo is None:
+                        pass_dt = pass_dt.replace(tzinfo=datetime.timezone.utc)
+                    
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    timeout_mins = _load_rebuttal_timeout()
+                    
+                    if (now - pass_dt).total_seconds() <= timeout_mins * 60:
+                        try:
+                            rebuttal_pass_file.unlink()
+                        except Exception:
+                            pass
+                        print(f"✅ [GATE] Rebuttal bypass unblocked! (diff hash: {current_diff_hash})")
+                        return 0
+                    else:
+                        print("⚠️  [GATE] Rebuttal token expired. Full review required.")
+                else:
+                    print("⚠️  [GATE] Staged code changed since rebuttal acceptance. Full review required.")
+        except Exception as e:
+            print(f"⚠️  [GATE] Error reading rebuttal token: {e}")
 
     # ── Rolling Session Token Budget Enforcement (T1-I-07) ──
     session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
@@ -2246,6 +2871,11 @@ def _run_review() -> int:
         
         # Verify and suppress confirmed branch-isolated models from ORM roster
         verify_and_suppress_roster_issues(typed_verdict, route_decision)
+        
+        # Assign sequential finding_ids (FID-1, FID-2, etc.) to all remaining issues
+        for idx, issue in enumerate(typed_verdict.issues, 1):
+            issue["finding_id"] = f"FID-{idx}"
+            
         raw_review["verdict"] = typed_verdict.verdict
         raw_review["issues"] = typed_verdict.issues
         raw_review["blocking_concern"] = typed_verdict.blocking_concern

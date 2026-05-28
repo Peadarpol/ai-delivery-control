@@ -8,6 +8,7 @@ Tests are additive to .agent/tests/test_ai_review_preflight.py (QA-03).
 import json
 import os
 import tempfile
+import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -838,5 +839,456 @@ class TestStructuredBypassAndRegression:
         # Read mock diff
         diff_text = (tmp_path / first_row[headers.index("diff_file")]).read_text(encoding="utf-8")
         assert diff_text == "some simulated python diff"
+
+
+class TestStructuredRebuttal:
+    """Complete unit test suite for T1-G-06 Structured Rebuttal Protocol."""
+
+    def test_rebuttal_file_missing(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            args = MagicMock()
+            args.rebutted_by_agent = False
+            res = ai_review._run_rebuttal(args)
+            assert res == 1
+
+    def test_rebuttal_malformed_json(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
+            rebuttal_file.write_text("{malformed: json", encoding="utf-8")
+            
+            args = MagicMock()
+            args.rebutted_by_agent = False
+            res = ai_review._run_rebuttal(args)
+            assert res == 1
+
+    def test_rebuttal_invalid_rebuttal_type(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
+            
+            rebuttal_data = {
+                "original_fail_session_id": "session-123",
+                "original_fail_timestamp": "2026-05-28T12:00:00Z",
+                "normalized_diff_hash": "diffhash123",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "rebuttal_type": "INVALID_TYPE",  # Invalid type
+                        "evidence": "evidence"
+                    }
+                ]
+            }
+            rebuttal_file.write_text(json.dumps(rebuttal_data), encoding="utf-8")
+            
+            args = MagicMock()
+            args.rebutted_by_agent = False
+            res = ai_review._run_rebuttal(args)
+            assert res == 1
+
+    def test_rebuttal_no_fail_log(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
+            
+            rebuttal_data = {
+                "original_fail_session_id": "session-123",
+                "original_fail_timestamp": "2026-05-28T12:00:00Z",
+                "normalized_diff_hash": "diffhash123",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "rebuttal_type": "FALSE_POSITIVE",
+                        "evidence": "evidence"
+                    }
+                ]
+            }
+            rebuttal_file.write_text(json.dumps(rebuttal_data), encoding="utf-8")
+            
+            with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"):
+                args = MagicMock()
+                args.rebutted_by_agent = False
+                res = ai_review._run_rebuttal(args)
+                assert res == 1
+
+    @patch("time.time", return_value=1748260000.0)
+    def test_rebuttal_updates_session_token_budget(self, mock_time, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
+            session_file = rebuttal_dir / "session.json"
+            
+            rebuttal_data = {
+                "original_fail_session_id": "session-123",
+                "original_fail_timestamp": "2026-05-28T12:00:00Z",
+                "normalized_diff_hash": "diffhash123",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "rebuttal_type": "FALSE_POSITIVE",
+                        "evidence": "evidence"
+                    }
+                ]
+            }
+            rebuttal_file.write_text(json.dumps(rebuttal_data), encoding="utf-8")
+            
+            session_data = {
+                "session_id": "session-123",
+                "start_time": "2026-05-28T12:00:00Z",
+                "token_usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "reasoning_tokens": 0
+                }
+            }
+            session_file.write_text(json.dumps(session_data), encoding="utf-8")
+            
+            # Setup mock failed log in .ai-review-log.jsonl
+            log_file = tmp_path / ".ai-review-log.jsonl"
+            fail_log = {
+                "verdict": "FAIL",
+                "session_id": "session-123",
+                "timestamp": "2026-05-28T12:00:00Z",
+                "strategy": "standard",
+                "issues": [
+                    {
+                        "severity": "HIGH",
+                        "concern": "BRANCH_ISOLATION",
+                        "finding_id": "FID-1",
+                        "description": "test fail"
+                    }
+                ]
+            }
+            log_file.write_text(json.dumps(fail_log) + "\n", encoding="utf-8")
+            
+            # Mock LLM provider
+            mock_provider = MagicMock()
+            mock_provider.name = "anthropic"
+            mock_provider.model = "claude-sonnet"
+            mock_provider.raw_completion.return_value = json.dumps({
+                "rebuttal_verdict": "PASS",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "verdict": "REBUTTAL_ACCEPTED",
+                        "rationale": "accepted rationale"
+                    }
+                ]
+            })
+            mock_provider.last_token_usage = {
+                "input_tokens": 200,
+                "output_tokens": 100,
+                "reasoning_tokens": 0,
+                "cache_read_input_tokens": 0
+            }
+            
+            with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"), \
+                 patch("ai_review._load_session_token_budget", return_value=1000), \
+                 patch("providers.get_provider", return_value=mock_provider), \
+                 patch("subprocess.Popen") as mock_popen:
+                args = MagicMock()
+                args.rebutted_by_agent = False
+                res = ai_review._run_rebuttal(args)
+                assert res == 0
+                
+                # Check that session file was updated
+                with open(session_file, "r", encoding="utf-8") as f:
+                    updated_session = json.load(f)
+                usage = updated_session["token_usage"]
+                assert usage["input_tokens"] == 300
+                assert usage["output_tokens"] == 150
+
+    def test_rebuttal_accepted_unblocks_commit(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
+            
+            rebuttal_data = {
+                "original_fail_session_id": "session-123",
+                "original_fail_timestamp": "2026-05-28T12:00:00Z",
+                "normalized_diff_hash": "diffhash123",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "rebuttal_type": "FALSE_POSITIVE",
+                        "evidence": "evidence"
+                    }
+                ]
+            }
+            rebuttal_file.write_text(json.dumps(rebuttal_data), encoding="utf-8")
+            
+            log_file = tmp_path / ".ai-review-log.jsonl"
+            fail_log = {
+                "verdict": "FAIL",
+                "session_id": "session-123",
+                "timestamp": "2026-05-28T12:00:00Z",
+                "strategy": "standard",
+                "issues": [
+                    {
+                        "severity": "HIGH",
+                        "concern": "BRANCH_ISOLATION",
+                        "finding_id": "FID-1",
+                        "description": "test fail"
+                    }
+                ]
+            }
+            log_file.write_text(json.dumps(fail_log) + "\n", encoding="utf-8")
+            
+            mock_provider = MagicMock()
+            mock_provider.name = "anthropic"
+            mock_provider.model = "claude-sonnet"
+            mock_provider.raw_completion.return_value = json.dumps({
+                "rebuttal_verdict": "PASS",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "verdict": "REBUTTAL_ACCEPTED",
+                        "rationale": "accepted rationale"
+                    }
+                ]
+            })
+            mock_provider.last_token_usage = {}
+            
+            with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"), \
+                 patch("ai_review._load_session_token_budget", return_value=None), \
+                 patch("providers.get_provider", return_value=mock_provider), \
+                 patch("subprocess.Popen") as mock_popen:
+                args = MagicMock()
+                args.rebutted_by_agent = False
+                res = ai_review._run_rebuttal(args)
+                assert res == 0
+                
+                # Check that gate_rebuttal.json was deleted
+                assert not rebuttal_file.exists()
+                # Check that rebuttal_pass.json was written
+                pass_file = rebuttal_dir / "rebuttal_pass.json"
+                assert pass_file.exists()
+
+    def test_rebuttal_rejected_keeps_fail(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
+            
+            rebuttal_data = {
+                "original_fail_session_id": "session-123",
+                "original_fail_timestamp": "2026-05-28T12:00:00Z",
+                "normalized_diff_hash": "diffhash123",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "rebuttal_type": "FALSE_POSITIVE",
+                        "evidence": "evidence"
+                    }
+                ]
+            }
+            rebuttal_file.write_text(json.dumps(rebuttal_data), encoding="utf-8")
+            
+            log_file = tmp_path / ".ai-review-log.jsonl"
+            fail_log = {
+                "verdict": "FAIL",
+                "session_id": "session-123",
+                "timestamp": "2026-05-28T12:00:00Z",
+                "strategy": "standard",
+                "issues": [
+                    {
+                        "severity": "HIGH",
+                        "concern": "BRANCH_ISOLATION",
+                        "finding_id": "FID-1",
+                        "description": "test fail"
+                    }
+                ]
+            }
+            log_file.write_text(json.dumps(fail_log) + "\n", encoding="utf-8")
+            
+            mock_provider = MagicMock()
+            mock_provider.name = "anthropic"
+            mock_provider.model = "claude-sonnet"
+            mock_provider.raw_completion.return_value = json.dumps({
+                "rebuttal_verdict": "FAIL",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "verdict": "REBUTTAL_REJECTED",
+                        "rationale": "rejected rationale"
+                    }
+                ]
+            })
+            mock_provider.last_token_usage = {}
+            
+            with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"), \
+                 patch("ai_review._load_session_token_budget", return_value=None), \
+                 patch("providers.get_provider", return_value=mock_provider):
+                args = MagicMock()
+                args.rebutted_by_agent = False
+                res = ai_review._run_rebuttal(args)
+                assert res == 1
+                
+                # Check that gate_rebuttal.json was PRESERVED
+                assert rebuttal_file.exists()
+                # Check that rebuttal_pass.json was NOT written
+                pass_file = rebuttal_dir / "rebuttal_pass.json"
+                assert not pass_file.exists()
+
+    def test_rebuttal_pass_json_staged_guard(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            pass_file = rebuttal_dir / "rebuttal_pass.json"
+            
+            pass_data = {
+                "diff_hash": "diffhash123",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+            pass_file.write_text(json.dumps(pass_data), encoding="utf-8")
+            
+            # Setup git diff output mimicking that rebuttal_pass.json IS staged
+            mock_subprocess_res = MagicMock()
+            mock_subprocess_res.stdout = ".agent/state/rebuttal_pass.json\n"
+            
+            with patch("subprocess.run", return_value=mock_subprocess_res), \
+                 patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"):
+                # We mock check_preflight_shortcut to not bypass, then run _run_review
+                with patch("ai_review.check_preflight_shortcut") as mock_shortcut, \
+                     patch("ai_review._load_session_token_budget", return_value=1000):
+                    mock_shortcut.return_value.direct_pass_allowed = False
+                    
+                    # Because rebuttal_pass is staged, it should block bypass and proceed to standard execution path, failing closed due to missing session.json
+                    with pytest.raises(SystemExit) as exc:
+                        ai_review._run_review()
+                    assert exc.value.code == 1
+
+    def test_rebuttal_pass_json_stale(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            pass_file = rebuttal_dir / "rebuttal_pass.json"
+            
+            # 20 minutes ago (expired under default 15 mins)
+            stale_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=20)
+            pass_data = {
+                "diff_hash": "diffhash123",
+                "timestamp": stale_time.isoformat()
+            }
+            pass_file.write_text(json.dumps(pass_data), encoding="utf-8")
+            
+            # rebuttal_pass.json is NOT staged
+            mock_subprocess_res = MagicMock()
+            mock_subprocess_res.stdout = ""
+            
+            with patch("subprocess.run", return_value=mock_subprocess_res), \
+                 patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"):
+                with patch("ai_review.check_preflight_shortcut") as mock_shortcut, \
+                     patch("ai_review._load_rebuttal_timeout", return_value=15), \
+                     patch("ai_review._load_session_token_budget", return_value=1000):
+                    mock_shortcut.return_value.direct_pass_allowed = False
+                    
+                    # Stale token should NOT bypass, failing closed due to missing session.json
+                    with pytest.raises(SystemExit) as exc:
+                        ai_review._run_review()
+                    assert exc.value.code == 1
+
+    def test_rebuttal_pass_token_enables_commit(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            pass_file = rebuttal_dir / "rebuttal_pass.json"
+            
+            # 5 minutes ago (valid)
+            recent_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+            pass_data = {
+                "diff_hash": "diffhash123",
+                "timestamp": recent_time.isoformat()
+            }
+            pass_file.write_text(json.dumps(pass_data), encoding="utf-8")
+            
+            # rebuttal_pass.json is NOT staged
+            mock_subprocess_res = MagicMock()
+            mock_subprocess_res.stdout = ""
+            
+            with patch("subprocess.run", return_value=mock_subprocess_res), \
+                 patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review.PROJECT_ROOT", tmp_path), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"):
+                with patch("ai_review.check_preflight_shortcut") as mock_shortcut, \
+                     patch("ai_review._load_rebuttal_timeout", return_value=15):
+                    mock_shortcut.return_value.direct_pass_allowed = False
+                    
+                    # Valid token bypasses review completely, deletes token, and returns 0!
+                    res = ai_review._run_review()
+                    assert res == 0
+                    assert not pass_file.exists()
+
+    def test_rebuttal_rate_limiter_blocks_second_attempt(self, ai_review, tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path):
+            rebuttal_dir = tmp_path / ".agent" / "state"
+            rebuttal_dir.mkdir(parents=True, exist_ok=True)
+            rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
+            
+            rebuttal_data = {
+                "original_fail_session_id": "session-123",
+                "original_fail_timestamp": "2026-05-28T12:00:00Z",
+                "normalized_diff_hash": "diffhash123",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "rebuttal_type": "FALSE_POSITIVE",
+                        "evidence": "evidence"
+                    }
+                ]
+            }
+            rebuttal_file.write_text(json.dumps(rebuttal_data), encoding="utf-8")
+            
+            # Write prior logs containing a standard fail AND a rejected rebuttal attempt for the SAME diff hash
+            log_file = tmp_path / ".ai-review-log.jsonl"
+            fail_log = {
+                "verdict": "FAIL",
+                "session_id": "session-123",
+                "timestamp": "2026-05-28T12:00:00Z",
+                "strategy": "standard",
+                "issues": [
+                    {
+                        "severity": "HIGH",
+                        "concern": "BRANCH_ISOLATION",
+                        "finding_id": "FID-1",
+                        "description": "test fail"
+                    }
+                ]
+            }
+            rejected_rebuttal = {
+                "verdict": "FAIL",
+                "strategy": "rebuttal",
+                "normalized_diff_hash": "diffhash123",
+                "original_fail_session_id": "session-123",
+                "original_fail_timestamp": "2026-05-28T12:00:00Z",
+                "findings": [
+                    {
+                        "finding_id": "FID-1",
+                        "rebuttal_type": "FALSE_POSITIVE",
+                        "verdict": "REBUTTAL_REJECTED",
+                        "rationale": "rejected rationale"
+                    }
+                ]
+            }
+            log_file.write_text(json.dumps(fail_log) + "\n" + json.dumps(rejected_rebuttal) + "\n", encoding="utf-8")
+            
+            with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"):
+                args = MagicMock()
+                args.rebutted_by_agent = False
+                # Should block execution via Limiter and return 1 without calling LLM!
+                res = ai_review._run_rebuttal(args)
+                assert res == 1
 
 

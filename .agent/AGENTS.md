@@ -186,6 +186,15 @@ When a CI/CD pipeline fails after a push:
 All framework work must develop on dedicated feature branches before merging via Pull Request:
   `feat/framework-{item-id}-{short-description} → PR → main`
 
+### 8.6 Gate Governance Escalation Hierarchy
+
+When the AI review gate returns a `FAIL` verdict, agents and developers MUST adhere to the following escalation hierarchy:
+
+1. **Fix the actual problem** (First Priority): Always attempt to resolve the underlying code quality, security, or architectural issue directly.
+2. **Structured Rebuttal** (Governed Contest): If a finding is believed to be a false positive or is specifically required, create `.agent/state/gate_rebuttal.json`. 
+   - **Agent Mandate**: **Agents MUST NOT self-execute the `--rebuttal` command.** Writing the rebuttal file and presenting the argument to the human operator is the agent's sole action. The human reviews the argument and explicitly runs: `python src/scripts/ai_review.py --rebuttal`.
+3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
+
 ### 9 Environment Progression (mandatory gate sequence)
 
 Before raising any PR, the agent must confirm which environment gates apply to this project. The project's environment progression is defined in .agent/config.yaml under environments: or in the governing workflow file.

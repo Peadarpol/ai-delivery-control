@@ -345,13 +345,80 @@ def check_harness_alerts():
         print("\033[91m   BRANCH_ISOLATION suppression is currently inactive. Update config.yaml to fix.\033[0m")
 
 
+def report_rebuttals():
+    section_header("REBUTTAL HARNESS HEALTH")
+    log_paths = [Path(".ai-review-log.jsonl"), Path(".agent/state/ai-review-log.jsonl")]
+    log_path = next((p for p in log_paths if p.exists()), None)
+
+    if not log_path:
+        print("  Status         : \033[93mNO LOG FOUND\033[0m")
+        return
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now - datetime.timedelta(days=30)
+    
+    total_reviews_30d = 0
+    agent_rebuttals_30d = 0
+    human_rebuttals_30d = 0
+    
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                    ts_str = record.get("timestamp")
+                    if not ts_str:
+                        continue
+                    if ts_str.endswith("Z"):
+                        ts_str = ts_str[:-1] + "+00:00"
+                    rec_dt = datetime.datetime.fromisoformat(ts_str)
+                    if rec_dt.tzinfo is None:
+                        rec_dt = rec_dt.replace(tzinfo=datetime.timezone.utc)
+                    else:
+                        rec_dt = rec_dt.astimezone(datetime.timezone.utc)
+                        
+                    if rec_dt < cutoff:
+                        continue
+                        
+                    strategy = record.get("strategy")
+                    if strategy == "rebuttal":
+                        actor = record.get("rebuttal_actor", "human")
+                        if actor == "agent":
+                            agent_rebuttals_30d += 1
+                        else:
+                            human_rebuttals_30d += 1
+                    else:
+                        total_reviews_30d += 1
+                except Exception:
+                    continue
+    except Exception as e:
+        print(f"  Error reading log: {e}")
+        return
+
+    divisor = max(total_reviews_30d, 1)
+    agent_rate = (agent_rebuttals_30d / divisor) * 100
+    human_rate = (human_rebuttals_30d / divisor) * 100
+    
+    print(f"  Standard Reviews (30d): {total_reviews_30d}")
+    print(f"  Agent-Initiated Rebuttals (30d): {agent_rebuttals_30d} ({agent_rate:.1f}%)")
+    print(f"  Human-Initiated Rebuttals (30d): {human_rebuttals_30d} ({human_rate:.1f}%)")
+    
+    if agent_rate > 15.0:
+        print("\033[91m  ⚠️  [ALERT] Agent Rebuttal Rate exceeds 15% (gaming signal)! Recommendation: Restrict agent capabilities.\033[0m")
+    if human_rate > 15.0:
+        print("\033[93m  ⚠️  [ALERT] Human Rebuttal Rate exceeds 15% (calibration signal)! Recommendation: Relax specific skills.\033[0m")
+
+
 def main():
     show_all = "--all" in sys.argv
     print("\033[1m" + "=" * 60)
     print("  GYM APP RESILIENCE HARNESS HEALTH REPORT")
     print("=" * 60 + "\033[0m")
-
+ 
     report_ai_reviews()
+    report_rebuttals()
     report_governance_audit()
     report_resilience_pointer()
     report_dlq_pointer()
@@ -360,11 +427,11 @@ def main():
     report_token_trends()
     report_backlog(show_all=show_all)
     check_harness_alerts()
-
+ 
     print("\n" + "=" * 60)
     print(f"Report Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60 + "\n")
-
-
+ 
+ 
 if __name__ == "__main__":
     main()

@@ -113,7 +113,7 @@ V1_1_0 = {
 }
 
 V1_1_5 = {
-    '.agent/AGENTS.md': 'a9d4efd529fac02c387eba14ec8c777d09a0b241ff12c69b211e4eaf29116a0a',
+    '.agent/AGENTS.md': 'cdda8e0ac89f478dcca48307ae0ac32e056d8544cfbfbf206c38b06dd2fe068d',
     '.agent/governance.md': '9ae9b21689382bc07033df0bea0e59ac05ede52fea5156279388d08dc85dfe01',
     '.agent/scripts/audit_logger.py': 'f26b36025315d152fbf5e9a95ac089f290a0f31976dfd1a6d20c20be96b2fa64',
     '.agent/scripts/check_halt.py': 'd9d134f1304a9e8c837bef459da5071f14487f8c5c16a34fe58b57875b8cbc79',
@@ -127,8 +127,8 @@ V1_1_5 = {
     '.agent/scripts/eval_runner.py': '8e35d7e5d6b62e48203ff61d56df169d0495ee2bb202f753aa86f76e3e34a5b0',
     '.agent/scripts/false_positive_to_eval.py': '9b9822dae925b5b2a5cec4a57775f7d3d116f1c4fcfc7ff05aaaab6bc5202842',
     '.agent/scripts/governance_check.py': '7fb3e98e8946ebf5ebcbff94f19bf06322ba2061634fb8dab40597a005015dee',
-    '.agent/scripts/harness_health.py': 'a67c2786cc2c525acd4a602e955faa8d9ec603c5dbcf5a0cb2696e221fc84125',
-    '.agent/scripts/init_session.py': '5984f47a7d9918febea621e1db90899177effafa70303b85a44a3dc2d0b4a6c3',
+    '.agent/scripts/harness_health.py': '2ca30693136196a7792c6618cd8f1bdfcf8b4e929f81d6bed8416032552815a5',
+    '.agent/scripts/init_session.py': '51445b87632902f198aa2fc74dfea1335d0339651e35abade0b6385e5a43d3db',
     '.agent/scripts/onboarding.py': '471f0b30843d04a7ae03d64eed8b6a79e0cca38a09a151e3f6fe16eb98e92179',
     '.agent/scripts/retention_cleanup.py': '653753473bbb8f3d0088291e438cee504291c21c03c446f37082b0b8f72fbd5f',
     '.agent/scripts/review_log_summary.py': '72c3295a960b840fe7a9de737e1a4cb461bd3c0f26aa549d372550231bc7ac13',
@@ -700,7 +700,7 @@ V1_1_5 = {
     '.agent/skills/universal/senior-architect/SKILL.md': '3329cd51b638442e575e0b5361357ebed623efe151cd25baee7dfe3486869d38',
     '.agent/skills/universal/senior-architect/scripts/architecture_checks.py': '3f013e1244f309c1b07f9537a2bc5dd562e20f9480ea76ead4f747bee834580d',
     '.agent/skills/universal/senior-architect/scripts/dependency_analyzer.py': 'df98b89099d25b6e888280bc06f8833bd7b23259bbd52cd46888d9e93f900140',
-    '.agent/skills/universal/senior-architect/scripts/repo_map.py': '11c79ecfdd63798fdd395f8454bedd7d00f9ee043d988a92a24a1770b86a3da1',
+    '.agent/skills/universal/senior-architect/scripts/repo_map.py': '7b1aad36501c44594288d9b353e6f90df507c1c468fadfc0460b487fa64e3312',
     '.agent/skills/universal/senior-architect/scripts/validate.py': 'b5e035d53ede112347c46ffce6e7c42e6afae6870138c2b359ffc5204432ae5c',
     '.agent/skills/universal/systematic-debugging/CREATION-LOG.md': 'b482ef9a918fbfc6c369729e8160633ddfa2332466dd362ee73f1527c239ef8b',
     '.agent/skills/universal/systematic-debugging/SKILL.md': 'e93cd576db91d4329c9a8fb0187087a79f6f73a0f56b42d00f0cf100b2d9ea7f',
@@ -738,8 +738,8 @@ V1_1_5 = {
     '.agent/workflows/technical-writer.md': '853478641e2780f19e41385841f35a99ec30db227abe6497e3ff027e16088a3b',
     '.agent/workflows/test-engineer.md': 'd5c101bdfb70bf979e704c9333395a9966934b4f98ec241ac9555d85f319f195',
     '.agent/workflows/ux.md': '1e6f4c9d8214c1b81dd3169f0225863e19edc3e58974571c53be018d8e992d8d',
-    'src/scripts/ai_review.py': '0877bc3da14e17fe5629c04eebdd26bb200849d71dc428252f36dbffbc9d90cf',
-    'src/scripts/providers.py': 'b8cd14f0d92fc026a59202ea4d48ff3d7325e1ba114c95fbcd9385483a14f5af',
+    'src/scripts/ai_review.py': '5648cdc15cbbad4b2cd35ea782a70932e86a4af2e288551775650f972c9daea5',
+    'src/scripts/providers.py': 'd4eb76aa557c7cb11fdf3a50656a302114883fc74a5bc52cad030a317f86f901',
     'src/scripts/review_context_universal.md': '6842501f6a684dc9c03480263e27900841940fe1ed456714ef5cc2879dca10cd',
     'src/scripts/roster_builder.py': 'aee75f857ec3d9f22598f19198f0e8e6725f265456a68423fc465fea9d40d2ec',
 }

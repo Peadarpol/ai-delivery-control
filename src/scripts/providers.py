@@ -107,6 +107,14 @@ class ReviewProvider(ABC):
         """
         ...
 
+    @abstractmethod
+    def raw_completion(self, system: str, user_content: str) -> str:
+        """Send a completion request and return the raw text response from the LLM.
+
+        This method must also calculate and update self.last_token_usage.
+        """
+        ...
+
     @property
     def last_token_usage(self) -> Dict[str, int]:
         """Return thread-safe token usage of the last request."""
@@ -210,6 +218,47 @@ class AnthropicProvider(ReviewProvider):
         raw = _strip_json_fences(raw)
         return json.loads(raw)
 
+    def raw_completion(self, system: str, user_content: str) -> str:
+        if not self._api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
+
+        if len(user_content) > MAX_DIFF_CHARS:
+            raise RuntimeError(
+                f"Content too large ({len(user_content):,} chars > "
+                f"{MAX_DIFF_CHARS:,}); skip guard should have caught this."
+            )
+
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "max_tokens": 1024,
+                "system": system,
+                "messages": [{"role": "user", "content": user_content}],
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": self._api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+
+        body = json.loads(call_api_with_retry(req).decode("utf-8"))
+        usage = body.get("usage", {})
+        self.last_token_usage = {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "reasoning_tokens": usage.get("thinking_tokens", 0),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+        }
+        raw = body["content"][0]["text"].strip()
+        return _strip_json_fences(raw)
+
 
 # ── OpenAI-Compatible Provider ────────────────────────────────────────────────
 
@@ -284,6 +333,45 @@ class OpenAIProvider(ReviewProvider):
         raw = _strip_json_fences(raw)
         return json.loads(raw)
 
+    def raw_completion(self, system: str, user_content: str) -> str:
+        if not self._api_key:
+            raise RuntimeError("OPENAI_API_KEY environment variable not set")
+
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "max_tokens": 1024,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_content},
+                ],
+                "response_format": {"type": "json_object"},
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{self._base_url}/chat/completions",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+            },
+            method="POST",
+        )
+
+        body = json.loads(call_api_with_retry(req).decode("utf-8"))
+        usage = body.get("usage", {})
+        completion_details = usage.get("completion_tokens_details", {})
+        reasoning = completion_details.get("reasoning_tokens", 0)
+        self.last_token_usage = {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+            "reasoning_tokens": reasoning,
+            "cache_read_input_tokens": 0,
+        }
+        raw = body["choices"][0]["message"]["content"].strip()
+        return _strip_json_fences(raw)
+
 
 # ── Ollama Provider ───────────────────────────────────────────────────────────
 
@@ -354,6 +442,37 @@ class OllamaProvider(ReviewProvider):
         raw = body.get("response", "{}").strip()
         raw = _strip_json_fences(raw)
         return json.loads(raw)
+
+    def raw_completion(self, system: str, user_content: str) -> str:
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "system": system,
+                "prompt": user_content,
+                "format": "json",
+                "stream": False,
+                "options": {"num_predict": 1024},
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{self._base_url}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        body = json.loads(
+            call_api_with_retry(req, timeout=120, max_retries=2).decode("utf-8")
+        )
+        self.last_token_usage = {
+            "input_tokens": body.get("prompt_eval_count", 0),
+            "output_tokens": body.get("eval_count", 0),
+            "reasoning_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+        raw = body.get("response", "{}").strip()
+        return _strip_json_fences(raw)
 
 
 # ── Provider Factory ──────────────────────────────────────────────────────────
