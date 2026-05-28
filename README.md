@@ -112,6 +112,7 @@ developer customisations in the shim files untouched.
 
 ## Quick Install
 
+(detailed in /docs/getting-started.md)
 ```bash
 #1. git clone https://github.com/Peadarpol/ai-delivery-control
 
