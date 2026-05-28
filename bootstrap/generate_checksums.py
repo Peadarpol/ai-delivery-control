@@ -104,11 +104,13 @@ def run_generate(version: str, framework_root: Path, bootstrap_dir: Path):
     version_var = f"V{format_version_var(version)}"
     all_versions[version_var] = version_digests
     
-    # Ensure always having V1_1_0 and V1_1_5 initialized as dicts if missing
+    # Ensure always having V1_1_0, V1_1_5 and V1_1_5_1 initialized as dicts if missing
     if "V1_1_0" not in all_versions:
         all_versions["V1_1_0"] = {}
     if "V1_1_5" not in all_versions:
         all_versions["V1_1_5"] = {}
+    if "V1_1_5_1" not in all_versions:
+        all_versions["V1_1_5_1"] = {}
 
     # Write out to checksums.py
     with open(checksums_path, "w", encoding="utf-8", newline="\n") as f:
@@ -140,13 +142,13 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
         print(f"Error: Failed to import bootstrap.checksums ({e})", file=sys.stderr)
         sys.exit(1)
         
-    # Check 1: Digest match against what is currently on disk for V1_1_5
-    v1_1_5_var = "V1_1_5"
-    if not hasattr(checksums, v1_1_5_var):
-        print(f"Error: {v1_1_5_var} not found in checksums.py!", file=sys.stderr)
+    # Check 1: Digest match against what is currently on disk for V1_1_5_1
+    v1_1_5_1_var = "V1_1_5_1"
+    if not hasattr(checksums, v1_1_5_1_var):
+        print(f"Error: {v1_1_5_1_var} not found in checksums.py!", file=sys.stderr)
         sys.exit(1)
         
-    v1_1_5_dict = getattr(checksums, v1_1_5_var)
+    v1_1_5_1_dict = getattr(checksums, v1_1_5_1_var)
     current_files = expand_patterns(framework_root, manifest.FRAMEWORK_OWNED)
     
     # Calculate digests on disk and compare
@@ -157,7 +159,7 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
         full_path = framework_root / f
         current_digest = compute_sha256(full_path)
         
-        expected_digest = v1_1_5_dict.get(rel_path)
+        expected_digest = v1_1_5_1_dict.get(rel_path)
         if expected_digest is None:
             print(f"MISMATCH: File '{rel_path}' exists on disk but is not recorded in {v1_1_5_var} checksums.", file=sys.stderr)
             failures += 1
@@ -168,10 +170,10 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
             checked += 1
             
     # Check if files in checksum dict are missing on disk
-    for rel_path in v1_1_5_dict.keys():
+    for rel_path in v1_1_5_1_dict.keys():
         full_path = framework_root / rel_path
         if not full_path.exists():
-            print(f"MISMATCH: File '{rel_path}' recorded in {v1_1_5_var} but does not exist on disk.", file=sys.stderr)
+            print(f"MISMATCH: File '{rel_path}' recorded in {v1_1_5_1_var} but does not exist on disk.", file=sys.stderr)
             failures += 1
             
     # Check 2: Non-empty assertion for versions referenced in migration chain
@@ -197,13 +199,17 @@ def main():
     parser = argparse.ArgumentParser(description="AI Delivery Control Checksum Generator/Verifier")
     parser.add_argument("--version", help="Version to generate checksums for (e.g., 1.1.0 or 1.1.5)")
     parser.add_argument("--framework-root", default=".", help="Root directory of framework sources (default: '.')")
-    parser.add_argument("--verify", action="store_true", help="Run in verification mode instead of generation mode")
+    parser.add_argument("--verify", action="store_true", help="Run in verification mode instead of generation mode. For framework development use only. Not applicable to installed project directories.")
+    parser.add_argument("--project", action="store_true", help="Indicate this is an installed project directory")
     
     args = parser.parse_args()
     framework_root = Path(args.framework_root).resolve()
     bootstrap_dir = Path(__file__).resolve().parent
     
     if args.verify:
+        if args.project:
+            print("generate_checksums.py --verify is a framework development tool and is not meaningful for customised project installations. Run bootstrap/validate.py instead.")
+            sys.exit(0)
         run_verify(framework_root, bootstrap_dir)
     else:
         if not args.version:

@@ -69,7 +69,7 @@ class UpgradeManager:
         self.backup_path = self.project_path / ".agent_backup_upgrade"
         self.state_file_path = self.project_path / ".agent" / ".framework_migration_state"
         self.config_path = self.project_path / ".agent" / "config.yaml"
-        self.target_version = "1.1.5"
+        self.target_version = "1.1.5.1"
 
     def validate_project(self):
         """Ensure the project directory carries an active .agent folder."""
@@ -90,8 +90,8 @@ class UpgradeManager:
         if self.config_path.exists():
             try:
                 content = self.config_path.read_text(encoding="utf-8")
-                # Parse framework version using simple regex
-                match = re.search(r"^\s*version:\s*\"([^\"]+)\"", content, re.MULTILINE)
+                # Parse framework version using regex anchored to framework block context
+                match = re.search(r"^\s*framework:\s*\r?\n(?:\s*(?:#.*)?\r?\n)*\s+version:\s*\"([^\"]+)\"", content, re.MULTILINE)
                 if match:
                     return match.group(1)
             except Exception as e:
@@ -106,12 +106,11 @@ class UpgradeManager:
             return []
         
         discovered = []
-        pattern = re.compile(r"^v(\d+)_(\d+)_(\d+)_to_v(\d+)_(\d+)_(\d+)\.py$")
         for file in migrations_dir.iterdir():
-            match = pattern.match(file.name)
+            match = re.match(r"^v([\d_]+)_to_v([\d_]+)\.py$", file.name)
             if match:
-                from_v = tuple(int(match.group(i)) for i in (1, 2, 3))
-                to_v = tuple(int(match.group(i)) for i in (4, 5, 6))
+                from_v = tuple(int(x) for x in match.group(1).split("_"))
+                to_v = tuple(int(x) for x in match.group(2).split("_"))
                 discovered.append((from_v, to_v, file))
         return discovered
 

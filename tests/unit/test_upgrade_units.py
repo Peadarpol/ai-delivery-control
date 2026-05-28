@@ -31,11 +31,11 @@ def test_chain_resolves_single_step():
     """Given a single migration step, verify it resolves correctly."""
     class MockMigration:
         from_version = "1.1.0"
-        to_version = "1.1.5"
+        to_version = "1.1.5.1"
         __name__ = "MockMigration"
     
     migrations = [
-        ((1, 1, 0), (1, 1, 5), MockMigration)
+        ((1, 1, 0), (1, 1, 5, 1), MockMigration)
     ]
     
     manager = upgrade.UpgradeManager(Path("."), dry_run=True)
@@ -45,7 +45,7 @@ def test_chain_resolves_single_step():
     # To test UpgradeManager.build_chain directly:
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
     # We patch discover_migrations
-    real_manager.discover_migrations = lambda: [((1, 1, 0), (1, 1, 5), Path("v1_1_0_to_v1_1_5.py"))]
+    real_manager.discover_migrations = lambda: [((1, 1, 0), (1, 1, 5, 1), Path("v1_1_0_to_v1_1_5_1.py"))]
     real_manager.load_migration_module = lambda p: MockMigration
     
     resolved = real_manager.build_chain("1.1.0")
@@ -60,15 +60,15 @@ def test_chain_resolves_multi_step():
         __name__ = "Step1"
     class Step2:
         from_version = "1.1.0"
-        to_version = "1.1.5"
+        to_version = "1.1.5.1"
         __name__ = "Step2"
         
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
     real_manager.discover_migrations = lambda: [
-        ((1, 1, 0), (1, 1, 5), Path("v1_1_0_to_v1_1_5.py")),
+        ((1, 1, 0), (1, 1, 5, 1), Path("v1_1_0_to_v1_1_5_1.py")),
         ((1, 0, 0), (1, 1, 0), Path("v1_0_0_to_v1_1_0.py"))
     ]
-    real_manager.load_migration_module = lambda p: Step2 if "1_1_5" in p.name else Step1
+    real_manager.load_migration_module = lambda p: Step2 if "1_1_5_1" in p.name else Step1
     
     resolved = real_manager.build_chain("1.0.0")
     assert len(resolved) == 2
@@ -79,14 +79,14 @@ def test_chain_detects_duplicate_from_version():
     """Verify having two migrations with the same from_version raises a chain error."""
     class Step1:
         from_version = "1.1.0"
-        to_version = "1.1.5"
+        to_version = "1.1.5.1"
     class Step1Dup:
         from_version = "1.1.0"
         to_version = "1.2.0"
         
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
     real_manager.discover_migrations = lambda: [
-        ((1, 1, 0), (1, 1, 5), Path("v1_1_0_to_v1_1_5.py")),
+        ((1, 1, 0), (1, 1, 5, 1), Path("v1_1_0_to_v1_1_5_1.py")),
         ((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py"))
     ]
     real_manager.load_migration_module = lambda p: Step1
@@ -170,7 +170,7 @@ def test_migration_protocol_enforced_with_runtime_checkable():
     
     class CorrectMigration:
         from_version = "1.1.0"
-        to_version = "1.1.5"
+        to_version = "1.1.5.1"
         def migrate(self, config_path: Path) -> None:
             pass
         def downgrade(self, config_path: Path) -> None:

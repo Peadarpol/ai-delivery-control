@@ -72,8 +72,8 @@ def test_upgrade_full_success(fresh_v110_project):
     state_file = fresh_v110_project / ".agent" / ".framework_migration_state"
     assert state_file.exists()
     state = json.loads(state_file.read_text(encoding="utf-8"))
-    assert state["current_version"] == "1.1.5"
-    assert "v1_1_0_to_v1_1_5" in state["applied_migrations"][0]
+    assert state["current_version"] == "1.1.5.1"
+    assert any("v1_1_0_to_v1_1_5" in m for m in state["applied_migrations"])
     
     # Backup directory must be deleted on successful exit
     backup_dir = fresh_v110_project / ".agent_backup_upgrade"
@@ -96,8 +96,8 @@ def test_upgrade_conflict_with_sidecar(modified_v110_project):
     gov_content = gov_file.read_text(encoding="utf-8")
     assert "# Custom developer rule" in gov_content
     
-    # A conflict sidecar should be created containing the framework v1.1.5 version
-    sidecar_file = modified_v110_project / ".agent" / "governance.md.framework-v1.1.5"
+    # A conflict sidecar should be created containing the framework v1.1.5.1 version
+    sidecar_file = modified_v110_project / ".agent" / "governance.md.framework-v1.1.5.1"
     assert sidecar_file.exists()
     sidecar_content = sidecar_file.read_text(encoding="utf-8")
     assert "# Custom developer rule" not in sidecar_content
@@ -108,7 +108,7 @@ def test_atomic_restore_on_failure(fresh_v110_project):
     
     class FailureMigration:
         from_version = "1.1.0"
-        to_version = "1.1.5"
+        to_version = "1.1.5.1"
         __name__ = "FailureMigration"
         def migrate(self, config_path):
             raise ValueError("Simulated Error")
@@ -132,8 +132,8 @@ def test_atomic_restore_on_failure(fresh_v110_project):
     assert not backup_dir.exists()
 
 def test_already_upgraded_re_verify_mode(fresh_v110_project, capsys):
-    """Verify that re-running upgrade on v1.1.5 skips writing and enters re-verify mode."""
-    # Run first upgrade to reach v1.1.5
+    """Verify that re-running upgrade on v1.1.5.1 skips writing and enters re-verify mode."""
+    # Run first upgrade to reach v1.1.5.1
     manager = upgrade.UpgradeManager(fresh_v110_project, dry_run=False, force=True)
     manager.run_upgrade()
     capsys.readouterr() # clear buffer
@@ -141,7 +141,7 @@ def test_already_upgraded_re_verify_mode(fresh_v110_project, capsys):
     # Run second time
     manager.run_upgrade()
     captured = capsys.readouterr()
-    assert "Project is already at version 1.1.5" in captured.out
+    assert "Project is already at version 1.1.5.1" in captured.out
 
 def test_adversarial_empty_config(malformed_config_project):
     """Verify that a malformed/empty config.yaml triggers validation errors and aborts safely."""
@@ -167,7 +167,7 @@ def test_adversarial_directory_conflict(fresh_v110_project):
 
 def test_downgrade_full_success(fresh_v110_project):
     """Verify full downgrade reverts configurations to v1.1.0 keys and version markers."""
-    # 1. Run upgrade to v1.1.5
+    # 1. Run upgrade to v1.1.5.1
     manager_up = upgrade.UpgradeManager(fresh_v110_project, dry_run=False, force=True)
     manager_up.run_upgrade()
     

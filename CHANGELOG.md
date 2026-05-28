@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.5.1] — 2026-05-28
+
+### Framework Infrastructure & Diagnostics
+
+#### BUG-09: Anchored Version Detection Fallback
+- Anchored the `upgrade.py` and `downgrade.py` config fallback version detection regex to the `framework:` block context
+- Prevents wrong version matching on customized `config.yaml` layouts where application/project versions exist above the framework version
+
+#### HIB-028: generate_checksums.py --project Flag
+- Added `--project` flag to `generate_checksums.py` to bypass framework-only checksum verification on customized project installations with a clear error output pointing to `bootstrap/validate.py`
+- Updated `--verify` help text to clarify its framework development scoping
+
+#### General Framework Improvements
+- Upgraded `discover_migrations` in `upgrade.py` and `downgrade.py` to dynamically parse and link migrations with arbitrary version segment lengths (e.g., `v1_1_5_to_v1_1_5_1.py`)
+- Created seamless `v1_1_5_to_v1_1_5_1` no-op migration chain and bumped framework version to `v1.1.5.1`
+- Regenerated framework checksums registry covering all 629 files under `v1.1.5.1`
+
 ## [1.1.5] — 2026-05-28
 
 ### Theme 1: Gating & Enforcement

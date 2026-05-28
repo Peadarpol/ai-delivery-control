@@ -396,3 +396,139 @@ session close via Stop hook (Claude Code) or retrospective inference fallback.
 Fields: commits_made, files_changed, gate_verdicts, decisions_logged,
 open_tasks_remaining, outcome. Supplements agent-written last_session_summary.md
 with a compliance-independent machine-generated record.
+
+---
+
+## HIB-027 — .agent/memory/ directory separation
+
+**Date**: 2026-05-29
+**Source**: Cole Medin / Anthropic large codebase blog post
+**Pillar**: T1-B / Environment legibility
+**Status**: 📅 Backlog — v1.3.0 T1-B series
+
+Cole Medin's implementation uses a dedicated `/memory` folder for agent memory
+files, separate from operational state. The current harness mixes agent memory
+files (e.g. `active_context.md`, `last_session_summary.md`) with operational
+state files (circuit breaker counts, event log) under `.agent/state/`. This
+reduces legibility — it is not obvious which files are agent-written memory and
+which are harness-managed operational data.
+
+**Suggested change**: Create `.agent/memory/` for agent-written memory files and
+retain `.agent/state/` for harness-managed operational files only. Migration
+scope:
+- Move `active_context.md`, `last_session_summary.md`, and any session
+  observation files to `.agent/memory/`
+- Update path references in `init_session.py`, `AGENTS.md`,
+  `UNIVERSAL_CONTEXT.md`, and any skill scripts that read/write these paths
+- Add a migration module (`v1_x_x_to_v1_3_0.py`) to relocate files on upgrade
+- Update `.gitignore` to cover `.agent/memory/session_observations_*.md`
+
+Deferred to v1.3.0 T1-B environment legibility sprint to avoid churn mid-v1.1.x
+series. No behaviour change — pure path reorganisation.
+
+---
+
+## HIB-028 — generate_checksums.py --verify misleading output on customised installations
+
+**Date**: 2026-05-29
+**Source**: BUG-09 / v1.1.5 release
+**Pillar**: T1-A / Bootstrap integrity
+**Status**: ✅ Resolved — direct fix shipped in v1.1.5 as BUG-09
+
+`generate_checksums.py --verify` was designed to validate the framework author's
+release artefacts, not installed projects. On customised installations it
+produced false-positive failures because developer-modified files (legitimately
+changed post-install) were compared against release-time checksums. The flag's
+help text did not warn about this, making the output misleading for any consumer
+other than the release pipeline.
+
+**Resolution**: `generate_checksums.py --verify` now guards against project-context
+misuse with an explicit warning and early exit when run outside the framework
+source tree. See BUG-09 in `FRAMEWORK_BACKLOG.md` for the full fix record.
+
+---
+
+## HIB-029 — Session-end lightweight observation capture
+
+**Date**: 2026-05-29
+**Source**: Cole Medin / Anthropic large codebase blog post
+**Pillar**: T1-D-03 / Dream Phase signal
+**Status**: 📅 Backlog — documentation only (AGENTS.md update)
+
+The dream phase (T1-D-03) runs weekly and requires frequency thresholds before
+generating improvement proposals. Observations that don't yet meet the threshold
+are lost before the dream phase runs — the freshest signal (end of session, full
+context) is discarded.
+
+**Suggested change**: Add a lightweight session-end observation step to the
+session close protocol in `AGENTS.md`. At session close the agent writes 3–5
+bullet raw observations to `.agent/state/session_observations_{date}.md`:
+patterns noticed, files referenced repeatedly, friction points, awkward code
+patterns. No proposals, no structured schema — raw signal only. `distill_dream.py`
+reads these alongside `harness_events.jsonl` when it runs. Gitignore the
+observations directory.
+
+This avoids the alignment problem Cole identifies (agents proposing self-serving
+rule changes) because observations ≠ proposals — humans still decide what becomes
+a skill or rule update. The dream phase governance layer is preserved; this only
+feeds it richer signal. Cost: one paragraph in `AGENTS.md` and a gitignored
+observations file.
+
+---
+
+## HIB-030 — Path-based skill activation in skill_ownership.yaml
+
+**Date**: 2026-05-29
+**Source**: Cole Medin / Anthropic large codebase blog post
+**Pillar**: T1-H-04 / Skill routing
+**Status**: 📅 Backlog — schema extension
+
+The harness activates skills based on capability type (`check_type`,
+`event_type`, keyword). There is no mechanism to auto-load a skill when the
+diff touches a specific directory — e.g. a security-audit skill activating
+whenever `src/auth/` is touched, or UoW/soft-delete skills activating only for
+`src/**/repositories/**`. Domain-specific skills end up either always-on (noisy)
+or manually invoked (forgotten).
+
+**Suggested change**: Add an optional `paths:` field to each entry in
+`skill_ownership.yaml` alongside existing ownership rules. When the diff contains
+files matching a configured path glob, the skill is included in the session
+context regardless of capability routing. Pattern:
+
+```yaml
+paths:
+  - "src/**/repositories/**"
+  - "src/**/services/**"
+```
+
+Logic: path match OR capability match triggers inclusion — purely additive to
+existing routing. Connects to T1-H-04 (auto-generated context at install time),
+which could auto-populate initial path rules from the project's directory
+structure at install time.
+
+---
+
+## HIB-031 — Sub-agent exploration patterns in workflow documentation
+
+**Date**: 2026-05-29
+**Source**: Cole Medin / Anthropic large codebase blog post
+**Pillar**: T1-B / Workflow documentation
+**Status**: 📅 Backlog — documentation only (AGENTS.md + workflow files)
+
+The harness workflows (`feature-implementation.md`, `architect.md`) do not
+mention sub-agent exploration patterns. As projects grow and sessions regularly
+hit context limits, the absence of this guidance causes agents to load full
+exploration context into the primary session, crowding out implementation space.
+
+**Suggested change**: Add a sub-agent exploration step to
+`feature-implementation.md` Phase 1 (Plan) and `architect.md`. Before planning
+or implementation begins, the agent dispatches a sub-agent to explore relevant
+codebase sections and returns a summary. The primary session consumes only the
+summary, not the full exploration context. Template language for `AGENTS.md`:
+
+> "For tasks touching more than 3 service domains, dispatch a sub-agent with
+> `Task()` to explore each domain independently before beginning the
+> implementation plan. Consume only the summary in the primary session."
+
+Low effort — documentation only, no code changes. Directly addresses the
+context-bloat failure mode Cole identifies for large codebases.
