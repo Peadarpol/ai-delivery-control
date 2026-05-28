@@ -113,8 +113,22 @@ developer customisations in the shim files untouched.
 ## Quick Install
 
 ```bash
-git clone https://github.com/Peadarpol/ai-delivery-control
-python bootstrap/install.py --project-path /path/to/your/project
+#1. git clone https://github.com/Peadarpol/ai-delivery-control
+
+# 2. python bootstrap/install.py --project-path /path/to/your/project
+
+# 3. Validate the install
+python bootstrap/validate.py --project-path /path/to/your/project
+
+# 4. Review and configure
+# Edit .agent/config.yaml — set budget_provider, API keys, source paths
+
+# 5. Run onboarding
+cd /path/to/your/project
+python .agent/scripts/onboarding.py
+
+# 6. Start your first session
+python .agent/scripts/init_session.py
 ```
 
 The installer detects your tech stack, copies framework files, scaffolds configuration
