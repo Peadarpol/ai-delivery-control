@@ -1,63 +1,26 @@
+import sys
+from pathlib import Path
+
+# Bootstrap: add src/scripts to path before harness_utils import
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+from harness_utils import _setup_sys_path, _lock_session, log_harness_event, redact_api_keys
+_setup_sys_path()  # full path setup for remaining imports
+
 import argparse
-import contextlib
 import json
 import os
 import re
 import subprocess
-import sys
 import time
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 
-# Ensure UTF-8 stdout/stderr on Windows
-if sys.platform == "win32" and "pytest" not in sys.modules:
-    import io
-
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 STATE_DIR = Path(".agent/state")
 SESSION_FILE = STATE_DIR / "session.json"
 LEDGER_FILE = STATE_DIR / "session_ledger.jsonl"
 
-
-@contextlib.contextmanager
-def _lock_session(session_file: Path, timeout: float = 5.0, delay: float = 0.05):
-    """Platform-agnostic, atomic directory-based advisory lock for session.json with stale lock clearance."""
-    lock_path = session_file.with_suffix(".lock")
-    start_time = time.time()
-    acquired = False
-    
-    while time.time() - start_time < timeout:
-        try:
-            lock_path.mkdir(exist_ok=False)
-            acquired = True
-            break
-        except FileExistsError:
-            # Check for stale lock (older than 60 seconds)
-            try:
-                mtime = lock_path.stat().st_mtime
-                if time.time() - mtime > 60.0:
-                    try:
-                        lock_path.rmdir()
-                        print("[LOCK] Cleared stale session lock directory.")
-                        continue
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            time.sleep(delay)
-            
-    try:
-        yield acquired
-    finally:
-        if acquired:
-            try:
-                lock_path.rmdir()
-            except Exception:
-                pass
 
 
 def parse_iso_datetime(dt_str: str) -> datetime:
@@ -196,9 +159,40 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             else:
                 # 2. Check for commits made
                 commits = get_commits_after(prev_start)
-                if commits:
-                    action_str = f"[COMMIT]: {commits[0]['message']}"
+                spec_files_modified = False
+                
+                if not commits:
+                    # Scan for modified spec files in specs_path
+                    try:
+                        specs_dir = PROJECT_ROOT / "docs" / "planning" / "specs"
+                        config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+                        if config_path.exists():
+                            try:
+                                content = config_path.read_text(encoding="utf-8")
+                                match = re.search(r"specs_path:\s*['\"]?([^'\"\n]+)['\"]?", content)
+                                if match:
+                                    specs_dir = PROJECT_ROOT / Path(match.group(1).strip())
+                            except Exception:
+                                pass
+                        
+                        if specs_dir.exists() and specs_dir.is_dir():
+                            prev_start_dt = parse_iso_datetime(prev_start)
+                            for spec_file in specs_dir.glob("SPEC-*.md"):
+                                try:
+                                    mtime = datetime.fromtimestamp(spec_file.stat().st_mtime)
+                                    if mtime > prev_start_dt:
+                                        spec_files_modified = True
+                                        action_str = f"Compiled/updated specification: {spec_file.name}"
+                                        break
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
 
+                if commits or spec_files_modified:
+                    if commits:
+                        action_str = f"[COMMIT]: {commits[0]['message']}"
+                    
                     # Check for open tasks in active_context.md
                     has_open_tasks = False
                     CONTEXT_FILE = STATE_DIR / "active_context.md"
@@ -212,12 +206,18 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
 
                     if not has_fail and not has_open_tasks:
                         outcome = "success"
-                        note = "All committed changes completed with no pending open tasks."
+                        if commits:
+                            note = "All committed changes completed with no pending open tasks."
+                        else:
+                            note = "Specification compiled/updated with no active commits."
                     else:
                         outcome = "partial"
-                        note = f"Changes committed but open tasks or review failures remain. (FAIL reviews: {has_fail}, open tasks: {has_open_tasks})"
+                        if commits:
+                            note = f"Changes committed but open tasks or review failures remain. (FAIL reviews: {has_fail}, open tasks: {has_open_tasks})"
+                        else:
+                            note = f"Specification compiled/updated but open tasks remain. (open tasks: {has_open_tasks})"
                 else:
-                    # 3. No commits and not escalated => abandoned
+                    # 3. No commits, no spec changes, and not escalated => abandoned
                     outcome = "abandoned"
                     note = "Session closed with no commits."
                     action_str = "No active commits made. Session abandoned."

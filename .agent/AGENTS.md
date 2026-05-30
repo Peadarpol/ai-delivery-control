@@ -129,7 +129,7 @@ Full trigger list in `.agent/governance.md` §2.
 2. **MUST run context compaction** (`python .agent/skills/meta/validate.py`) whenever the rolling spent has passed 80% of its budget ceiling.
 3. **ALWAYS complete the compaction/handoff template** `.agent/skills/meta/context-compaction.md` in full prior to close.
 4. **MUST update `.agent/state/active_context.md`** — current task, branch, blockers, immediate next steps.
-5. **MUST update `.agent/state/decisions_log.md`** — document all technical, design, and business decisions made during this session.
+5. **MUST update `.agent/state/decisions_log.md`** — document all technical, design, and business decisions made during this session. **Archival check**: if `decisions_log.md` exceeds **150 lines**, archive the oldest entries to `.agent/state/decisions_log_archive.md` before adding new ones — the review gate injects this file into every review context.
 6. **MUST update `.agent/state/last_session_summary.md`** — what was done, what's incomplete, decisions deferred.
 7. **MUST append a row to `.agent/state/session_ledger.jsonl` and `.agent/state/session_ledger.md`** — session ID, date, action summary.
 

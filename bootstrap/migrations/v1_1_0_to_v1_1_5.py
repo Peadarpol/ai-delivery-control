@@ -360,6 +360,11 @@ class MigrationV1_1_0_to_V1_1_5(MigrationProtocol):
             new_lines[last_key_in_tt+1:last_key_in_tt+1] = inserted_lines
             return new_lines
 
+# Chain-discovery constants used by _assert_chain_contiguous()
+FROM_VERSION = "1.1.0"
+TO_VERSION = "1.1.5"
+MIGRATION_TYPE = "minor"
+
 # Expose a direct module attribute for discover_migrations scanning
 v1_1_0_to_v1_1_5_migration = MigrationV1_1_0_to_V1_1_5()
 from_version = MigrationV1_1_0_to_V1_1_5.from_version

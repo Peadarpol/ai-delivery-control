@@ -532,3 +532,287 @@ summary, not the full exploration context. Template language for `AGENTS.md`:
 
 Low effort — documentation only, no code changes. Directly addresses the
 context-bloat failure mode Cole identifies for large codebases.
+
+---
+
+## HIB-032 — Policy-as-code governance layer (Starlark) as long-horizon consideration
+
+**Date**: 2026-05-29
+**Source**: majiayu000/harness ecosystem research
+**Pillar**: Governance architecture
+**Status**: 📅 Long-horizon — v3.0.0 territory, not actionable until Tier 2
+  infrastructure exists
+
+The majiayu000/harness project implements a Starlark-based execution policy
+engine with a hardened parser dialect (no `load`, `def`, or `lambda`
+permitted) for sandboxed rule evaluation. Starlark is a deterministic,
+sandboxed subset of Python designed for configuration and policy expression.
+
+This is architecturally more robust than markdown conventions for governance
+rules: policies are machine-evaluatable, agents cannot modify the evaluation
+language itself, and the hardened dialect prevents agents from using
+full-Python constructs to escape policy constraints.
+
+**Relevance to AI Delivery Control**: The current governance model relies on
+markdown conventions (AGENTS.md, governance.md) that agents can read and
+reason around, and Python scripts (architecture_checks.py) that are
+framework-owned but language-specific. A Starlark policy layer would:
+(1) make governance rules evaluatable without agent interpretation;
+(2) be language-agnostic (not Python AST-specific);
+(3) be auditable as committed policy files alongside application code.
+
+Not actionable before Tier 2 infrastructure (v2.0.0). File as a design
+input for the v3.0.0 compliance and enterprise governance milestone where
+formal control mapping (SOCI Act, ISM, PSPF) requires machine-evaluatable
+policies, not prose conventions.
+
+---
+
+## HIB-033 — Adversarial separation becoming ecosystem table stakes
+
+**Date**: 2026-05-29
+**Source**: Harness engineering ecosystem research; CodeRabbit analysis
+**Pillar**: Positioning / competitive differentiation
+**Status**: 📅 Monitoring — informs positioning, no immediate code action
+
+When AI Delivery Control was conceived, the adversarial separation between
+writing agent and reviewing model was a distinctive architectural claim. As
+of May 2026, independent cross-agent review is appearing in multiple
+ecosystem projects (majiayu000/harness explicitly prevents self-review by
+architecture; CodeRabbit Plan uses separate models for planning vs
+generation; the RALPH loop pattern is widely adopted).
+
+**Implication**: The adversarial separation is becoming table stakes, not
+a differentiator. The durable differentiation is shifting toward:
+(1) hard enforcement at the commit boundary (most ecosystem harnesses are
+soft governance — advisory rather than blocking);
+(2) compliance-grade audit trail (harness_events.jsonl, ai-review-log.jsonl,
+.framework_migration_state — none of the ecosystem tools have this);
+(3) the self-improvement loop (dream phase producing project-calibrated
+skill proposals — no fast-follower can replicate months of session data);
+(4) the structured rebuttal protocol with incentive controls (the alignment
+problem analysis is unique to AI Delivery Control).
+
+**Suggested action**: Update the README Strategic Context section to
+de-emphasise "adversarial separation is unique" and emphasise the harder-to-
+replicate differentiators listed above. The positioning should lead with
+the audit trail and self-improvement loop, not the two-model architecture
+that the ecosystem is now converging on.
+
+---
+
+## HIB-034 — AGENTS.md length audit and line ceiling enforcement
+
+**Date**: 2026-05-30
+**Source**: v1.2.0 planning — context budget review
+**Pillar**: Environment legibility / agent compliance
+**Status**: ✅ Resolved — v1.2.0 hardening sprint
+
+**Resolution**: Added `ALWAYS_LOADED_LINE_CEILING = 300` constant and ceiling checks for `.agent/AGENTS.md`, `.agent/governance.md`, and `src/scripts/review_context_universal.md` to `check_skills_hygiene.py`. Added 150-line archival check to `AGENTS.md` §6 Session Close checklist and to `business-analyst.md` Phase 5.
+
+The framework enforces a 150-line limit on skills (validated by
+T1-B-06/07) but has no equivalent ceiling on AGENTS.md — the document
+agents read on every single session start. AGENTS.md has been extended
+in every release: provider sections, workflow sections, rebuttal
+hierarchy, task magnitude classification, context compaction protocol,
+session budget rules. By v1.1.5 it is likely 400-600+ lines. The
+v1.2.0 additions will extend it further.
+
+The "curse of instructions" research (Osmani) validates the skill limit
+and applies equally here: compliance per rule decreases as total rules
+increase regardless of model capability. An AGENTS.md that requires
+agents to process 600 lines on every session start is actively
+counterproductive.
+
+**Suggested changes**:
+1. Run a line count audit on AGENTS.md in the current GymBase
+   installation before any v1.2.0 content is added. If over 400 lines,
+   prune before extending further.
+2. Pruning principle: content that applies only within a specific
+   workflow context (spec gate procedures, /ba session rules, /pm
+   rules) belongs in that workflow's document and should be referenced
+   from AGENTS.md, not duplicated. AGENTS.md should contain only global
+   invariants — rules that are always true regardless of which workflow
+   is active.
+3. Establish a 300-line ceiling on AGENTS.md and enforce it as a
+   pre-commit check (the Agent Skills Hygiene Scan hook is the natural
+   home for this). This mirrors the 150-line skill limit and closes the
+   inconsistency.
+4. Apply the same ceiling to `governance.md` and
+   `UNIVERSAL_CONTEXT.md` — any always-loaded document should have a
+   governed length limit.
+
+---
+
+## HIB-035 — decisions_log.md retention policy (pre-T1-I-06 interim)
+
+**Date**: 2026-05-30
+**Source**: v1.2.0 planning — context budget review
+**Pillar**: Memory / context management
+**Status**: ✅ Resolved — v1.2.0 hardening sprint
+
+**Resolution**: Added 150-line archival check to `AGENTS.md` §6 Session Close checklist and to `business-analyst.md` Phase 5 (archival prompt before writing new decisions). The formal retention policy (T1-I-06) remains deferred to v1.3.0.
+
+`decisions_log.md` grows indefinitely with no retention policy.
+A project with 50 active sessions could have a 2,000+ line decisions
+log being injected into every adversarial review context. This
+degrades review quality — the gate's context window fills with old
+decisions that are no longer relevant to the current diff.
+
+T1-I-06 (Memory Retention Policy, v1.3.0) is the formal solution.
+Until it ships, an interim convention should be established:
+
+**Suggested interim convention**: decisions older than 90 days that
+have not been referenced in a recent session should be moved from the
+active `decisions_log.md` to an archive file
+`decisions_log_archive.md`. The review gate reads only
+`decisions_log.md`. The /ba workflow Phase 4 step that writes new
+decisions should also include a check: if `decisions_log.md` exceeds
+150 lines, prompt the developer to archive the oldest entries before
+adding new ones. Document this convention in `AGENTS.md` and the
+agent operations guide (T1-M-01).
+
+---
+
+## HIB-036 — Atomic config migration rollback
+
+**Date**: 2026-05-30
+**Source**: Migration chain robustness review
+**Pillar**: Bootstrap / upgrade reliability
+**Status**: ✅ Resolved — v1.2.0 hardening sprint
+
+**Resolution**: `upgrade.py` and `downgrade.py` both now snapshot `config.yaml` to `.yaml.migration_backup` before the migration chain executes, and restore from the backup on any exception. The backup is deleted on clean completion. Stale backup detection added to both CLIs with `--force` override. Scope limitation documented: framework file changes applied before an exception are not auto-rolled back.
+
+**Problem**: If a migration chain partially completes — for example,
+`v1_1_0_to_v1_1_5.py` succeeds but `v1_1_5_to_v1_2_0.py` fails
+mid-execution — `.agent/config.yaml` is left in a partial state with
+no clean recovery path. `.framework_migration_state` has not been
+updated so a retry attempt will try to re-run from an incorrect
+starting point, compounding the corruption.
+
+The conflict file sidecar pattern in HIB-006 handles file conflicts
+atomically. Config migrations have no equivalent protection.
+
+**Suggested changes**:
+1. At the start of the migration chain (before any module runs),
+   snapshot `.agent/config.yaml` to
+   `.agent/config.yaml.migration_backup`.
+2. If any migration module raises an exception or exits with error,
+   restore `.agent/config.yaml` from the backup, delete the backup
+   file, and exit `upgrade.py` with a clear error message:
+   `"Migration failed at vX.X → vX.X. Config restored to pre-upgrade
+   state. No changes have been committed."`
+3. On successful completion of the full chain, delete the backup file.
+4. Write a `migration_backup_created` event to `harness_events.jsonl`
+   at backup creation time, and a `migration_backup_deleted` event on
+   successful completion or rollback, so the upgrade audit trail is
+   complete.
+
+---
+
+## HIB-037 — Pre-flight installation state validation before migration
+
+**Date**: 2026-05-30
+**Source**: Migration chain robustness review
+**Pillar**: Bootstrap / upgrade reliability
+**Status**: ✅ Resolved — v1.2.0 hardening sprint
+
+**Resolution**: `_pre_flight_check()` added to `upgrade.py`. Checks a deterministic 8-file sample set (`ai_review.py`, `providers.py`, `harness_utils.py`, `governance_check.py`, `init_session.py`, `AGENTS.md`, `check_halt.py`, `feature-implementation.md`) against the installed version's checksum registry. Halts on >3 mismatches; warns within threshold. `--skip-preflight` flag available for intentionally customised installations. `downgrade.py` gains matching `--skip-preflight` for full parity.
+
+**Problem**: Nothing currently validates that the target installation
+is in a healthy state before the migration chain runs. A developer who
+interrupted a previous upgrade may have `.framework_migration_state`
+declaring version v1.1.0 while their installed files are partially
+v1.1.5. Running the migration chain on a broken installation produces
+cascading failures with no clear diagnosis.
+
+**Suggested changes**:
+1. Add a `_pre_flight_check(project_root, declared_version)` function
+   to `upgrade.py` that runs before migration discovery.
+2. The function loads the checksum dictionary for `declared_version`
+   from `bootstrap/checksums.py` and spot-checks a sample of
+   FRAMEWORK_OWNED files (5-10 files, weighted toward high-change
+   files like `ai_review.py` and `init_session.py`).
+3. If mismatches exceed a configurable threshold (default: 3 files),
+   print a clear warning:
+   `"⚠️ Installation state mismatch detected for declared version
+   vX.X.X. X of Y sampled files do not match expected checksums.
+   Run bootstrap/validate.py before upgrading."`
+   and exit 1, halting the upgrade before any changes are made.
+4. If mismatches are within threshold (e.g. developer has made
+   governed customisations), print a lower-visibility advisory and
+   continue.
+5. Add `--skip-preflight` flag for cases where the developer has
+   intentionally customised files and understands the state.
+
+---
+
+## HIB-038 — Migration chain contiguity assertion
+
+**Date**: 2026-05-30
+**Source**: Migration chain robustness review
+**Pillar**: Bootstrap / upgrade reliability
+**Status**: ✅ Resolved — v1.2.0 hardening sprint
+
+**Resolution**: `_assert_chain_contiguous()` added to `upgrade.py`. Uses `packaging.version.Version` for correct semver comparison. Walks from installed version to target using greedy fork resolution (selects largest `TO_VERSION ≤ target` at each fork). Halts on major/minor gaps; warns on patch gaps. `FROM_VERSION`, `TO_VERSION`, `MIGRATION_TYPE` constants added to all four migration modules. Fork at v1.1.5 (v1_1_5_to_v1_1_5_1 vs v1_1_5_to_v1_2_0) resolved by greedy selection of the minor-branch module when upgrading to v1.2.0.
+
+**Problem**: The `discover_migrations()` function in `upgrade.py`
+finds all migration modules between source and target version and runs
+them in sequence. If a module is missing from the chain — deleted
+accidentally, absent in a custom fork, or skipped in a branched
+development — the discovery silently skips that version's config
+changes. The developer gets no indication that a migration was omitted.
+
+**Suggested changes**:
+1. After `discover_migrations()` builds the ordered list of modules to
+   run, assert the sequence is contiguous: each module's source version
+   must equal the previous module's target version, forming an
+   unbroken chain from installed version to target version.
+2. If a gap is detected, halt with a specific error:
+   `"Migration chain incomplete: no migration module found between
+   vX.X.X and vX.X.X. Upgrade cannot proceed safely."`
+3. For patch-level migrations that are deliberately no-ops (e.g.
+   v1_1_5_to_v1_1_5_1.py), add a module-level constant
+   `MIGRATION_TYPE = "patch"`. The contiguity check treats patch
+   modules as optional — their absence generates a WARNING rather
+   than a hard halt, since patch migrations by convention carry no
+   config schema changes.
+4. Document the `MIGRATION_TYPE` convention in `CONTRIBUTING.md` so
+   future migration authors know to declare it.
+
+---
+
+## HIB-039 — Replace string-based YAML injection with ruamel.yaml
+
+**Date**: 2026-05-30
+**Source**: Migration chain robustness review
+**Pillar**: Bootstrap / upgrade reliability
+**Status**: 📅 Backlog — long-horizon, v1.3.0+ consideration
+
+**Problem**: Migration modules currently append YAML blocks to
+`.agent/config.yaml` using string-based injection. YAML is fragile
+for string manipulation — indentation errors, comment displacement,
+and key collision can silently produce malformed configs. This is most
+likely to fail on heavily customised installations (as demonstrated by
+the GymBase upgrade with 9 conflict files).
+
+**Suggested changes**:
+1. Replace string-based config mutations in all migration modules with
+   `ruamel.yaml`, which preserves inline comments, handles indentation
+   correctly, and produces valid YAML on round-trip.
+2. Add `ruamel.yaml` as a bootstrap dependency (install-time only,
+   not a runtime dependency of the gate scripts). Justify: bootstrap
+   is the correct place for installation tooling dependencies.
+3. Create a shared `_mutate_config(config_path, mutations_fn)`
+   helper in `bootstrap/` that wraps ruamel.yaml loading, applies a
+   caller-supplied mutation function, and writes back atomically. All
+   migration modules use this helper rather than writing YAML
+   manipulation inline.
+4. Retrofit existing migration modules to use `_mutate_config()` when
+   this HIB is implemented, ensuring consistency across the full
+   migration chain.
+
+**Note**: This is a lower priority than HIB-036/037/038 because the
+string injection approach has worked in practice. It becomes higher
+priority as the number of migration modules grows and the config
+structure becomes more complex.

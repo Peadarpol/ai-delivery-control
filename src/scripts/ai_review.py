@@ -77,73 +77,18 @@ def _find_project_root() -> Path:
 
 PROJECT_ROOT = _find_project_root()
 
-def log_harness_event(event_dict: Dict[str, Any]) -> None:
-    """Log a harness event to .agent/state/harness_events.jsonl (T1-L-08)."""
-    try:
-        log_dir = PROJECT_ROOT / ".agent" / "state"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / "harness_events.jsonl"
-        
-        session_id = None
-        session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
-        if session_file.exists():
-            try:
-                with open(session_file, "r", encoding="utf-8") as f:
-                    session_id = json.load(f).get("session_id")
-            except Exception:
-                pass
-                
-        # Modern standard-compliant UTC datetime
-        now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
-        
-        record = {
-            "schema_version": "1.0",
-            "event_type": event_dict.get("event_type"),
-            "timestamp_utc": now_utc,
-            "session_id": session_id,
-            "commit_sha": None,
-            "agent": os.environ.get("AGENT_ID", "ai_review"),
-            "severity": event_dict.get("severity", "INFO"),
-            "payload": event_dict.get("payload", {}),
-        }
-        
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record) + "\n")
-    except Exception:
-        pass  # Never block execution due to logging failures
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-def _setup_sys_path():
-    """Route sys.path to allow imports from senior-architect and agent scripts."""
-    # TODO(T1-B-05): Move senior-architect routing to config-driven path resolution in future versions.
-    nested_skills_path = PROJECT_ROOT / ".agent" / "skills" / "universal" / "senior-architect" / "scripts"
-    flat_skills_path = PROJECT_ROOT / ".agent" / "skills" / "senior-architect" / "scripts"
-    scripts_path = str(PROJECT_ROOT / ".agent" / "scripts")
-    
-    resolved_skills_path = None
-    if nested_skills_path.exists():
-        resolved_skills_path = str(nested_skills_path)
-    elif flat_skills_path.exists():
-        resolved_skills_path = str(flat_skills_path)
-        
-    if resolved_skills_path:
-        if resolved_skills_path not in sys.path:
-            sys.path.insert(0, resolved_skills_path)
-    else:
-        # Neither path exists - log warning event
-        log_harness_event({
-            "event_type": "skills_path_not_found",
-            "severity": "WARNING",
-            "payload": {
-                "searched_paths": [str(flat_skills_path), str(nested_skills_path)]
-            }
-        })
-        print("⚠️  [REVIEW] Warning: Senior Architect skills path not found under .agent/skills/")
-
-    if scripts_path not in sys.path:
-        sys.path.insert(0, scripts_path)
+from harness_utils import _setup_sys_path, _lock_session
 
 # Execute immediately to configure path before local/skill imports
 _setup_sys_path()
+
+def log_harness_event(event_dict: Dict[str, Any]) -> None:
+    """Wrapper that routes through harness_utils but respects local/patched PROJECT_ROOT."""
+    import harness_utils
+    harness_utils.log_harness_event(event_dict, PROJECT_ROOT)
 
 # Framework modules imported dynamically to allow mock patching in tests and stay under Clean Architecture thresholds
 try:
@@ -1317,41 +1262,7 @@ def count_diff_lines(diff_text: str) -> int:
     return count
 
 
-@contextlib.contextmanager
-def _lock_session(session_file: Path, timeout: float = 5.0, delay: float = 0.05):
-    """Platform-agnostic, atomic directory-based advisory lock for session.json with stale lock clearance."""
-    lock_path = session_file.with_suffix(".lock")
-    start_time = time.time()
-    acquired = False
-    
-    while time.time() - start_time < timeout:
-        try:
-            lock_path.mkdir(exist_ok=False)
-            acquired = True
-            break
-        except FileExistsError:
-            # Check for stale lock (older than 60 seconds)
-            try:
-                mtime = lock_path.stat().st_mtime
-                if time.time() - mtime > 60.0:
-                    try:
-                        lock_path.rmdir()
-                        print("[LOCK] Cleared stale session lock directory.")
-                        continue
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            time.sleep(delay)
-            
-    try:
-        yield acquired
-    finally:
-        if acquired:
-            try:
-                lock_path.rmdir()
-            except Exception:
-                pass
+
 
 
 def _write_halt_file(msg: str):

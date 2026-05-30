@@ -273,3 +273,7 @@ architecture_checks:
     filenames: []   # e.g. "payment_gateway.py"
     adr_domains: [] # e.g. "payment_flow"
 
+# Spec Quality Gate Configuration (T1-L-01)
+spec_gate:
+  specs_path: docs/planning/specs/
+

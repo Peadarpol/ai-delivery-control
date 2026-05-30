@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.1.0
-**Target Release**: v1.1.5
-**Last Updated**: 2026-05-27
+**Current Version**: 1.2.0
+**Target Release**: v1.3.0
+**Last Updated**: 2026-05-30
 
 ---
 
@@ -163,7 +163,7 @@ The dream phase is the mechanism that makes the framework improve over time — 
 
 ---
 
-### v1.1.5 — Beta Ready 🔄 ACTIVE TARGET (Q2–Q3 2026)
+### v1.1.5 — Beta Ready ✅ SHIPPED (2026-05-29)
 
 **Goal**: Ship a version that external developers can install, use, and upgrade
 without hand-holding — while closing the two sharpest edges the framework
@@ -197,7 +197,7 @@ cannot upgrade without manual file merging will not continue.
 | T1-B-03 | Onboarding workflow | Low | ✅ |
 | S0-03 | `CONTRIBUTING.md` | Low | ✅ |
 | S0-04 | GitHub issue templates | Low | ✅ |
-| S0-05 | Cut v1.1.5 GitHub release + tag | Low | ⬜ |
+| S0-05 | Cut v1.1.5 GitHub release + tag | Low | ✅ |
 | S0-06 | CI badge | Low | ✅ |
 | S0-08 | Surface representative skills in docs | Low | ✅ |
 | S0-09 | Worked example (diff → routing → verdict cycle) | Low | ✅ |
@@ -216,7 +216,7 @@ S0-05 must be cut before any beta invitations are sent.
 | T1-I-02 | Token budget tracking per session | Low | ✅ |
 | T1-I-07 | Session token budget with WARN/HALT | Low | ✅ |
 | T1-M-06 | Context compaction template | Low | ✅ |
-| T1-G-08 | Diff size review strategy | Low | ⬜ |
+| T1-G-08 | Diff size review strategy | Low | ✅ |
 
 ---
 
@@ -227,24 +227,17 @@ S0-05 must be cut before any beta invitations are sent.
 | T1-H-08 | Branch-isolated model roster in compiled wiki | Low | ✅ |
 | T1-G-07 | Structured SKIP_REASON enforcement | Low | ✅ |
 | T1-L-10 | False positive → eval regression pipeline | Low | ✅ |
-| T1-G-06 | Structured rebuttal protocol | Medium | ⬜ |
+| T1-G-06 | Structured rebuttal protocol | Medium | ✅ |
 
 ---
 
 #### Recommended Sequencing
 
-**Completed**: T1-B-03, T1-I-02, T1-I-07, T1-M-06, T1-L-10, T1-G-07, T1-G-08,
-T1-H-08, HIB-006, S0-03, S0-04, S0-06, S0-08, S0-09 ✅
-
-**Remaining**:
-- S0-05 — cut v1.1.5 release ← **next**
-- T1-G-06 — structured rebuttal protocol (medium effort; second LLM pass on FAIL findings, REBUTTAL_ACCEPTED/REJECTED verdicts)
-
-Human-authored in parallel: T1-M-01, T1-M-02, T1-M-04
+**Completed**: All items shipped in v1.1.5.2 patch release.
 
 ---
 
-### v1.2.0 — Outer Loop 📋 PLANNED (Q3 2026)
+### v1.2.0 — Outer Loop 🔄 ACTIVE TARGET (Q3 2026)
 
 **Goal**: Govern the full delivery lifecycle from requirement to commit, not just from commit to repository.
 
@@ -262,13 +255,9 @@ Human-authored in parallel: T1-M-01, T1-M-02, T1-M-04
 
 | ID | Item | Description |
 |----|------|-------------|
-| T1-H-08 | Branch-isolated model roster in compiled wiki | AST-generated roster of confirmed branch-isolated models injected into wiki; suppresses false-positive BRANCH_ISOLATION flags on verified models. Dependency: T1-H-06 ✅, T1-H-01 ✅. |
-| T1-L-10 | False positive → eval regression pipeline | `false_positive_to_eval.py` — confirmed false positives create permanent "must not flag" guards in the T1-L-09 test suite; invoked automatically by rebuttal and structured bypass paths. Dependency: T1-L-09 ✅. |
-| T1-G-07 | Structured SKIP_REASON enforcement | High-risk bypasses require structured JSON SKIP_REASON; malformed reasons rejected; valid reasons feed false positive pipeline automatically. Dependency: T1-L-08 ✅, T1-L-10. |
-| T1-G-06 | Structured rebuttal protocol | FAIL verdict triggers a second-pass review with agent-provided structured evidence per finding; REBUTTAL_ACCEPTED unblocks commit and creates eval guard automatically. Dependency: T1-E-02 ✅, T1-G-03 ✅. |
-| T1-L-01 | Spec quality gate | Before `/feature-implementation` begins, SPEC-XXX.md must exist and pass quality checks: acceptance criteria present, out-of-scope stated, architectural constraints identified, status APPROVED. Gate refuses to start without an approved spec. |
-| T1-L-02 | `/business-analyst` workflow | Full state-machine workflow: requirement intake → user story extraction → BDD scenarios → spec drafting → acceptance criteria → traceability matrix → human approval gate. Agent drafts; human approves. |
-| T1-L-03 | `/project-manager` workflow | How an approved SPEC becomes a prioritised backlog item with effort estimate and dependencies. Sprint planning and dependency resolution. |
+| T1-L-01 | Spec quality gate | Before `/feature-implementation` begins, SPEC-XXX.md must exist and pass quality checks: acceptance criteria present, out-of-scope stated, architectural constraints identified, status APPROVED. Gate refuses to start without an approved spec. *Note: description enhanced with CodeRabbit two-tier check.* | ✅ |
+| T1-L-02 | `/business-analyst` workflow | Full state-machine workflow: requirement intake → user story extraction → BDD scenarios → spec drafting → acceptance criteria → traceability matrix → human approval gate. Agent drafts; human approves. *Note: description enhanced with CodeRabbit Phase 0 intake, assumptions, and decisions_log feed.* Agent drafts; human approves. Scope: what to build and why. Effort estimation is T1-L-03's responsibility. | ✅ |
+| T1-L-03 | `/project-manager` workflow | How an approved SPEC becomes a prioritised backlog item with effort estimate and dependencies. Sprint planning and dependency resolution. Receives an approved SPEC-XXX.md from T1-L-02. Owns effort estimates, task breakdown, dependency ordering, and sprint assignment. |
 | T1-L-04 | Requirement → commit traceability | Pre-commit check: non-trivial commits must reference a requirement ID. Closes the spec-to-code chain. `--no-trace` flag for infrastructure commits with reason logged. |
 | T1-L-05 | Acceptance gate | Second AI review call with the spec as context, checking intent alignment not just code correctness. Produces `AcceptanceVerdict`: SATISFIED / PARTIAL / DIVERGED. Runs once per feature branch before PR. |
 | T1-L-07 | Incident → backlog pipeline | `incident_to_backlog.py`: structured incident entry with root cause, affected commit SHA, which gate should have caught it, and proposed guard. Closes the production feedback loop. |
@@ -421,12 +410,25 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ## Current Sprint Status
 
-**Active milestone**: v1.1.5 (v1.1.0 shipped 2026-05-23)
+**Active milestone**: v1.3.0 (v1.2.0 shipped 2026-05-30)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**Priority order for v1.1.5** *(all theme items delivered except T1-G-06; verified 2026-05-27)*:
-1. T1-G-06 — structured rebuttal protocol ← **next session**
-2. S0-05 — GitHub release + tag (after T1-G-06; before any beta invitations)
+**v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
+- ✅ T1-L-01 — Spec quality gate (`check_spec.py`, two-tier BDD + field validation)
+- ✅ T1-L-02 — `/business-analyst` workflow (state-machine phases, assumption surfacing, decisions_log feed)
+- ✅ S0-14 — `bootstrap/uninstall.py` — clean framework removal utility
+- ✅ S0-15 — Upgrade prerequisite documentation (getting-started.md, README.md, upgrade.py help)
+- ✅ HIB-034/035 — Context length governance (AGENTS.md ceiling check, decisions_log archival prompt)
+- ✅ HIB-036 — Atomic config migration rollback (upgrade.py + downgrade.py)
+- ✅ HIB-037 — Pre-flight installation state validation (`_pre_flight_check`, `--skip-preflight`)
+- ✅ HIB-038 — Migration chain contiguity assertion (`_assert_chain_contiguous`, fork resolution)
+
+**v1.3.0 priority order (next sprint)**:
+1. T1-L-03 — `/project-manager` workflow
+2. T1-L-04 — Requirement → commit traceability
+3. T1-L-05 — Acceptance gate
+4. T1-L-07 — Incident → backlog pipeline
+5. T1-M-03 — Mid-session observability
 
 ---
 

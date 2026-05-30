@@ -31,11 +31,11 @@ def test_chain_resolves_single_step():
     """Given a single migration step, verify it resolves correctly."""
     class MockMigration:
         from_version = "1.1.0"
-        to_version = "1.1.5.2"
+        to_version = "1.2.0"
         __name__ = "MockMigration"
     
     migrations = [
-        ((1, 1, 0), (1, 1, 5, 2), MockMigration)
+        ((1, 1, 0), (1, 2, 0), MockMigration)
     ]
     
     manager = upgrade.UpgradeManager(Path("."), dry_run=True)
@@ -45,7 +45,7 @@ def test_chain_resolves_single_step():
     # To test UpgradeManager.build_chain directly:
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
     # We patch discover_migrations
-    real_manager.discover_migrations = lambda: [((1, 1, 0), (1, 1, 5, 2), Path("v1_1_0_to_v1_1_5_2.py"))]
+    real_manager.discover_migrations = lambda: [((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py"))]
     real_manager.load_migration_module = lambda p: MockMigration
     
     resolved = real_manager.build_chain("1.1.0")
@@ -60,50 +60,69 @@ def test_chain_resolves_multi_step():
         __name__ = "Step1"
     class Step2:
         from_version = "1.1.0"
-        to_version = "1.1.5.2"
+        to_version = "1.2.0"
         __name__ = "Step2"
         
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
     real_manager.discover_migrations = lambda: [
-        ((1, 1, 0), (1, 1, 5, 2), Path("v1_1_0_to_v1_1_5_2.py")),
+        ((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py")),
         ((1, 0, 0), (1, 1, 0), Path("v1_0_0_to_v1_1_0.py"))
     ]
-    real_manager.load_migration_module = lambda p: Step2 if "1_1_5_2" in p.name else Step1
+    real_manager.load_migration_module = lambda p: Step2 if "1_2_0" in p.name else Step1
     
     resolved = real_manager.build_chain("1.0.0")
     assert len(resolved) == 2
     assert resolved[0] == Step1
     assert resolved[1] == Step2
 
-def test_chain_detects_duplicate_from_version():
-    """Verify having two migrations with the same from_version raises a chain error."""
-    class Step1:
-        from_version = "1.1.0"
-        to_version = "1.1.5.2"
-    class Step1Dup:
+def test_chain_fork_resolution_via_greedy_selection():
+    """Verify that a fork (two modules sharing FROM_VERSION) is resolved by greedy selection.
+
+    When two modules both start from 1.1.0 but one targets 1.2.0 and another 1.3.0,
+    and the upgrade target is 1.2.0, the greedy algorithm selects the 1.2.0 module
+    (largest TO_VERSION ≤ target) and produces a single-element chain.
+    """
+    class StepToV120:
         from_version = "1.1.0"
         to_version = "1.2.0"
-        
+        __name__ = "StepToV120"
+    class StepToV130:
+        from_version = "1.1.0"
+        to_version = "1.3.0"
+        __name__ = "StepToV130"
+
+    step120 = StepToV120()
+    step130 = StepToV130()
+
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
-    real_manager.discover_migrations = lambda: [
-        ((1, 1, 0), (1, 1, 5, 2), Path("v1_1_0_to_v1_1_5_2.py")),
-        ((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py"))
+
+    raw = [
+        ((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py")),
+        ((1, 1, 0), (1, 3, 0), Path("v1_1_0_to_v1_3_0.py")),
     ]
-    real_manager.load_migration_module = lambda p: Step1
-    
-    with pytest.raises(ValueError, match="Ambiguous migration chain"):
-        real_manager.build_chain("1.1.0")
+    real_manager.load_migration_module = lambda p: step120 if "v1_2_0" in p.name else step130
+
+    chain = real_manager._assert_chain_contiguous(raw, "1.1.0")
+    assert len(chain) == 1
+    assert chain[0] is step120, "Greedy selection must pick TO_VERSION=1.2.0 when target is 1.2.0"
+
 
 def test_chain_errors_on_no_path():
     """Verify an error is raised if no migration path exists from installed to target."""
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
-    real_manager.discover_migrations = lambda: [
+    raw = [
         ((1, 2, 0), (1, 3, 0), Path("v1_2_0_to_v1_3_0.py"))
     ]
-    real_manager.load_migration_module = lambda p: None
-    
-    with pytest.raises(ValueError, match="No migration path found"):
-        real_manager.build_chain("1.1.0")
+
+    class DummyMod:
+        from_version = "1.2.0"
+        to_version = "1.3.0"
+        __name__ = "DummyMod"
+
+    real_manager.load_migration_module = lambda p: DummyMod()
+
+    with pytest.raises(ValueError, match="Migration chain incomplete"):
+        real_manager._assert_chain_contiguous(raw, "1.1.0")
 
 def test_checksum_normalises_crlf():
     """Verify CRLF normalisation yields identical SHA-256 digests."""
@@ -170,7 +189,7 @@ def test_migration_protocol_enforced_with_runtime_checkable():
     
     class CorrectMigration:
         from_version = "1.1.0"
-        to_version = "1.1.5.2"
+        to_version = "1.2.0"
         def migrate(self, config_path: Path) -> None:
             pass
         def downgrade(self, config_path: Path) -> None:

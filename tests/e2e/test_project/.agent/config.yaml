@@ -24,7 +24,3 @@ paths:
 
 domain_constraints:
   - "Tenant Isolation"
-
-review:
-  large_diff_threshold: 10
-  large_diff_strategy: "stratified"

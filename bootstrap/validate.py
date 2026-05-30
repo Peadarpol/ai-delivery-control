@@ -177,6 +177,8 @@ class Validator:
             ".agent/governance.md",
             ".agent/scripts/init_session.py",
             ".agent/scripts/check_halt.py",
+            ".agent/templates/feature_spec.md",
+            ".agent/scripts/check_spec.py",
         ]
         
         missing = []

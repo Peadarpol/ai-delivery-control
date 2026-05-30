@@ -70,6 +70,11 @@ class MigrationV1_1_5_1_to_V1_1_5_2(MigrationProtocol):
         if modified:
             config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
+# Chain-discovery constants used by _assert_chain_contiguous()
+FROM_VERSION = "1.1.5.1"
+TO_VERSION = "1.1.5.2"
+MIGRATION_TYPE = "patch"
+
 # Expose direct attributes for upgrade CLI scanning
 v1_1_5_1_to_v1_1_5_2_migration = MigrationV1_1_5_1_to_V1_1_5_2()
 from_version = MigrationV1_1_5_1_to_V1_1_5_2.from_version

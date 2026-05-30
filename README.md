@@ -114,6 +114,10 @@ developer customisations in the shim files untouched.
 
 (detailed in /docs/getting-started.md)
 ```bash
+# 0. Clone (or pull the latest if you already have it)
+#    git clone https://github.com/Peadarpol/ai-delivery-control
+#    — or —  git pull   (from inside an existing clone)
+
 #1. git clone https://github.com/Peadarpol/ai-delivery-control
 
 # 2. python bootstrap/install.py --project-path /path/to/your/project
