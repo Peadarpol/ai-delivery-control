@@ -216,6 +216,24 @@ The mandatory session startup protocol in `AGENTS.md §1` takes effect from sess
 
 ---
 
+## 8. Upgrading to a new version
+
+> [!WARNING]
+> **Before running any upgrade, ensure you have the latest framework clone.** The upgrade script lives in the `ai-delivery-control` repo — not in your project. A stale clone runs old code with known bugs already fixed in the latest release.
+>
+> ```bash
+> # In the ai-delivery-control clone directory
+> git pull
+> ```
+>
+> Then run the upgrade from the up-to-date clone:
+>
+> ```bash
+> python bootstrap/upgrade.py --project-path /path/to/your/project
+> ```
+
+---
+
 ## Next steps
 
 - [Configuration Reference](configuration.md) — customise `.agent/config.yaml` for your stack

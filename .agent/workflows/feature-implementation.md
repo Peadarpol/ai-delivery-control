@@ -42,7 +42,25 @@ Before executing any phase, AI MUST read these files to maintain context and pre
 
 ---
 
-## Phase 0: Impact & Gap Analysis (Deep Dive) **Skill**: /project-manager
+## Phase 0: Verify Specification (Spec Quality Gate) **Skill**: /project-manager
+
+**Goal**: Assert that a valid, approved specification exists and passes quality checks prior to executing any implementation phase or code modification.
+
+**AI Executes** (2 min):
+1. **Determine Active Specification**: Extract `SPEC_ID` from the active git branch name (matching regex `SPEC-\d+`) or environment.
+2. **Run Spec Quality Gate**: Set `SPEC_ID` as an environment variable and execute the specification quality checks:
+   ```bash
+   python .agent/scripts/check_spec.py
+   ```
+   *If the gate fails (exits with code 1), execution MUST halt immediately. No code modifications or adjacent files may be edited.*
+3. **Legacy Feature Bypass (Migration Note)**: Active features predating the spec gate must either backfill specs or execute the gate with the skip flag and migration rationale:
+   ```bash
+   SKIP_REASON="legacy-in-flight-feature" python .agent/scripts/check_spec.py --skip-spec-gate
+   ```
+
+---
+
+## Phase 0.5: Impact & Gap Analysis (Deep Dive) **Skill**: /project-manager
 
 **Goal**: Identify exactly what files, tests, data, and **external issues** will be affected by the new requirement BEFORE starting work.
 

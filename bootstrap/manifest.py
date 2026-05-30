@@ -7,12 +7,14 @@ FRAMEWORK_OWNED = [
     ".agent/scripts/*",
     ".agent/workflows/*",
     ".agent/skills/*",
+    ".agent/templates/*",
     ".agent/governance.md",
     ".agent/AGENTS.md",
     "src/scripts/ai_review.py",
     "src/scripts/providers.py",
     "src/scripts/roster_builder.py",
     "src/scripts/review_context_universal.md",
+    "src/scripts/harness_utils.py",
 ]
 
 PROJECT_OWNED = [

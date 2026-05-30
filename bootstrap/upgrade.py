@@ -15,6 +15,8 @@ import sys
 import traceback
 from pathlib import Path
 
+from packaging.version import Version
+
 # Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
 if sys.platform == "win32":
     import io
@@ -69,7 +71,7 @@ class UpgradeManager:
         self.backup_path = self.project_path / ".agent_backup_upgrade"
         self.state_file_path = self.project_path / ".agent" / ".framework_migration_state"
         self.config_path = self.project_path / ".agent" / "config.yaml"
-        self.target_version = "1.1.5.2"
+        self.target_version = "1.2.0"
 
     def validate_project(self):
         """Ensure the project directory carries an active .agent folder."""
@@ -109,9 +111,15 @@ class UpgradeManager:
         for file in migrations_dir.iterdir():
             match = re.match(r"^v([\d_]+)_to_v([\d_]+)\.py$", file.name)
             if match:
-                from_v = tuple(int(x) for x in match.group(1).split("_"))
-                to_v = tuple(int(x) for x in match.group(2).split("_"))
-                discovered.append((from_v, to_v, file))
+                try:
+                    mod = self.load_migration_module(file)
+                    from_v = parse_version_tuple(mod.from_version)
+                    to_v = parse_version_tuple(mod.to_version)
+                    discovered.append((from_v, to_v, file))
+                except Exception:
+                    from_v = tuple(int(x) for x in match.group(1).split("_"))
+                    to_v = tuple(int(x) for x in match.group(2).split("_"))
+                    discovered.append((from_v, to_v, file))
         return discovered
 
     def load_migration_module(self, path: Path) -> migration_base.MigrationProtocol:
@@ -126,54 +134,167 @@ class UpgradeManager:
             raise TypeError(f"Module {path.name} does not conform to MigrationProtocol contract (missing required attributes or methods).")
         return mod
 
-    def build_chain(self, installed_version: str) -> list[migration_base.MigrationProtocol]:
-        """Build and validate the sorted migration chain from installed_version to v1.1.5."""
-        raw_migrations = self.discover_migrations()
-        
-        # Verify duplicate from_version
-        from_versions = [m[0] for m in raw_migrations]
-        if len(from_versions) != len(set(from_versions)):
-            seen = set()
-            dups = []
-            for fv in from_versions:
-                if fv in seen:
-                    dups.append(f"v{'.'.join(map(str, fv))}")
-                seen.add(fv)
-            raise ValueError(f"Ambiguous migration chain: two modules both start from {', '.join(dups)}.")
-            
-        migrations = []
+    def _pre_flight_check(self, installed_version: str, skip: bool = False) -> None:
+        """Spot-check a deterministic set of high-risk files against the installed version's checksums."""
+        if skip:
+            log_warn("Pre-flight check skipped via --skip-preflight.")
+            return
+
+        version_key = f"V{installed_version.replace('.', '_')}"
+        checksum_registry = getattr(checksums, version_key, None)
+        if checksum_registry is None:
+            log_warn(f"No checksum registry found for v{installed_version}. Skipping pre-flight check.")
+            return
+
+        # Fixed deterministic sample — two runs on same install always produce the same result.
+        # upgrade.py and manifest.py are excluded: they live in the framework repo, not the target project.
+        SAMPLE_FILES = [
+            "src/scripts/ai_review.py",
+            "src/scripts/providers.py",
+            "src/scripts/harness_utils.py",
+            ".agent/scripts/governance_check.py",
+            ".agent/scripts/init_session.py",
+            ".agent/AGENTS.md",
+            ".agent/scripts/check_halt.py",
+            ".agent/workflows/feature-implementation.md",
+        ]
+
+        mismatches = 0
+        checked = 0
+        for rel in SAMPLE_FILES:
+            expected = checksum_registry.get(rel)
+            if expected is None:
+                continue
+            target_file = self.project_path / rel
+            if not target_file.exists():
+                mismatches += 1
+                checked += 1
+                continue
+            try:
+                from bootstrap import generate_checksums
+                actual = generate_checksums.compute_sha256(target_file)
+                if actual != expected:
+                    mismatches += 1
+            except Exception:
+                mismatches += 1
+            checked += 1
+
+        if mismatches > 3:
+            log_error(
+                f"Pre-flight check failed: {mismatches} of {checked} sampled files do not match "
+                f"expected checksums for v{installed_version}. "
+                "The installation may be in a partially-upgraded or corrupted state. "
+                "Run bootstrap/validate.py before upgrading, or pass --skip-preflight if you have "
+                "intentionally customised these files."
+            )
+            sys.exit(1)
+        elif mismatches > 0:
+            log_warn(
+                f"Pre-flight advisory: {mismatches} of {checked} sampled files differ from "
+                f"v{installed_version} checksums (within acceptable threshold). Continuing upgrade."
+            )
+
+    def _assert_chain_contiguous(
+        self,
+        raw_migrations: list,
+        installed_version: str,
+    ) -> list[migration_base.MigrationProtocol]:
+        """Walk the chain from installed_version to target using greedy fork resolution.
+
+        Uses uppercase FROM_VERSION / TO_VERSION constants from each module for graph traversal.
+        When two modules share the same FROM_VERSION (a fork), selects the one whose TO_VERSION
+        is largest but still ≤ target — following the minor branch when upgrading past a fork point.
+
+        When upgrading from 1.1.5 directly to 1.2.0 via this greedy algorithm, the patch chain
+        (v1_1_5_to_v1_1_5_1 → v1_1_5_1_to_v1_1_5_2) is skipped because v1_1_5_to_v1_2_0 is the
+        nearest forward step. This is intentional — those are no-op patch migrations for intermediate
+        states the user never installed. Patch gaps produce a WARNING rather than a hard halt.
+        """
+        target = Version(self.target_version)
+        current = Version(installed_version)
+
+        # Build lookup: mod_path → (FROM_VERSION_str, TO_VERSION_str, MIGRATION_TYPE_str, mod)
+        modules = []
         for from_v, to_v, path in raw_migrations:
             try:
                 mod = self.load_migration_module(path)
-                migrations.append((from_v, to_v, mod))
             except Exception as e:
                 log_error(f"Failed to load migration {path.name}: {e}")
                 raise
-                
-        migrations = sorted(migrations, key=lambda x: x[0])
-        
-        chain = []
-        current = parse_version_tuple(installed_version)
-        target = parse_version_tuple(self.target_version)
-        
+            from_ver_str = getattr(mod, "FROM_VERSION", None) or ".".join(map(str, from_v))
+            to_ver_str = getattr(mod, "TO_VERSION", None) or ".".join(map(str, to_v))
+            mtype = getattr(mod, "MIGRATION_TYPE", "minor")
+            modules.append((Version(from_ver_str), Version(to_ver_str), mtype, mod))
+
         if current == target:
             return []
-            
         if current > target:
-            raise ValueError(f"No migration path found from v{installed_version} to v{self.target_version}. Manual upgrade/downgrade required.")
-            
+            raise ValueError(
+                f"No migration path from v{installed_version} to v{self.target_version}. "
+                "Manual upgrade/downgrade required."
+            )
+
+        chain = []
         while current < target:
-            step = None
-            for from_v, to_v, mod in migrations:
-                if from_v == current:
-                    step = (from_v, to_v, mod)
-                    break
-            if not step:
-                raise ValueError(f"No migration path found from v{'.'.join(map(str, current))} to v{self.target_version}. Manual upgrade required.")
-            chain.append(step[2])
-            current = step[1]
-            
+            # Candidates: modules where FROM_VERSION == current AND TO_VERSION <= target
+            candidates = [
+                (fv, tv, mt, mod)
+                for fv, tv, mt, mod in modules
+                if fv == current and tv <= target
+            ]
+            if not candidates:
+                # Determine gap severity
+                # Check if any module exists with FROM_VERSION == current (even if target overshot)
+                any_from = [m for m in modules if m[0] == current]
+                if not any_from:
+                    # Find nearest from_version to determine the gap type
+                    gap_type = "major/minor"
+                    raise ValueError(
+                        f"Migration chain incomplete: no migration module found starting from "
+                        f"v{current} toward v{self.target_version}. "
+                        f"Upgrade cannot proceed safely. (Gap type: {gap_type})"
+                    )
+                # If there are modules from current but none reach target, check gap type
+                next_from = sorted(any_from, key=lambda x: x[1], reverse=True)
+                mv, nv, mt, mod = next_from[0]
+                # Compare major/minor segments
+                if nv.major != target.major or nv.minor != target.minor:
+                    raise ValueError(
+                        f"Migration chain incomplete: no major/minor migration found between "
+                        f"v{current} and v{self.target_version}. Upgrade halted."
+                    )
+                # Patch gap — warn and skip
+                log_warn(
+                    f"Patch gap in migration chain: no module found from v{current} to "
+                    f"v{self.target_version}. Skipping patch step (patch migrations are optional)."
+                )
+                break
+
+            # Greedy selection: pick candidate with the largest TO_VERSION
+            best = max(candidates, key=lambda x: x[1])
+            fv, tv, mt, mod = best
+
+            # Warn on skipped patch modules at the fork point
+            skipped_patch = [
+                c for c in candidates
+                if c[1] < tv and c[2] == "patch"
+            ]
+            if skipped_patch:
+                log_warn(
+                    f"Fork at v{current}: selecting v{tv} over patch branch(es) "
+                    f"({', '.join(f'v{c[1]}' for c in skipped_patch)}). "
+                    "These are no-op patch migrations for intermediate states not installed here."
+                )
+
+            chain.append(mod)
+            current = tv
+
         return chain
+
+    def build_chain(self, installed_version: str) -> list[migration_base.MigrationProtocol]:
+        """Build and validate the sorted migration chain from installed_version to target_version."""
+        raw_migrations = self.discover_migrations()
+        return self._assert_chain_contiguous(raw_migrations, installed_version)
 
     def expand_manifest_files(self) -> list[str]:
         """Collect all active framework files relative to project_path from manifest patterns."""
@@ -269,13 +390,32 @@ class UpgradeManager:
             gitignore_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
             log_success("Updated .gitignore with sidecar and backup exclusions.")
 
-    def run_upgrade(self):
+    def run_upgrade(self, skip_preflight: bool = False):
         self.validate_project()
         installed_version = self.detect_installed_version()
-        
+
+        # 0. Stale backup guard — a leftover .yaml.migration_backup signals a previously
+        #    failed migration that may have left config.yaml in a partial state.
+        config_migration_backup = self.config_path.with_suffix(".yaml.migration_backup")
+        if config_migration_backup.exists():
+            log_warn(
+                "A backup from a previous failed migration was found. "
+                "Review .agent/config.yaml before proceeding."
+            )
+            if not self.force:
+                log_error(
+                    "Stale migration backup detected. Resolve manually or pass --force to override."
+                )
+                sys.exit(1)
+            else:
+                log_warn("--force supplied. Overwriting stale migration backup.")
+
+        # 0b. Pre-flight check
+        self._pre_flight_check(installed_version, skip=skip_preflight)
+
         # 1. Scans sidecars and print warnings
         unresolved_sidecars = self.scan_unresolved_sidecars()
-        
+
         # 2. Build migration chain
         try:
             chain = self.build_chain(installed_version)
@@ -431,10 +571,23 @@ class UpgradeManager:
                     except Exception as diff_err:
                         print(f"Failed to generate diff: {diff_err}")
                         
-            # 6. Chain configurations migration
-            for migration in chain:
-                log_info(f"Running config migration: {migration.from_version} ➔ {migration.to_version}...")
-                migration.migrate(self.config_path)
+            # 6. Atomic configuration migration — snapshot config.yaml before any module runs.
+            #    Scope: covers config.yaml only. Framework file changes applied by migrate()
+            #    before an exception are not rolled back and may require manual remediation.
+            if chain and self.config_path.exists():
+                shutil.copy2(self.config_path, config_migration_backup)
+            try:
+                for migration in chain:
+                    log_info(f"Running config migration: {migration.from_version} ➔ {migration.to_version}...")
+                    migration.migrate(self.config_path)
+            except Exception as config_err:
+                log_error(f"Config migration failed: {config_err}. Restoring config.yaml from backup.")
+                if config_migration_backup.exists():
+                    shutil.copy2(config_migration_backup, self.config_path)
+                    config_migration_backup.unlink(missing_ok=True)
+                raise
+            if config_migration_backup.exists():
+                config_migration_backup.unlink(missing_ok=True)
                 
             # 7. Update gitignore & Write state file
             self.update_gitignore()
@@ -465,22 +618,33 @@ class UpgradeManager:
             sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Delivery Control Framework Upgrade Utility")
+    parser = argparse.ArgumentParser(
+        description=(
+            "AI Delivery Control Framework Upgrade Utility. "
+            "IMPORTANT: run 'git pull' on the ai-delivery-control clone before upgrading "
+            "to ensure you are using the latest upgrade.py with all known bug fixes applied."
+        )
+    )
     parser.add_argument("--project-path", default=".", help="Target project root directory (default: '.')")
     parser.add_argument("--dry-run", action="store_true", help="Print report without writing any changes")
-    parser.add_argument("--force", action="store_true", help="Skip prompt and overwrite previous backups")
+    parser.add_argument("--force", action="store_true", help="Skip prompt and overwrite previous backups or stale migration backup")
     parser.add_argument("--diff", action="store_true", help="Print unified color diffs for conflict files")
-    
+    parser.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Bypass the pre-flight installation state checksum check (use when files are intentionally customised)",
+    )
+
     args = parser.parse_args()
     project_path = Path(args.project_path).resolve()
-    
+
     manager = UpgradeManager(
         project_path=project_path,
         dry_run=args.dry_run,
         force=args.force,
         show_diff=args.diff
     )
-    manager.run_upgrade()
+    manager.run_upgrade(skip_preflight=args.skip_preflight)
 
 if __name__ == "__main__":
     main()

@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import sys
+import traceback
 from pathlib import Path
 
 # Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
@@ -61,7 +62,7 @@ class DowngradeManager:
         if self.state_file_path.exists():
             try:
                 state = json.loads(self.state_file_path.read_text(encoding="utf-8"))
-                return state.get("current_version", "1.1.5.2")
+                return state.get("current_version", "1.2.0")
             except Exception:
                 pass
         
@@ -75,7 +76,7 @@ class DowngradeManager:
             except Exception:
                 pass
         
-        return "1.1.5.2"
+        return "1.2.0"
 
     def discover_migrations(self) -> list[tuple[tuple[int, ...], tuple[int, ...], Path]]:
         migrations_dir = self.framework_path / "bootstrap" / "migrations"
@@ -86,9 +87,15 @@ class DowngradeManager:
         for file in migrations_dir.iterdir():
             match = re.match(r"^v([\d_]+)_to_v([\d_]+)\.py$", file.name)
             if match:
-                from_v = tuple(int(x) for x in match.group(1).split("_"))
-                to_v = tuple(int(x) for x in match.group(2).split("_"))
-                discovered.append((from_v, to_v, file))
+                try:
+                    mod = self.load_migration_module(file)
+                    from_v = parse_version_tuple(mod.from_version)
+                    to_v = parse_version_tuple(mod.to_version)
+                    discovered.append((from_v, to_v, file))
+                except Exception:
+                    from_v = tuple(int(x) for x in match.group(1).split("_"))
+                    to_v = tuple(int(x) for x in match.group(2).split("_"))
+                    discovered.append((from_v, to_v, file))
         return discovered
 
     def load_migration_module(self, path: Path) -> migration_base.MigrationProtocol:
@@ -139,10 +146,25 @@ class DowngradeManager:
             
         return chain
 
-    def run_downgrade(self):
+    def run_downgrade(self, skip_preflight: bool = False):
         self.validate_project()
         current_version = self.detect_installed_version()
-        
+
+        # Stale backup guard — mirrors upgrade.py behaviour for full parity.
+        config_migration_backup = self.config_path.with_suffix(".yaml.migration_backup")
+        if config_migration_backup.exists():
+            log_warn(
+                "A backup from a previous failed migration was found. "
+                "Review .agent/config.yaml before proceeding."
+            )
+            if not self.force:
+                log_error(
+                    "Stale migration backup detected. Resolve manually or pass --force to override."
+                )
+                sys.exit(1)
+            else:
+                log_warn("--force supplied. Overwriting stale migration backup.")
+
         try:
             chain = self.build_reverse_chain(current_version)
         except ValueError as e:
@@ -182,14 +204,24 @@ class DowngradeManager:
             log_success("Dry run completed cleanly. Zero changes written.")
             sys.exit(0)
 
-        # 1. Reverse configuration changes
+        # 1. Atomic configuration downgrade — snapshot config.yaml before any module runs.
+        #    Scope: covers config.yaml only. Framework file changes applied by downgrade()
+        #    before an exception are not rolled back and may require manual remediation.
+        if chain and self.config_path.exists():
+            shutil.copy2(self.config_path, config_migration_backup)
         try:
             for migration in chain:
                 log_info(f"Running config downgrade: {migration.to_version} ➔ {migration.from_version}...")
                 migration.downgrade(self.config_path)
         except Exception as e:
-            log_error(f"Failed to downgrade config.yaml: {e}")
+            log_error(f"Failed to downgrade config.yaml: {e}. Restoring config.yaml from backup.")
+            traceback.print_exc()
+            if config_migration_backup.exists():
+                shutil.copy2(config_migration_backup, self.config_path)
+                config_migration_backup.unlink(missing_ok=True)
             sys.exit(1)
+        if config_migration_backup.exists():
+            config_migration_backup.unlink(missing_ok=True)
 
         # 2. File restore prioritization
         # Check priority 1: conflict sidecars *.framework-v*
@@ -241,19 +273,24 @@ def main():
     parser = argparse.ArgumentParser(description="AI Delivery Control Framework Downgrade Utility")
     parser.add_argument("--project-path", default=".", help="Target project root directory (default: '.')")
     parser.add_argument("--dry-run", action="store_true", help="Print report without making any changes")
-    parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+    parser.add_argument("--force", action="store_true", help="Skip confirmation prompt and override stale backup block")
     parser.add_argument("--to-version", default="1.1.0", help="Target version to downgrade to (default: '1.1.0')")
-    
+    parser.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Bypass pre-flight checksum check (use when files are intentionally customised)",
+    )
+
     args = parser.parse_args()
     project_path = Path(args.project_path).resolve()
-    
+
     manager = DowngradeManager(
         project_path=project_path,
         dry_run=args.dry_run,
         force=args.force,
         to_version=args.to_version
     )
-    manager.run_downgrade()
+    manager.run_downgrade(skip_preflight=args.skip_preflight)
 
 if __name__ == "__main__":
     main()

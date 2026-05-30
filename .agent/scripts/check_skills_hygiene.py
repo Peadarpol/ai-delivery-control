@@ -4,6 +4,14 @@ from pathlib import Path
 
 SKILLS_DIR = Path(".agent/skills")
 
+ALWAYS_LOADED_LINE_CEILING = 300
+
+ALWAYS_LOADED_DOCS = [
+    Path(".agent/AGENTS.md"),
+    Path(".agent/governance.md"),
+    Path("src/scripts/review_context_universal.md"),
+]
+
 
 def run_hygiene_check() -> int:
     """Scans .agent/skills/ for temporary execution scripts and banned test files."""
@@ -62,6 +70,24 @@ def run_hygiene_check() -> int:
         )
         print("  - If they are orphaned debug/temp execution scripts, delete them.")
         return 1
+
+    # 3. Always-loaded document line ceiling check
+    ceiling_warnings = []
+    for doc_path in ALWAYS_LOADED_DOCS:
+        if not doc_path.exists():
+            continue
+        line_count = len(doc_path.read_text(encoding="utf-8", errors="replace").splitlines())
+        if line_count > ALWAYS_LOADED_LINE_CEILING:
+            ceiling_warnings.append((doc_path, line_count))
+
+    if ceiling_warnings:
+        print(f"\n[WARNING] Always-loaded documents exceed {ALWAYS_LOADED_LINE_CEILING}-line ceiling:")
+        for doc_path, line_count in ceiling_warnings:
+            print(
+                f"  [CEILING] {doc_path} — {line_count} lines "
+                f"(ceiling: {ALWAYS_LOADED_LINE_CEILING}). "
+                "Prune or archive content to keep agent attention focused."
+            )
 
     print("Skills hygiene check complete. No violations found.")
     return 0

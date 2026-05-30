@@ -1,2 +1,4 @@
 /node_modules/
 /.agent/state/
+*.framework-v*
+/.agent_backup_upgrade/

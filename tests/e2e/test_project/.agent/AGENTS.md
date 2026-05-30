@@ -123,12 +123,15 @@ Full trigger list in `.agent/governance.md` §2.
 
 ---
 
-## 6. Session Close (do this before ending any session with code changes)
+## 6. Session Close (MANDATORY — do this before ending any session with code changes)
 
-1. Update `.agent/state/active_context.md` — current task, branch, blockers, immediate next steps.
-2. Update `.agent/state/decisions_log.md` — any architectural or business decisions made.
-3. Update `.agent/state/last_session_summary.md` — what was done, what's incomplete, decisions deferred.
-4. Append a row to `.agent/state/session_ledger.md` — session ID, date, action summary.
+1. **MUST review the task magnitude auto-classification** in `session.json`. You **NEVER downgrade** a session from `major` to `micro` without explicit, documented justification in `session.json` (`task_magnitude_override_reason`).
+2. **MUST run context compaction** (`python .agent/skills/meta/validate.py`) whenever the rolling spent has passed 80% of its budget ceiling.
+3. **ALWAYS complete the compaction/handoff template** `.agent/skills/meta/context-compaction.md` in full prior to close.
+4. **MUST update `.agent/state/active_context.md`** — current task, branch, blockers, immediate next steps.
+5. **MUST update `.agent/state/decisions_log.md`** — document all technical, design, and business decisions made during this session. **Archival check**: if `decisions_log.md` exceeds **150 lines**, archive the oldest entries to `.agent/state/decisions_log_archive.md` before adding new ones — the review gate injects this file into every review context.
+6. **MUST update `.agent/state/last_session_summary.md`** — what was done, what's incomplete, decisions deferred.
+7. **MUST append a row to `.agent/state/session_ledger.jsonl` and `.agent/state/session_ledger.md`** — session ID, date, action summary.
 
 ---
 
@@ -182,6 +185,15 @@ When a CI/CD pipeline fails after a push:
 
 All framework work must develop on dedicated feature branches before merging via Pull Request:
   `feat/framework-{item-id}-{short-description} → PR → main`
+
+### 8.6 Gate Governance Escalation Hierarchy
+
+When the AI review gate returns a `FAIL` verdict, agents and developers MUST adhere to the following escalation hierarchy:
+
+1. **Fix the actual problem** (First Priority): Always attempt to resolve the underlying code quality, security, or architectural issue directly.
+2. **Structured Rebuttal** (Governed Contest): If a finding is believed to be a false positive or is specifically required, create `.agent/state/gate_rebuttal.json`. 
+   - **Agent Mandate**: **Agents MUST NOT self-execute the `--rebuttal` command.** Writing the rebuttal file and presenting the argument to the human operator is the agent's sole action. The human reviews the argument and explicitly runs: `python src/scripts/ai_review.py --rebuttal`.
+3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
 
 ### 9 Environment Progression (mandatory gate sequence)
 
