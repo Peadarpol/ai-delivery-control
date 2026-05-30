@@ -1,7 +1,5 @@
 # AI Delivery Control
 
-[![CI Build Status](https://github.com/Peadarpol/ai-delivery-control/actions/workflows/ci.yml/badge.svg)](https://github.com/Peadarpol/ai-delivery-control/actions)
-
 AI coding tools are capable. They will also happily commit broken code, implement
 something adjacent to what you asked for, or quietly lose track of decisions made
 three hours earlier — unless you give them structure.
