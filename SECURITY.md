@@ -58,7 +58,7 @@ This framework requires **elevated trust** relative to a typical developer tool:
 
 The correct security posture:
 1. **Read the governance files before installing.** Specifically: `.agent/AGENTS.md`, `.agent/governance.md`, and `src/scripts/review_context_universal.md`.
-2. **Install only from the authoritative source**: `https://github.com/Peadarpol/ai-delivery-control`. Do not install from forks or third-party distributions.
+2. **Install from the authoritative source**: `https://github.com/Peadarpol/ai-delivery-control`. Forks or third-party distributions cannot be guaranteed to be free of malicious code.
 3. **Verify checksums after installing**: `python bootstrap/generate_checksums.py --verify`.
 4. **Review governance file diffs on every upgrade.** The upgrade report shows which files changed. Read the diffs for AGENTS.md, governance.md, and workflow files before accepting.
 
