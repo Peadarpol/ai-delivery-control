@@ -265,9 +265,9 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
-### v1.3.0 — Self-Improvement & Reliability 📋 PLANNED (Q4 2026)
+### v1.3.0 — Self-Improvement, Reliability & Security Foundations 📋 PLANNED (Q4 2026)
 
-**Goal**: The dream phase becomes operational — the framework's temporal moat starts generating real proposals from real session data. Memory system foundations make session history queryable and durable. Reliability mechanisms replace voluntary compliance with structured recovery.
+**Goal**: The dream phase becomes operational — the framework's temporal moat starts generating real proposals from real session data. Memory system foundations make session history queryable and durable. Reliability mechanisms replace voluntary compliance with structured recovery. Security foundations address the novel context-injection attack surface before broad community distribution.
 
 **The strategic context**: The adversarial gate is the same for every installation on day one. The dream phase is what makes each installation unique over time. This milestone is where the compound effect begins.
 
@@ -304,6 +304,16 @@ S0-05 must be cut before any beta invitations are sent.
 | T1-J-01 | Automatic checkpoint before file changes | Recovery | ⬜ |
 | BUG-07 | Session heartbeat file modification failure | Bug fix | ✅ |
 | BUG-08 | Deprecated `datetime.utcnow()` in governance_check.py | Bug fix | ✅ |
+
+**Security foundations** *(new — addresses context-injection attack vector before broad community distribution)*:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| S0-16 | GPG-sign all releases | Supply chain | ⬜ |
+| S0-17 | `validate.py --security` mode — hash and display governance files interactively | Verifiability | ⬜ |
+| S0-18 | `docs/security/` — document every context injection point as a visibility baseline | Transparency | ⬜ |
+| T1-K-02 | Formal security review: context-injection attack surface published as `docs/security/attack-surface-review.md` | Security | ⬜ |
+| T1-K-03 | Governance file diff highlighting on upgrade (AGENTS.md, governance.md, workflows) — on by default | Security | ⬜ |
 
 **Architecture**:
 
