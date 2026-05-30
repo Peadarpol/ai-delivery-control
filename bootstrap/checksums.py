@@ -2011,12 +2011,12 @@ V1_1_5_2 = {
 }
 
 V1_2_0 = {
-    '.agent/AGENTS.md': 'cdda8e0ac89f478dcca48307ae0ac32e056d8544cfbfbf206c38b06dd2fe068d',
+    '.agent/AGENTS.md': '9fc36d5db33eba47dbfeaa1b4696141f9f6f4bce9bbaf5db0d1b94a2239a4204',
     '.agent/governance.md': '9ae9b21689382bc07033df0bea0e59ac05ede52fea5156279388d08dc85dfe01',
     '.agent/scripts/audit_logger.py': 'f26b36025315d152fbf5e9a95ac089f290a0f31976dfd1a6d20c20be96b2fa64',
     '.agent/scripts/check_halt.py': 'd9d134f1304a9e8c837bef459da5071f14487f8c5c16a34fe58b57875b8cbc79',
     '.agent/scripts/check_repo.py': '165fe738816c66ce70d3d3e3315c9074bb6a2804bae80fd27e38667abd0d93d5',
-    '.agent/scripts/check_skills_hygiene.py': '58013fbf14ddafc8b4a66c20efcef132139e2f278941907782a993c12d0edc4a',
+    '.agent/scripts/check_skills_hygiene.py': '5b8df66aa8334efd725d0577f1cc88f3af0d1055744c650bf351bdf9011813e1',
     '.agent/scripts/check_spec.py': 'f96a8727cf24fbf60b2fd71f536e171e15022135d30dc670704a775bf00d62c5',
     '.agent/scripts/checkpoint.ps1': '693b61f86efd75a6083c9a25a5371924a9d7d335192d5140e1c1ad46cf51c5b0',
     '.agent/scripts/circuit_breaker.py': '9ba9a355a5c4abd06e66df326600fed31f621b8809743003db1eac94a699c9f2',
@@ -2622,7 +2622,7 @@ V1_2_0 = {
     '.agent/templates/feature_spec.md': 'fcbecff78a08cc958f792aeb13d9a1fe56565ed6496e72b180f67e6ff2ccab64',
     '.agent/workflows/architect.md': '9ba20fcbebca38ded3d75ade9a98bc08617844aa9b168de77c839b042c783d2e',
     '.agent/workflows/bug-fix.md': '2b79a838d387cdd7175ac04f01503b7089654a599cf5ff109cf9f90e714a2a2a',
-    '.agent/workflows/business-analyst.md': '65bd31aa4c66c822cb8adc08d995cf51763521b393b0b8ea7644dad66aca2dcf',
+    '.agent/workflows/business-analyst.md': 'd46b6d46338a3d9cfc05dcfea0c0f2087937ddb8bb9c3d2fd4748f4b8a634ceb',
     '.agent/workflows/code-reviewer.md': '7c2bf546bf252e20b39179472d1a4396e1ff8f9c0bf2ac7e35e502cfdff38076',
     '.agent/workflows/dba.md': '0fc1d9429fecafb0bc6b51c56a02a9340f6d4209ce1298fe0c24a7606f968aa5',
     '.agent/workflows/deploy.md': '5c2f7e386f08c56b4b9fa35ee4efa0a8c7059af11a596591cb3e9f53503c7fc7',
