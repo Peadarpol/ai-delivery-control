@@ -816,3 +816,63 @@ the GymBase upgrade with 9 conflict files).
 string injection approach has worked in practice. It becomes higher
 priority as the number of migration modules grows and the config
 structure becomes more complex.
+
+---
+
+## HIB-040 — Context-injection attack surface: governance layer as a novel supply chain threat
+
+**Date**: 2026-05-30
+**Source**: Security review of framework distribution model
+**Pillar**: Security / Trust Model
+**Status**: 📅 Backlog — v1.3.0 security foundations sprint
+
+**Problem**: Traditional supply chain security (pip-audit, bandit, guarddog) focuses
+on malicious executable code. AI governance frameworks introduce a qualitatively
+different attack vector: an attacker who compromises a governance framework does not
+need to inject malicious code — they need to inject malicious natural language
+instructions.
+
+A modified `AGENTS.md` could instruct agents to: generate code with specific
+vulnerability patterns, approve commits that would otherwise be blocked, or exfiltrate
+context through the review gate's API calls. A modified review gate system prompt
+could selectively pass dangerous diffs. A modified workflow file could redirect
+agent behaviour at critical decision points. None of this requires a single line of
+malicious Python — and none of it is detectable by any current security scanner.
+
+The "dark factory" risk amplifies this vector: a development team running agents
+autonomously against an unreviewed governance framework is the high-value target.
+The governance layer is trusted implicitly after installation. Nobody re-reads
+AGENTS.md twice once it is installed.
+
+**Why this is novel**: Traditional supply chain attacks embed malicious behaviour in
+executable code or build scripts. This attack embeds malicious behaviour in natural
+language documents that AI agents interpret as instructions. The harm unfolds through
+AI reasoning rather than code execution. No existing scanner, SAST tool, or
+dependency audit can detect it. The only defences are human review, content hashing,
+and GPG-signed distribution — all of which rely on human vigilance in a way that
+traditional supply chain security does not.
+
+**Suggested changes**:
+1. Publish a formal security review of the framework's context-injection attack
+   surface as `docs/security/attack-surface-review.md` before broad community
+   distribution (T1-K-02 in FRAMEWORK_BACKLOG.md).
+2. Add `docs/security/` directory documenting every context injection point with
+   expected content (S0-18) — creating a visibility baseline that makes malicious
+   modifications harder to hide.
+3. Implement `validate.py --security` mode (S0-17) so users can verify governance
+   file hashes without reading Python source.
+4. GPG-sign all releases (S0-16) so distribution-channel attacks cannot substitute
+   a modified framework without invalidating the signature.
+5. Add T1-K-03 (governance file diff highlighting on upgrade) so users cannot
+   accidentally accept AGENTS.md changes without seeing exactly what changed.
+6. Publish this threat model publicly in `SECURITY.md` — establishing the
+   visibility baseline creates accountability for any future modifications.
+
+**Resolution dependency**: S0-16 (GPG signing) is the highest-priority single
+action. It addresses the distribution-channel attack vector that checksums alone
+cannot close: an attacker who modifies both the framework files and the checksum
+registry passes `--verify`. A GPG signature requires the private key and cannot
+be forged.
+
+**References**: `SECURITY.md` — "The Context-Injection Attack Vector" section.
+`FRAMEWORK_BACKLOG.md` — T1-K-02, T1-K-03, S0-16, S0-17, S0-18.

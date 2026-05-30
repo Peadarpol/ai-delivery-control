@@ -209,6 +209,24 @@ To maintain a lightweight, highly-focused codebase, the following areas are deli
 
 ---
 
+## Security and Provenance
+
+**Authoritative source**: `https://github.com/Peadarpol/ai-delivery-control`
+
+Do not install from forks or third-party distributions. Verify checksums before installing:
+
+```bash
+python bootstrap/generate_checksums.py --verify
+```
+
+**Before running `install.py`**, read `.agent/AGENTS.md` and `.agent/governance.md`. This framework injects context into every AI agent session in your project — you should understand what it instructs agents to do before granting it that access. This is not a courtesy suggestion; it is the correct security posture for any governance layer you did not author.
+
+**What this framework has access to**: your `ANTHROPIC_API_KEY` (or equivalent) via environment variables, the full content of every commit diff reviewed by the gate, your codebase structure via the repo map, and `.agent/config.yaml`. It does not exfiltrate data beyond what the configured LLM provider receives during review calls.
+
+**Security model and responsible disclosure**: see [`SECURITY.md`](SECURITY.md).
+
+---
+
 ## Reference Implementation
 
 Built and validated while engineering a multi-tenant SaaS business management platform. The harness governs its own development: all framework changes are developed on feature branches, gated by the same pre-commit AI review, and merged via PR.
