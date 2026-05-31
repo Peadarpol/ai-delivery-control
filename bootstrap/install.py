@@ -492,6 +492,50 @@ class Installer:
             
         self.log(SYMBOL_SUCCESS, "Configuration and supplementary context templates rendered.")
 
+    def update_gitignore(self):
+        """Ensure harness operational state files and user logs are ignored by git."""
+        self.log(SYMBOL_STEP, "Updating target project .gitignore...")
+        gitignore_path = self.project_path / ".gitignore"
+
+        # The clean, correct operational state block (BUG-10)
+        required_entries = [
+            ".agent/state/session.json",
+            ".agent/state/HALT",
+            ".agent/state/*.lock",
+            ".agent/config.yaml.migration_backup",
+            ".agent/wiki/",
+        ]
+
+        if gitignore_path.exists():
+            try:
+                content = gitignore_path.read_text(encoding="utf-8")
+                lines = content.splitlines()
+            except Exception as e:
+                self.log(SYMBOL_WARN, f"Failed to read .gitignore: {e}")
+                lines = []
+        else:
+            lines = []
+
+        # Idempotency check: check if `.agent/state/session.json` is already present
+        is_already_present = any(".agent/state/session.json" == line.strip() for line in lines)
+        if is_already_present:
+            self.log(SYMBOL_SUCCESS, ".gitignore already contains harness exclusions (idempotent skip).")
+            return
+
+        # Append block
+        header = "# AI Delivery Control — operational state (not project history)"
+        if lines:
+            lines.append("")
+        lines.append(header)
+        for entry in required_entries:
+            lines.append(entry)
+
+        try:
+            gitignore_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            self.log(SYMBOL_SUCCESS, "Updated target project .gitignore with harness exclusions.")
+        except Exception as e:
+            self.log(SYMBOL_ERROR, f"Failed to write .gitignore: {e}")
+
     def wire_git_hooks(self):
         """Phase 5: Wire the git pre-commit hooks."""
         self.log(SYMBOL_STEP, "Wiring pre-commit hooks inside .git/hooks/...")
@@ -585,6 +629,7 @@ class Installer:
         self.detect_stack()
         self.copy_framework_files()
         self.scaffold_configurations()
+        self.update_gitignore()
         self.wire_git_hooks()
         self.run_validation()
         

@@ -165,3 +165,57 @@ class TestOverallResult:
         v = validate_mod.Validator(tmp_path)
         v.errors = 1
         assert v.errors > 0
+
+
+# ── Gitignore state validation ───────────────────────────────────────────────
+
+
+class TestValidateGitignoredStates:
+    def test_all_ignored_passes(self, validate_mod, tmp_path):
+        """HALT and session.json are ignored -> pass."""
+        (tmp_path / ".git").mkdir()
+        v = validate_mod.Validator(tmp_path)
+        
+        def mock_run(args, **kwargs):
+            # Exit code 0 means git check-ignore found it (ignored)
+            return MagicMock(returncode=0)
+            
+        with patch("subprocess.run", side_effect=mock_run):
+            passed, _ = v.validate_gitignored_states()
+        assert passed is True
+        assert v.errors == 0
+        assert v.warnings == 0
+
+    def test_halt_not_ignored_fails(self, validate_mod, tmp_path):
+        """HALT is not ignored -> hard failure (passed = False)."""
+        (tmp_path / ".git").mkdir()
+        v = validate_mod.Validator(tmp_path)
+        
+        def mock_run(args, **kwargs):
+            # Non-zero exit code means not ignored
+            return MagicMock(returncode=1)
+            
+        with patch("subprocess.run", side_effect=mock_run):
+            passed, details = v.validate_gitignored_states()
+        assert passed is False
+        assert "HALT" in details
+
+    def test_session_json_not_ignored_warns(self, validate_mod, tmp_path):
+        """session.json not ignored -> warning (passed = True, warnings incremented)."""
+        (tmp_path / ".git").mkdir()
+        v = validate_mod.Validator(tmp_path)
+        
+        def mock_run(args, **kwargs):
+            file_rel = args[-1]
+            # HALT is ignored (return 0), session.json is not ignored (return 1)
+            if "HALT" in file_rel:
+                return MagicMock(returncode=0)
+            else:
+                return MagicMock(returncode=1)
+                
+        with patch("subprocess.run", side_effect=mock_run), patch("builtins.print") as mock_print:
+            passed, details = v.validate_gitignored_states()
+        assert passed is True
+        assert v.warnings >= 1
+        assert "session.json" in details or "warning" in details.lower()
+

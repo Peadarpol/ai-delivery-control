@@ -325,10 +325,10 @@ class Validator:
 
     def validate_gitignored_states(self) -> Tuple[bool, str]:
         """Confirm session.json and all .agent/state/ files are correctly ignored by git."""
+        # Only HALT and session.json are validated. harness_events.jsonl must be committed.
         state_files = [
-            ".agent/state/session.json",
-            ".agent/state/harness_events.jsonl",
             ".agent/state/HALT",
+            ".agent/state/session.json",
         ]
         
         not_ignored = []
@@ -362,8 +362,32 @@ class Validator:
                     pass
                 
         if not_ignored:
-            return False, f"Harness state files are NOT gitignored: {', '.join(not_ignored)}. Check your .gitignore!"
-        return True, "All harness state files are correctly ignored by git."
+            # Check for HALT - this is a hard ERROR
+            halt_rel = ".agent/state/HALT"
+            if halt_rel in not_ignored:
+                return False, f"HALT state guard is NOT gitignored: {halt_rel}. Committing it permanently blocks agents on fresh clones! Add '.agent/state/HALT' to your .gitignore."
+                
+            # Check for session.json - this is a WARN
+            session_json_rel = ".agent/state/session.json"
+            if session_json_rel in not_ignored:
+                self.warnings += 1
+                # Format a user-friendly terminal warning card explaining the risk
+                print("\n" + "=" * 70)
+                print("         ⚠️  AI DELIVERY CONTROL — GITIGNORE WARNING  ⚠️")
+                print("=" * 70)
+                print(f"  Warning: {session_json_rel} is NOT ignored by git!")
+                print("\n💡 Why is this a risk?")
+                print("  The session metadata is highly volatile and updated on every agent run.")
+                print("  Committing it will lead to severe, recurring pre-commit conflict loops")
+                print("  for developer and agent work streams.")
+                print("\n🛠️  How to resolve:")
+                print("  Please append the harness operational state entries to your .gitignore:")
+                print("    echo \".agent/state/session.json\" >> .gitignore")
+                print("=" * 70 + "\n")
+                
+                return True, f"session.json warning emitted successfully (Basic harness is functional)"
+                
+        return True, "All critical harness state files are correctly ignored by git."
 
     def run_all(self) -> int:
         # Check if .agent/ exists as the very first check

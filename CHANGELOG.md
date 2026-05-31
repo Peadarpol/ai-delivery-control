@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.0.1] — 2026-05-31
+
+### Framework Gating & Exclusions (BUG-10)
+
+#### Harness Gitignore Enforcements
+- Implemented automatic `.gitignore` operational exclusions block provisioning during initial installation in `bootstrap/install.py`.
+- Created a clean roll-forward patch migration script `v1_2_0_to_v1_2_0_1.py` to retroactively append the exclusions block to existing installations while safely preserving shipped `1.2.0` file checksums.
+- Structured a highly robust and safe `downgrade()` mechanism in `v1_2_0_to_v1_2_0_1.py` to cleanly remove the appended block by matching the exact header line, ensuring complete idempotency.
+- Softened the `bootstrap/validate.py` check on `session.json` to emit a helpful, highly readable warning card explaining the pre-commit conflict risk and remediation, rather than failing the check.
+- Maintained a strict validation `ERROR` on `HALT` to prevent permanent agent blocking on fresh clones if committed.
+- Removed `harness_events.jsonl` from gitignore verification entirely since it is the session audit trail and must be committed to preserve project history.
+
+## [1.2.0] — 2026-05-30
+
+### Theme 2: Spec Quality Gating & Spec-driven Development
+- Implemented Automated Spec Quality Gating (`check_spec.py`) enforcing BDD specifications structures, Gherkin word boundaries, lenient assumptions presence, and adversarial LLM quality checks (soft/hard gates).
+- Consolidated shared path setups, session locks, and Windows UTF-8 stream wrapping into `src/scripts/harness_utils.py` and updated `init_session.py` to prevent redundant wrapping.
+
 ## [1.1.5.2] — 2026-05-28
 
 ### Framework Infrastructure & Diagnostics

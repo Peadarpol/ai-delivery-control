@@ -62,7 +62,7 @@ def colorize_line(line: str) -> str:
     return line
 
 class UpgradeManager:
-    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False):
+    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False, target_version: str = "1.2.0.1"):
         self.project_path = project_path.resolve()
         self.framework_path = Path(__file__).resolve().parent.parent
         self.dry_run = dry_run
@@ -71,7 +71,7 @@ class UpgradeManager:
         self.backup_path = self.project_path / ".agent_backup_upgrade"
         self.state_file_path = self.project_path / ".agent" / ".framework_migration_state"
         self.config_path = self.project_path / ".agent" / "config.yaml"
-        self.target_version = "1.2.0"
+        self.target_version = target_version
 
     def validate_project(self):
         """Ensure the project directory carries an active .agent folder."""
