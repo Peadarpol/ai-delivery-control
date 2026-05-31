@@ -175,7 +175,7 @@ and runs the environment validation suite. Under ten minutes from zero to workin
 
 **Authoritative source only**: `https://github.com/Peadarpol/ai-delivery-control`
 
-Do not install from forks or third-party distributions.
+Forks or third-party distributions cannot be guaranteed to be free of malicious code.
 
 Before running `install.py`, read `.agent/AGENTS.md` and `.agent/governance.md`.
 This framework injects context into every AI agent session in your project. You

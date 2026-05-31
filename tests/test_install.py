@@ -134,3 +134,33 @@ class TestRepoNameSeeding:
             installer.detect_stack()
 
         assert installer.detected_repo_name == "my-cool-project"
+
+
+# ── Gitignore provisioning ───────────────────────────────────────────────────
+
+
+class TestGitignoreProvisioning:
+    def test_gitignore_written_if_missing(self, install_mod, tmp_path):
+        """Installer appends operational state block if missing in .gitignore."""
+        gitignore_file = tmp_path / ".gitignore"
+        # Not existing initially
+        installer = install_mod.Installer(str(tmp_path))
+        installer.update_gitignore()
+        
+        assert gitignore_file.exists()
+        content = gitignore_file.read_text(encoding="utf-8")
+        assert ".agent/state/session.json" in content
+        assert ".agent/state/HALT" in content
+        assert ".agent/wiki/" in content
+
+    def test_gitignore_idempotent_skip(self, install_mod, tmp_path):
+        """Installer skips appending if the harness entries are already in .gitignore."""
+        gitignore_file = tmp_path / ".gitignore"
+        gitignore_file.write_text("some-rule\n.agent/state/session.json\nother-rule", encoding="utf-8")
+        
+        installer = install_mod.Installer(str(tmp_path))
+        installer.update_gitignore()
+        
+        content = gitignore_file.read_text(encoding="utf-8")
+        assert content == "some-rule\n.agent/state/session.json\nother-rule"  # Unchanged
+

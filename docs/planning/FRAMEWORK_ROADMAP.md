@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.2.0
+**Current Version**: 1.2.0.1
 **Target Release**: v1.3.0
-**Last Updated**: 2026-05-30
+**Last Updated**: 2026-05-31
 
 ---
 
@@ -237,7 +237,7 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
-### v1.2.0 — Outer Loop 🔄 ACTIVE TARGET (Q3 2026)
+### v1.2.0 — Outer Loop ✅ SHIPPED (2026-05-31)
 
 **Goal**: Govern the full delivery lifecycle from requirement to commit, not just from commit to repository.
 
@@ -262,6 +262,25 @@ S0-05 must be cut before any beta invitations are sent.
 | T1-L-05 | Acceptance gate | Second AI review call with the spec as context, checking intent alignment not just code correctness. Produces `AcceptanceVerdict`: SATISFIED / PARTIAL / DIVERGED. Runs once per feature branch before PR. |
 | T1-L-07 | Incident → backlog pipeline | `incident_to_backlog.py`: structured incident entry with root cause, affected commit SHA, which gate should have caught it, and proposed guard. Closes the production feedback loop. |
 | T1-M-03 | Mid-session observability | Lightweight session health check: duration, tool call count, context load estimate, warning patterns. Diagnostic tool for when something feels off mid-session. |
+
+---
+
+### v1.2.0.1 — Harness Gitignore Enforcements ✅ SHIPPED (2026-05-31)
+
+**Goal**: Patch release resolving BUG-10 — bootstrap installations were not adding the required `.gitignore` block for operational state files, causing pre-commit conflict loops on fresh installs.
+
+**The gap this addresses**: On every fresh install and upgrade, the harness creates files in `.agent/state/` that must not be committed (`session.json`, `HALT`, `.lock` files, `config.yaml.migration_backup`, the compiled wiki). Without the `.gitignore` block, these files appear as untracked changes. Developers staging them — inadvertently or deliberately — hit a pre-commit hook that rejects the commit, creating a conflict loop with no clear exit. Beta testers encounter this on their first governed commit.
+
+**Delivered**:
+- `bootstrap/install.py` — `update_gitignore()` appends the operational state block to the target project's `.gitignore` on every fresh install (idempotent; block is only appended if absent)
+- `bootstrap/migrations/v1_2_0_to_v1_2_0_1.py` — migration module for existing v1.2.0 installations; safe header-anchored downgrade removes only the harness block
+- `bootstrap/validate.py` — `validate_gitignored_states()` hardened: HALT absent from `.gitignore` → ERROR; `session.json` absent → WARN (not ERROR); `harness_events.jsonl` excluded (must be committed — it is the audit trail)
+- `harness_version.txt`, `upgrade.py`, `downgrade.py` — version targets bumped to `1.2.0.1`
+- Full test coverage: 184 tests pass (unit + integration)
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| BUG-10 | Bootstrap does not write `.gitignore` block — pre-commit conflict loop on fresh installs | Install hardening | ✅ |
 
 ---
 
@@ -420,7 +439,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ## Current Sprint Status
 
-**Active milestone**: v1.3.0 (v1.2.0 shipped 2026-05-30)
+**Active milestone**: v1.3.0 (v1.2.0.1 shipped 2026-05-31)
 **Sprint tracking**: `.agent/state/active_context.md`
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
@@ -432,6 +451,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - ✅ HIB-036 — Atomic config migration rollback (upgrade.py + downgrade.py)
 - ✅ HIB-037 — Pre-flight installation state validation (`_pre_flight_check`, `--skip-preflight`)
 - ✅ HIB-038 — Migration chain contiguity assertion (`_assert_chain_contiguous`, fork resolution)
+- ✅ BUG-10 — Harness Gitignore Enforcements (v1.2.0.1 patch release, 2026-05-31)
 
 **v1.3.0 priority order (next sprint)**:
 1. T1-L-03 — `/project-manager` workflow

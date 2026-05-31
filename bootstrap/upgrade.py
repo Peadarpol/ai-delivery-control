@@ -62,7 +62,7 @@ def colorize_line(line: str) -> str:
     return line
 
 class UpgradeManager:
-    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False):
+    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False, target_version: str = "1.2.0.1"):
         self.project_path = project_path.resolve()
         self.framework_path = Path(__file__).resolve().parent.parent
         self.dry_run = dry_run
@@ -71,7 +71,7 @@ class UpgradeManager:
         self.backup_path = self.project_path / ".agent_backup_upgrade"
         self.state_file_path = self.project_path / ".agent" / ".framework_migration_state"
         self.config_path = self.project_path / ".agent" / "config.yaml"
-        self.target_version = "1.2.0"
+        self.target_version = target_version
 
     def validate_project(self):
         """Ensure the project directory carries an active .agent folder."""
@@ -180,13 +180,23 @@ class UpgradeManager:
             checked += 1
 
         if mismatches > 3:
-            log_error(
-                f"Pre-flight check failed: {mismatches} of {checked} sampled files do not match "
-                f"expected checksums for v{installed_version}. "
-                "The installation may be in a partially-upgraded or corrupted state. "
-                "Run bootstrap/validate.py before upgrading, or pass --skip-preflight if you have "
-                "intentionally customised these files."
-            )
+            print("\n" + "=" * 70, file=sys.stderr)
+            print("         ⚠️  AI DELIVERY CONTROL — PRE-FLIGHT CHECK WARNING  ⚠️", file=sys.stderr)
+            print("=" * 70, file=sys.stderr)
+            print(f"❌ Pre-flight check failed: {mismatches} of {checked} sampled files do not match", file=sys.stderr)
+            print(f"   expected checksums for the detected v{installed_version} version.", file=sys.stderr)
+            print("\n💡 Why did this happen?", file=sys.stderr)
+            print("   1. You intentionally tailored or customized core files (e.g. AGENTS.md,", file=sys.stderr)
+            print("      init_session.py, ai_review.py) in the target project.", file=sys.stderr)
+            print("   2. The target installation is in a partially-upgraded or corrupt state.", file=sys.stderr)
+            print("\n🛠️  How to proceed safely:", file=sys.stderr)
+            print("   👉 If you HAVE intentionally customized these files and want to proceed", file=sys.stderr)
+            print("      with the upgrade, bypass this check by adding the --skip-preflight flag:", file=sys.stderr)
+            print("      python bootstrap/upgrade.py --skip-preflight [other options]", file=sys.stderr)
+            print("\n   👉 If you did NOT customize these files, check their differences first by", file=sys.stderr)
+            print("      running the harness environment validation tool in your target project:", file=sys.stderr)
+            print("      python bootstrap/validate.py", file=sys.stderr)
+            print("=" * 70 + "\n", file=sys.stderr)
             sys.exit(1)
         elif mismatches > 0:
             log_warn(

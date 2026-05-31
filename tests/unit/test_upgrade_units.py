@@ -43,7 +43,7 @@ def test_chain_resolves_single_step():
     
     # Asserting build_chain logic directly using our test helper in UpgradeManager
     # To test UpgradeManager.build_chain directly:
-    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
+    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True, target_version="1.2.0")
     # We patch discover_migrations
     real_manager.discover_migrations = lambda: [((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py"))]
     real_manager.load_migration_module = lambda p: MockMigration
@@ -63,7 +63,7 @@ def test_chain_resolves_multi_step():
         to_version = "1.2.0"
         __name__ = "Step2"
         
-    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
+    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True, target_version="1.2.0")
     real_manager.discover_migrations = lambda: [
         ((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py")),
         ((1, 0, 0), (1, 1, 0), Path("v1_0_0_to_v1_1_0.py"))
@@ -94,7 +94,7 @@ def test_chain_fork_resolution_via_greedy_selection():
     step120 = StepToV120()
     step130 = StepToV130()
 
-    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
+    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True, target_version="1.2.0")
 
     raw = [
         ((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py")),
@@ -109,7 +109,7 @@ def test_chain_fork_resolution_via_greedy_selection():
 
 def test_chain_errors_on_no_path():
     """Verify an error is raised if no migration path exists from installed to target."""
-    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True)
+    real_manager = upgrade.UpgradeManager(Path("."), dry_run=True, target_version="1.3.0")
     raw = [
         ((1, 2, 0), (1, 3, 0), Path("v1_2_0_to_v1_3_0.py"))
     ]

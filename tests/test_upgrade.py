@@ -72,7 +72,7 @@ def test_upgrade_full_success(fresh_v110_project):
     state_file = fresh_v110_project / ".agent" / ".framework_migration_state"
     assert state_file.exists()
     state = json.loads(state_file.read_text(encoding="utf-8"))
-    assert state["current_version"] == "1.2.0"
+    assert state["current_version"] == "1.2.0.1"
     assert any("v1_1_0_to_v1_1_5" in m for m in state["applied_migrations"])
     
     # Backup directory must be deleted on successful exit
@@ -96,8 +96,8 @@ def test_upgrade_conflict_with_sidecar(modified_v110_project):
     gov_content = gov_file.read_text(encoding="utf-8")
     assert "# Custom developer rule" in gov_content
     
-    # A conflict sidecar should be created containing the framework v1.2.0 version
-    sidecar_file = modified_v110_project / ".agent" / "governance.md.framework-v1.2.0"
+    # A conflict sidecar should be created containing the framework v1.2.0.1 version
+    sidecar_file = modified_v110_project / ".agent" / "governance.md.framework-v1.2.0.1"
     assert sidecar_file.exists()
     sidecar_content = sidecar_file.read_text(encoding="utf-8")
     assert "# Custom developer rule" not in sidecar_content
@@ -329,7 +329,7 @@ def test_chain_fork_resolution_picks_correct_branch(tmp_path):
         def downgrade(self, p):
             pass
 
-    manager = upgrade.UpgradeManager(tmp_path, dry_run=False, force=True)
+    manager = upgrade.UpgradeManager(tmp_path, dry_run=False, force=True, target_version="1.2.0")
 
     from packaging.version import Version
 
@@ -377,3 +377,56 @@ def test_downgrade_full_success(fresh_v110_project):
     state_file = fresh_v110_project / ".agent" / ".framework_migration_state"
     state = json.loads(state_file.read_text(encoding="utf-8"))
     assert state["current_version"] == "1.1.0"
+
+
+# ── Patch Release 1.2.0.1 upgrade/downgrade ───────────────────────────────────
+
+
+def test_upgrade_and_downgrade_v1_2_0_1(fresh_v110_project):
+    """Verify upgrading to v1.2.0.1 appends gitignore and downgrading reverts it."""
+    # 1. Upgrade from 1.1.0 to 1.2.0 first
+    manager_up = upgrade.UpgradeManager(fresh_v110_project, dry_run=False, force=True)
+    manager_up.target_version = "1.2.0"
+    manager_up.run_upgrade(skip_preflight=True)
+    
+    state_file = fresh_v110_project / ".agent" / ".framework_migration_state"
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    assert state["current_version"] == "1.2.0"
+    
+    # Gitignore in target project should not have the v1.2.0.1 specific entries yet
+    gitignore = fresh_v110_project / ".gitignore"
+    gi_content = gitignore.read_text(encoding="utf-8")
+    assert ".agent/state/session.json" not in gi_content
+    
+    # 2. Upgrade to 1.2.0.1
+    manager_up_patch = upgrade.UpgradeManager(fresh_v110_project, dry_run=False, force=True)
+    manager_up_patch.target_version = "1.2.0.1"
+    manager_up_patch.run_upgrade(skip_preflight=True)
+    
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    assert state["current_version"] == "1.2.0.1"
+    
+    # Verify .gitignore entries appended
+    gi_content = gitignore.read_text(encoding="utf-8")
+    assert "# AI Delivery Control — operational state (not project history)" in gi_content
+    assert ".agent/state/session.json" in gi_content
+    assert ".agent/state/HALT" in gi_content
+    assert ".agent/wiki/" in gi_content
+    
+    # Verify idempotency: run upgrade again
+    manager_up_patch.run_upgrade(skip_preflight=True)
+    gi_content_after = gitignore.read_text(encoding="utf-8")
+    assert gi_content_after.count("# AI Delivery Control") == 1  # Not duplicated
+    
+    # 3. Downgrade back to 1.2.0
+    manager_down_patch = downgrade.DowngradeManager(fresh_v110_project, dry_run=False, force=True, to_version="1.2.0")
+    manager_down_patch.run_downgrade()
+    
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    assert state["current_version"] == "1.2.0"
+    
+    # Verify .gitignore entries were cleanly removed
+    gi_content_down = gitignore.read_text(encoding="utf-8")
+    assert "# AI Delivery Control" not in gi_content_down
+    assert ".agent/state/session.json" not in gi_content_down
+
