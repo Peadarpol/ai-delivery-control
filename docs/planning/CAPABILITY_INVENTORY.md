@@ -39,7 +39,7 @@
 - `_persist_verdict()` has no file locking; T1-N-02 (concurrent write safety for parallel subagents) is an undelivered backlog item
 - The `SYSTEM_PROMPT` for the review gate is static and GymBase-specific (references `_apply_branch_filter`, `HardenedBaseModel`, `BranchAwareRepository`); projects without these patterns will receive irrelevant review instructions
 - Co-change estimator (`T1-H-03`) result is injected only if HIGH-confidence warnings exist; MEDIUM-confidence warnings are printed to console but not injected into the LLM context
-- The test project copy (`tests/e2e/test_project/src/scripts/ai_review.py`) is an older version that does not include the rebuttal protocol — this is a maintenance gap in the test project's copy
+- The test project copy was previously out-of-sync; now dynamically synchronized by the E2E verification test runner at runtime to prevent version drift.
 
 **Backlog dependencies**:
 - T1-G-05: Restricted globals sandbox for `eval_runner.py`
@@ -181,12 +181,10 @@
 - `bootstrap/validate.py`: emits `WARN` (not ERROR) since v1.2.0.1
 
 **Current limitations**:
-- `token_usage` is incremented only by `check_spec.py` for the spec quality gate LLM call; `ai_review.py` does NOT write back to `session.json` token_usage — the per-review token counts are captured in `.ai-review-log.jsonl` and aggregated retrospectively in `infer_and_close_previous_session()`. The running session total visible at any point during the session is therefore always zero for AI review calls
-- The T1-I-07 token budget WARN/HALT fires from the HALT sentinel mechanism, not from a real-time session.json counter — `check_halt.py` reads the HALT file written by external logic; no code path in the framework currently writes `token_budget_exhausted` HALT files automatically
 - `parent_session_id` and `agent_role` (T1-N-01) are not yet fields in the schema
 
 **Backlog dependencies**:
-- T1-I-02: token budget tracking — ✅ partial (schema exists, retrospective aggregation works; real-time per-session running total not implemented)
+- T1-I-02: token budget tracking — ✅ delivered (real-time updates and retrospective aggregation work)
 - T1-N-01: multi-agent session hierarchy schema — ⬜ undelivered
 
 ---
@@ -206,10 +204,9 @@
 - No pre-commit hook entry for `check_halt.py`. It is only checked at session startup by convention. A commit attempted mid-session after a HALT file is written (e.g., by a token budget exhaustion trigger) is not automatically blocked unless the agent manually re-runs `check_halt.py` before committing or the agent follows AGENTS.md discipline
 - T1-N-03 (HALT sentinel subagent propagation) explicitly notes that Tier 1 HALT propagation works for same-machine subagents only via the pre-commit hook — but this hook doesn't yet exist
 - The BYPASS_HALT_REASON escape is available for `token_budget_exhausted` only; governance violation HALTs are genuinely unbypassable, which is intentional
-- No framework code currently writes a `token_budget_exhausted` HALT file automatically (the token budget counter in `session.json` is not updated in real time by `ai_review.py`); the token budget HALT is a mechanism without a trigger generator in the current implementation
 
 **Backlog dependencies**:
-- T1-I-07: session token budget WARN/HALT — ✅ mechanism exists; trigger generator not wired
+- T1-I-07: session token budget WARN/HALT — ✅ delivered
 - T1-N-03: HALT sentinel subagent propagation — ⬜ undelivered
 
 ---
@@ -422,12 +419,11 @@
 
 **Contradiction detection**: Before writing each proposal, `check_contradiction()` scans the target skill's `SKILL.md` for existing rules with opposite polarity (`never/must not/should not` vs `always/must/should`) on the same subject (2+ keyword overlap). Contradiction generates a `__contradiction.md` card instead of a proposal.
 
-**Routing to skill_ownership.yaml**: `skill_ownership.yaml` is read at startup. Each entry maps a skill name to `check_type`, `event_type`, and `keyword` lists. If `skill_ownership.yaml` is absent (T1-D-00 not delivered), `skill_map` is empty, causing ALL `harness_events.jsonl` patterns to fall back to `"agent-framework"` skill and ALL `.ai-review-log.jsonl` FAIL patterns to fall back to `"code-review"` skill — completely defeating the routing mechanism.
+**Routing to skill_ownership.yaml**: `skill_ownership.yaml` is read at startup. Each entry maps a skill name to `check_type`, `event_type`, and `keyword` lists. The logic maps event patterns to their designated skill files and supports both singular and plural fields.
 
 **Cooldown behaviour**: Managed by `init_session.py::maybe_run_dream_phase()`. Skipped if (a) fewer than 7 days since last run, OR (b) fewer than 15 sessions in ledger, OR (c) sessions span fewer than 14 days. Bypassed when previous session outcome is `"escalated"` or when critical events have occurred since the last run.
 
 **Current limitations**:
-- `skill_ownership.yaml` does not exist in the framework source (T1-D-00 undelivered). The routing fallbacks mean proposals are always attributed to `"agent-framework"` or `"code-review"` regardless of the actual failure domain. This makes proposals less actionable.
 - `proposed_rules_catalog` contains 11 hardcoded rule templates. Any `pattern_key` not in the catalog falls back to a generic rule. The catalog is not project-configurable.
 - The `check_type` field that `distill_dream.py` reads from `.ai-review-log.jsonl` is `log.get("check_type", "review_failure")` but the actual log schema field is `blocking_concern` — so all AI review FAILs are classified as `"review_failure"` in the occurrence map, losing the specific concern label that caused the failure
 - Contradiction detection uses keyword overlap (2+ non-stopword matches) which is a heuristic with both false positives (two unrelated rules sharing common technical vocabulary) and false negatives (antonymous rules with low word overlap)
@@ -435,9 +431,9 @@
 - No `unrouted__YYYY-MM-DD.md` output for unroutable patterns (described in the backlog spec); patterns that don't match any skill route to the fallback skills rather than being flagged explicitly
 
 **Backlog dependencies**:
-- T1-D-00: skill_ownership.yaml — ⬜ critical prerequisite, not delivered
+- T1-D-00: skill_ownership.yaml — ✅ delivered
 - T1-I-05: Memory contradiction detector — ✅ integrated into distill_dream.py
-- T1-D-03: Dream phase — ✅ delivered but partially non-functional without T1-D-00
+- T1-D-03: Dream phase — ✅ delivered
 
 ---
 
