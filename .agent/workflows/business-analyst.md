@@ -30,6 +30,19 @@ stateDiagram-v2
    ```bash
    python .agent/scripts/init_session.py
    ```
+2. Read `outer_loop.mode` from `.agent/config.yaml` (default: `incremental` if absent):
+   ```python
+   # Quick inline check — no separate script required
+   import re
+   content = open(".agent/config.yaml").read()
+   m = re.search(r"outer_loop:\s*\n\s*mode:\s*(\w+)", content)
+   mode = m.group(1) if m else "incremental"
+   print(f"📋 /ba workflow — outer_loop.mode: {mode}")
+   ```
+   The mode governs enforcement levels throughout this session:
+   - `discovery` — assumption resolution is advisory; `[Pending]` items do not block APPROVED
+   - `incremental` — current default behaviour; `[Pending]` items block APPROVED
+   - `contractual` — strictest enforcement; all assumptions must carry explicit `[Resolved: ...]` text
 
 ### Phase 1: Upstream Issue Intake
 1. Identify the source requirement (GitHub Issue, Jira Ticket, Linear URL, or local conversation file).
@@ -38,12 +51,20 @@ stateDiagram-v2
 
 ### Phase 2: Explicit Assumption Surfacing
 1. Prior to compiling acceptance criteria, prompt the LLM to enumerate every assumption it is making that is not explicitly stated in the source issue.
-2. Resolve each surfaced assumption in one of three ways:
+2. For each surfaced assumption, assign a confidence level (HIGH / MEDIUM / LOW).
+3. Resolve each surfaced assumption in one of three ways:
    - **Promoted** to an explicit acceptance criterion (`[Resolved: promoted to criterion #X]`).
    - **Declared out of scope** in the bounded scope section (`[Resolved: declared out of scope]`).
    - **Flagged** for human clarification (`[Pending: human review]`).
-3. Write all resolved and pending assumptions into the `# Assumptions` section. Ensure that each non-empty line starts with `[Resolved` or `[Pending` (case-insensitive).
-4. *Important*: Any `[Pending]` entry blocks final APPROVED status and must be resolved by the human architect before the spec gate can pass.
+4. Write all resolved and pending assumptions into the `# Assumptions` section. Ensure that each non-empty line starts with `[Resolved` or `[Pending` (case-insensitive).
+
+**Mode-conditional behaviour for `[Pending]` assumptions**:
+
+| Mode | Requirement | `[Pending]` blocks APPROVED? |
+|---|---|---|
+| `discovery` | Enumerate assumptions and capture known unknowns. `[Pending]` items are noted but do not block. Print advisory: *"Discovery mode: pending assumptions noted but not blocking."* | No |
+| `incremental` | Any assumption with confidence below HIGH must be marked `[Pending: human review]`. The human architect resolves it before APPROVED can be set. | Yes |
+| `contractual` | Stricter than incremental. MEDIUM confidence assumptions must also be explicitly resolved, not just noted. Every assumption bullet must carry `[Resolved: explicit reason]` — a bare `[Resolved]` marker is not sufficient. The human architect must supply the resolution text. | Yes (no bare markers) |
 
 ### Phase 3: INVEST Stories & Gherkin BDD
 1. Structure requirements as user stories satisfying the INVEST criteria (Independent, Negotiable, Valuable, Estimable, Small, Testable).
@@ -55,6 +76,11 @@ stateDiagram-v2
    - Scan `docs/planning/specs/` for files matching the pattern `SPEC-\d+\.md`.
    - Take the highest number, increment it by one (e.g. `SPEC-001` $\rightarrow$ `SPEC-002`), and use it. If no specifications exist, start at `SPEC-001`.
 2. Render the specification file to `docs/planning/specs/SPEC-XXX.md` using the `.agent/templates/feature_spec.md` template.
+3. Include a one-line metadata comment at the very top of the spec file recording the active mode at authoring time:
+   ```
+   <!-- outer_loop.mode: {mode} at time of authoring -->
+   ```
+   This creates a permanent record of which methodology the spec was written under, which is useful if the project's mode changes later.
 
 ### Phase 5: Architectural Traceability Feed
 1. On session close, identify all architectural and design decisions captured within the spec.

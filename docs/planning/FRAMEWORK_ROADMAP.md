@@ -145,7 +145,17 @@ The dream phase is the mechanism that makes the framework improve over time — 
 | S0-10 | Publish dream phase example: real proposals from real sessions | Documentation |
 | S0-11 | Add "What it prevents" section to README | Documentation | ✅ |
 | S0-12 | Fix validate.py legacy filename warning | Validation | ✅ |
+| S0-20 | Competitive positioning statement — add to README and docs | Documentation | |
+| S0-24 | De-GymBase-ify functional code before public promotion | General framework decoupling | |
 | T1-E-02 | LLMProvider ABC (AnthropicProvider, OpenAIProvider, OllamaProvider) | Provider portability | ✅ |
+
+> **S0-24 scope note (identified 2026-06-02)**: Three targeted code changes —
+> (a) extract `SYSTEM_PROMPT` in `ai_review.py` to a config-loaded template with
+> project-neutral defaults (GymBase patterns move to `review_context_project.md`);
+> (b) move `DOMAIN_REGISTRY` in `wiki_compile.py` from hardcoded Python to
+> `.agent/config.yaml` so projects without GymBase ADR files skip gracefully;
+> (c) move hardcoded directory paths in `build_route_decision()` to config.
+> Must complete before S0-23 (README pre-Reddit additions) goes live.
 | T1-L-06 | Explicit production scope statement in README and docs | Documentation | ✅ |
 | T1-L-08 | High-risk commit classification for fail-open behaviour | Gate hardening | ✅ |
 | T1-L-09 | Framework self-test suite (60 tests across 6 modules) | Testing | ✅ |
@@ -214,9 +224,16 @@ S0-05 must be cut before any beta invitations are sent.
 | ID | Item | Effort | Status |
 |----|------|--------|--------|
 | T1-I-02 | Token budget tracking per session | Low | ✅ |
-| T1-I-07 | Session token budget with WARN/HALT | Low | ✅ |
+| T1-I-07 | Session token budget with WARN/HALT | Low | ⬜ |
 | T1-M-06 | Context compaction template | Low | ✅ |
 | T1-G-08 | Diff size review strategy | Low | ✅ |
+
+> **T1-I-07 partial delivery note (identified 2026-06-02)**: The HALT mechanism,
+> file format, and threshold logic exist. `ai_review.py` does not write back to
+> `session.json` token counters after each review call — the running session
+> total is always zero for review calls, so the 80% WARN and 100% HALT
+> thresholds never fire during a session. Wiring `ai_review.py` → `session.json`
+> is the missing component; scheduled as a pre-Sprint-1 immediate item.
 
 ---
 
@@ -453,16 +470,79 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - ✅ HIB-038 — Migration chain contiguity assertion (`_assert_chain_contiguous`, fork resolution)
 - ✅ BUG-10 — Harness Gitignore Enforcements (v1.2.0.1 patch release, 2026-05-31)
 
-**v1.3.0 priority order (next sprint)**:
-1. T1-L-03 — `/project-manager` workflow
+**Immediate pre-sprint items (before Sprint 1 begins — low effort, high impact)**:
+
+These items were identified by direct code inspection (`docs/planning/CAPABILITY_INVENTORY.md`,
+2026-06-02) as blocking core value propositions. All are low effort. All should
+be completed before Sprint 1 begins.
+
+1. **T1-D-00 + BUG-11** (same PR) — Create `.agent/config/skill_ownership.yaml`.
+   The dream phase (T1-D-03 ✅) is live but routing ALL patterns to fallback
+   skills because the routing map was never created. Every dream proposal
+   generated today is mis-attributed. Configuration file only, no code required.
+   BUG-11: fix `distill_dream.py` reading `log.get("check_type")` when
+   `.ai-review-log.jsonl` uses `blocking_concern` — all AI review FAILs are
+   classified as `"review_failure"` regardless of actual concern. One-line fix.
+
+2. **BUG-12** — Fix wiki compile cold-start failure. `wiki_compile.py` updates
+   the 7-day cooldown timestamp even when compilation fails (Ollama not running,
+   ADR files missing). A developer without Ollama silently has no wiki context
+   for their first week. Fix: do not update `last_run_utc` on failure; use 1-day
+   retry cooldown on failure instead of 7-day success cooldown.
+
+3. **BUG-13** — Sync E2E test project `ai_review.py`. The file at
+   `tests/e2e/test_project/src/scripts/ai_review.py` is stale (git status shows
+   M) and does not include the rebuttal protocol (T1-G-06 ✅). E2E tests do not
+   test what ships. Sync to current framework source.
+
+4. **T1-I-07 wiring** — Wire `ai_review.py` token counts to `session.json`.
+   The HALT mechanism and file format exist. No code path currently increments
+   the session token counter from review gate calls — the v1.1.5 success
+   criterion ("a session approaching the token budget ceiling receives a WARN")
+   is not met. After each successful LLM call in `ai_review.py`, read
+   `session.json`, add `token_usage` from the `ReviewVerdict` to the running
+   session totals, write back atomically via `_lock_session()`.
+
+5. **S0-24** — De-GymBase-ify functional code (see S0-24 scope note in v1.1.0
+   section). Must complete before S0-23 (README pre-Reddit additions) goes live.
+
+6. **T1-L-00** — Outer loop methodology profile system. Design gate for all
+   remaining T1-L work. Retrofit `check_spec.py` and `/business-analyst` workflow
+   to add `outer_loop.mode` awareness (`discovery` / `incremental` / `contractual`).
+   Estimated: half-day design + audit, small code changes.
+
+---
+
+**v1.3.0 priority order (updated post-inventory)**:
+
+**Sprint 1** (after pre-sprint items above are complete; T1-L-00 sign-off required
+before this begins):
+
+1. T1-L-03 — `/project-manager` workflow (pm_scaffold.py, Gherkin-to-task mapping)
 2. T1-L-04 — Requirement → commit traceability
 3. T1-L-05 — Acceptance gate
 4. T1-L-07 — Incident → backlog pipeline
 5. T1-M-03 — Mid-session observability
 
+**Deferred from v1.3.0 to v1.3.1 or v1.4.0** (low effort but not blocking Sprint 1):
+- T1-C-02 — Structured HITL approval queue
+- T1-E-01 — Tool ABC subclasses (dependency for v1.5.0 skill quality work)
+- T1-J-01 — Automatic checkpoint before file changes
+- T1-K-01 — Supply chain malware detection (guarddog)
+- T1-M-04 — Minimal team usage guide
+
 ---
 
 ## Strategic Context
+
+> **Capability Inventory (2026-06-02)**: A direct code inspection inventory was
+> generated at `docs/planning/CAPABILITY_INVENTORY.md`. It is the authoritative
+> source of truth for what is actually delivered vs. what the backlog describes.
+> Where inventory findings conflict with backlog ✅ markers, the inventory takes
+> precedence. Key findings: T1-D-00 blocking dream phase routing; GymBase coupling
+> in functional code (S0-24); T1-I-07 partial delivery; BUG-11/12/13.
+> Sequencing observations in the inventory §3 should be reviewed before each
+> milestone planning session.
 
 ### The Competitive Position
 
@@ -475,6 +555,75 @@ The framework's durable differentiation is not the context file patterns or name
 3. **The outer loop** *(v1.2.0)*: Specification quality governance and acceptance traceability are not things vendor tools will build because they require institutional governance knowledge.
 
 4. **Compliance positioning** *(v3.0.0)*: SOCI, ISM, PSPF control mappings for Australian regulated industry contexts. Vendor tools will not go here.
+
+
+**Emerging ecosystem signal — agent governance interoperability (monitor from
+v1.3.0 onward)**:
+A nascent push toward open standards for agent governance is emerging, including the
+Open Agent Governance Spec (OAGS) and AgentHub concepts. Key proposals include:
+canonical agent identity manifests (model + prompt hash as a verifiable identity),
+cryptographically signed audit evidence records, append-only event logs as a
+first-class interoperability primitive, and package registries for agents and skills
+with signed provenance. None of these are stable standards as of mid-2026 — they are
+active proposals, not ratified specifications. However, if an open standard
+consolidates in the 2027–2028 timeframe, being an early compatible implementation
+would be a meaningful strategic advantage, particularly for the compliance positioning
+(v3.0.0) and the Tier 2 shared state layer (v2.0.0). **Review trigger**: at the
+start of each major milestone (v1.3.0, v2.0.0, v3.0.0 planning), check for
+consolidation in this space before finalising the milestone's audit trail and skill
+registry designs. Search terms: "OAGS agent governance spec", "AgentHub agent
+manifest", "OpenAgentSpec", "agentic SDLC interoperability standard". If a credible
+standard has emerged, open a spike item to assess compatibility cost before the
+milestone sprint begins. Also monitor: CodeRabbit ($88M raised) has traceability
+"coming via MCP" on their roadmap — if they pursue spec quality enforcement
+seriously, they become the first credible commercial entrant into currently open
+territory (see S0-22).
+
+**Dynamic Workflows / parallel subagent governance (monitor from v1.3.0 onward)**:
+Anthropic's Opus 4.8 (May 2026) introduced Dynamic Workflows in Claude Code — up to
+1,000 total subagents, 16 concurrent, orchestrated from a single session. This is a
+research preview. When it reaches general availability, the single-agent-per-session
+assumption underlying most Tier 1 harness mechanisms will need explicit multi-agent
+governance support. T1-N-01 through T1-N-03 lay the schema and concurrency
+foundations. Full multi-agent governance (per-subagent audit trails, distributed
+HALT propagation, swarm-level gate coordination) is planned for Tier 2 (v2.0.0).
+**Review trigger**: at v2.0.0 planning, assess whether Dynamic Workflows has reached
+general availability and what the production usage patterns look like before
+finalising the Tier 2 multi-agent governance design. Key design rule established:
+read-only agents (Read, Grep, Glob access only) are safe to run in parallel;
+write agents (Edit, Write, Bash access) must run sequentially in their own lane
+(source: freeCodeCamp software factory analysis, May 2026).
+
+**The implementation layer — component mapping (Nate B Jones, 2026)**:
+The following mapping validates that the harness covers the implementation layer
+components identified as the primary value location in enterprise agentic workflows
+(source: "The Trillion Dollar Agentic Workflow Opportunity"):
+
+| Implementation layer component | Harness equivalent |
+|---|---|
+| Workflow design — which decisions the model makes, where handoffs are, what counts as done | Named workflows, three-checkpoint model, AGENTS.md prohibition table |
+| Authority — what the agent is allowed to do, write vs read risk profiles | Governance gate, HALT sentinel, escalation triggers, high-risk commit classification (T1-L-08 ✅) |
+| Evals — scoring adherence to specific business rules | Adversarial review gate, ReviewVerdict, false-positive eval pipeline (T1-L-10 ✅) |
+| Audit trails — what gets logged, what an auditor can reconstruct | harness_events.jsonl, ai-review-log.jsonl, session ledger |
+| Recovery and ongoing ownership — what happens when it goes wrong, who keeps it tuned | Dream phase self-improvement (T1-D-03 ✅), HITL approval queue (T1-C-02), incident→backlog (T1-L-07) |
+
+The one component not owned by the harness is **data access** (which sources of
+truth the agent reads, row/field-level permissions) — deliberately out of scope, as
+this is contested territory between Salesforce, SAP, and data platform vendors. The
+harness governs the delivery process, not the data layer. The labs themselves
+(OpenAI, Anthropic) have acknowledged that the bottleneck for enterprise AI is the
+implementation layer, not the model — validating that governance frameworks are the
+defensible territory, not model wrappers.
+
+**Private equity as a distribution channel (strategic signal, Nate B Jones, 2026)**:
+PE firms own thousands of mid-market companies — finance, ops, support, procurement,
+compliance — and are actively seeking AI governance frameworks to deploy across
+portfolios. A framework that installs in under 10 minutes, provides a governed
+delivery structure, and adapts to each project's failure patterns (dream phase) is
+a portfolio-level governance standard, not just a per-developer tool. This
+distribution path is distinct from individual developer adoption and from enterprise
+direct sales. At v2.0.0 (shared state, team features), assess whether PE portfolio
+deployment is a viable go-to-market motion alongside community adoption.
 
 ### What the Research Validates
 

@@ -108,70 +108,158 @@ def get_active_branch_spec() -> str | None:
     return None
 
 
-def resolve_spec_file(spec_input: str | None, specs_path: str) -> tuple[str, Path] | None:
-    """Resolve SPEC_ID to actual file path, returning (SPEC_ID, Path)."""
-    specs_dir = PROJECT_ROOT / Path(specs_path)
-    
-    # 1. Direct SPEC_ID input or inferred
-    spec_id = spec_input
-    if not spec_id:
-        # Check env vars
-        spec_id = os.environ.get("SPEC_ID") or os.environ.get("SPEC_FILE")
-    if not spec_id:
-        # Check git branch name
-        spec_id = get_active_branch_spec()
-        
-    if spec_id:
-        # Normalize spec_id e.g. "SPEC-002"
-        spec_id_norm = spec_id.upper()
-        if not spec_id_norm.startswith("SPEC-"):
-            # Check if numeric e.g. "002" or "2"
-            if spec_id_norm.isdigit():
-                spec_id_norm = f"SPEC-{int(spec_id_norm):03d}"
-            else:
-                spec_id_norm = f"SPEC-{spec_id_norm}"
-                
-        spec_file = specs_dir / f"{spec_id_norm}.md"
-        if spec_file.exists():
-            return spec_id_norm, spec_file
-        
-    # 2. Check CLI argument or fallback to scanning directory
-    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
-        arg_val = sys.argv[1]
-        arg_norm = arg_val.upper()
-        if not arg_norm.startswith("SPEC-") and arg_norm.isdigit():
-            arg_norm = f"SPEC-{int(arg_norm):03d}"
-        spec_file = specs_dir / f"{arg_norm}.md"
-        if spec_file.exists():
-            return arg_norm, spec_file
-            
-    # 3. Fallback scan for single spec file in directory
+def get_spec_from_active_context() -> str | None:
+    """Scan first 20 lines of active_context.md for a SPEC-\\d+ reference."""
+    context_path = PROJECT_ROOT / ".agent" / "state" / "active_context.md"
+    if not context_path.exists():
+        return None
     try:
-        if specs_dir.exists() and specs_dir.is_dir():
-            spec_files = sorted(list(specs_dir.glob("SPEC-*.md")))
-            if len(spec_files) == 1:
-                inferred_id = spec_files[0].stem.upper()
-                return inferred_id, spec_files[0]
+        lines = context_path.read_text(encoding="utf-8").splitlines()[:20]
+        for line in lines:
+            match = re.search(r"\b(SPEC-\d+)\b", line, re.IGNORECASE)
+            if match:
+                return match.group(1).upper()
     except Exception:
         pass
-        
     return None
 
 
-def run_pass1(content: str, spec_id: str) -> tuple[bool, list[str], bool]:
-    """Execute Pass 1: Structural static checks. Returns (Passed, Errors, HighRiskDBA)."""
+_VALID_MODES = frozenset({"discovery", "incremental", "contractual"})
+
+
+def _load_outer_loop_mode() -> str:
+    """Read outer_loop.mode from .agent/config.yaml.
+
+    Returns 'incremental' on any failure, missing key, or unrecognised value.
+    """
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return "incremental"
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        in_outer_loop = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip())
+            if stripped == "outer_loop:":
+                in_outer_loop = True
+                continue
+            if in_outer_loop:
+                if indent == 0:
+                    break
+                m = re.match(r"mode:\s*['\"]?([a-zA-Z]+)['\"]?", stripped)
+                if m:
+                    mode = m.group(1).strip().lower()
+                    if mode in _VALID_MODES:
+                        return mode
+                    print(
+                        f"⚠️  [REVIEW-GATE] outer_loop.mode '{mode}' is not recognised. "
+                        "Valid values: discovery, incremental, contractual. Defaulting to incremental.",
+                        file=sys.stderr,
+                    )
+                    return "incremental"
+    except Exception:
+        pass
+    return "incremental"
+
+
+def resolve_spec_file(spec_input: str | None, specs_path: str) -> tuple[str, Path] | None:
+    """Resolve SPEC_ID to actual file path, returning (SPEC_ID, Path).
+
+    Resolution order (most to least explicit):
+      0. spec_input — positional CLI arg passed from argparse
+      1. SPEC_ID / SPEC_FILE environment variable
+      2. Git branch name matching SPEC-\\d+
+      3. active_context.md scan (first 20 lines)
+      4. Single-file scan of specs directory; error if multiple exist
+    """
+    specs_dir = PROJECT_ROOT / Path(specs_path)
+
+    def _try_resolve(raw_id: str) -> tuple[str, Path] | None:
+        if not raw_id:
+            return None
+        norm = raw_id.upper().strip()
+        if not norm.startswith("SPEC-"):
+            norm = f"SPEC-{int(norm):03d}" if norm.isdigit() else f"SPEC-{norm}"
+        spec_file = specs_dir / f"{norm}.md"
+        return (norm, spec_file) if spec_file.exists() else None
+
+    # Step 0: Positional CLI argument (from argparse)
+    if spec_input:
+        result = _try_resolve(spec_input)
+        if result:
+            return result
+
+    # Step 1: Environment variables
+    env_id = os.environ.get("SPEC_ID") or os.environ.get("SPEC_FILE")
+    if env_id:
+        result = _try_resolve(env_id)
+        if result:
+            return result
+
+    # Step 2: Git branch name
+    branch_id = get_active_branch_spec()
+    if branch_id:
+        result = _try_resolve(branch_id)
+        if result:
+            return result
+
+    # Step 3: active_context.md scan
+    context_id = get_spec_from_active_context()
+    if context_id:
+        result = _try_resolve(context_id)
+        if result:
+            return result
+
+    # Step 4: Single-file scan — explicit error on multiple
+    try:
+        if specs_dir.exists() and specs_dir.is_dir():
+            spec_files = sorted(specs_dir.glob("SPEC-*.md"))
+            if len(spec_files) == 1:
+                return spec_files[0].stem.upper(), spec_files[0]
+            elif len(spec_files) > 1:
+                names = ", ".join(f.name for f in spec_files)
+                print(
+                    f"❌ [REVIEW-GATE] Multiple spec files found: {names}. "
+                    "Cannot auto-select. Pass spec ID as positional argument "
+                    "(e.g. check_spec.py SPEC-001) or set the SPEC_ID env var.",
+                    file=sys.stderr,
+                )
+    except Exception:
+        pass
+
+    return None
+
+
+def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> tuple[bool, list[str], bool]:
+    """Execute Pass 1: Structural static checks. Returns (Passed, Errors, HighRiskDBA).
+
+    mode controls enforcement level:
+      discovery   — structural failures print advisories (exit 0 always from Pass 1)
+      incremental — current behaviour: structural failures block (exit 1)
+      contractual — same as incremental, plus APPROVED is required even in local mode
+    """
     errors = []
     high_risk_dba = False
-    
+
+    def _fail(message: str) -> None:
+        """Record a structural failure — advisory-only in discovery, blocking otherwise."""
+        if mode == "discovery":
+            print(f"⚠️  [DISCOVERY MODE] Spec gate advisory: {message}. Not blocking in discovery mode.")
+        else:
+            errors.append(message)
+
     # 1. Non-empty Source Issue
     source_match = re.search(r"\*\*Source Issue\*\*:\s*([^\n]+)", content, re.IGNORECASE)
     if not source_match:
-        errors.append("Missing '**Source Issue**:' field reference.")
+        _fail("Missing '**Source Issue**:' field reference.")
     else:
         source_val = source_match.group(1).strip()
-        if source_val.startswith("[") and source_val.endswith("]") or not source_val:
-            errors.append("Upstream issue reference cannot match placeholder brackets or be empty.")
-            
+        if (source_val.startswith("[") and source_val.endswith("]")) or not source_val:
+            _fail("Upstream issue reference cannot match placeholder brackets or be empty.")
+
     # 2. Required Headings Existence (depth-independent, case-insensitive)
     required_headings = [
         ("Goal & Context", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Goal\s+&\s+Context\b"),
@@ -180,10 +268,10 @@ def run_pass1(content: str, spec_id: str) -> tuple[bool, list[str], bool]:
         ("Acceptance Criteria", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Acceptance\s+Criteria\b"),
         ("Status & Sign-off", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Status\s+&\s+Sign-off\b"),
     ]
-    
+
     section_contents = {}
     lines = content.splitlines()
-    
+
     for h_name, h_regex in required_headings:
         match_found = False
         start_line = -1
@@ -193,9 +281,8 @@ def run_pass1(content: str, spec_id: str) -> tuple[bool, list[str], bool]:
                 start_line = i
                 break
         if not match_found:
-            errors.append(f"Missing required section header: '# {h_name}'.")
+            _fail(f"Missing required section header: '# {h_name}'.")
         else:
-            # Capture section block
             end_line = len(lines)
             for j in range(start_line + 1, len(lines)):
                 if re.match(r"^\s*#{1,6}\s+", lines[j]):
@@ -206,20 +293,21 @@ def run_pass1(content: str, spec_id: str) -> tuple[bool, list[str], bool]:
     # 3. Section Non-emptiness
     for h_name in ["Assumptions", "Acceptance Criteria"]:
         if h_name in section_contents and not section_contents[h_name]:
-            errors.append(f"The section '# {h_name}' cannot be empty.")
+            _fail(f"The section '# {h_name}' cannot be empty.")
 
-    # 4. Gherkin Scenario Validation (Given, When, Then all present, case-insensitive word boundary)
+    # 4. Gherkin Scenario Validation (advisory-only in discovery, blocking otherwise)
     if "Acceptance Criteria" in section_contents:
         ac_text = section_contents["Acceptance Criteria"]
         if ac_text:
-            # Find all Given/When/Then scenarios
             keywords = ["given", "when", "then"]
-            missing_keywords = []
-            for kw in keywords:
-                if not re.search(rf"\b{kw}\b", ac_text, re.IGNORECASE):
-                    missing_keywords.append(kw.capitalize())
+            missing_keywords = [kw.capitalize() for kw in keywords
+                                 if not re.search(rf"\b{kw}\b", ac_text, re.IGNORECASE)]
             if missing_keywords:
-                errors.append(f"BDD Gherkin validation failed in '# Acceptance Criteria'. Scenario block must contain Given, When, and Then scenarios (missing: {', '.join(missing_keywords)}).")
+                _fail(
+                    f"BDD Gherkin validation failed in '# Acceptance Criteria'. "
+                    f"Scenario block must contain Given, When, and Then scenarios "
+                    f"(missing: {', '.join(missing_keywords)})."
+                )
 
     # 5. Lenient Assumptions Formatting Bullet Check
     if "Assumptions" in section_contents:
@@ -230,40 +318,43 @@ def run_pass1(content: str, spec_id: str) -> tuple[bool, list[str], bool]:
             stripped = line.strip()
             if not stripped:
                 continue
-            # Evaluate only lines matching standard list item patterns (e.g. - or * list bullets)
             if re.match(r"^\s*[-*+]\s+", stripped) or re.match(r"^\s*\d+\.\s+", stripped):
-                # Must contain [Resolved or [Pending (case-insensitive)
-                if not re.search(r"\[Resolved", stripped, re.IGNORECASE) and not re.search(r"\[Pending", stripped, re.IGNORECASE):
+                if not re.search(r"\[Resolved", stripped, re.IGNORECASE) and \
+                        not re.search(r"\[Pending", stripped, re.IGNORECASE):
                     has_invalid = True
                 elif re.search(r"\[Pending", stripped, re.IGNORECASE):
                     has_pending = True
-                    
+
         if has_invalid:
-            errors.append("Lenient assumptions check failed. Every bullet list item in '# Assumptions' must be prefixed with '[Resolved: ...]' or '[Pending: ...]' to explicitly surface unstated constraints.")
+            _fail(
+                "Lenient assumptions check failed. Every bullet list item in '# Assumptions' "
+                "must be prefixed with '[Resolved: ...]' or '[Pending: ...]' to explicitly "
+                "surface unstated constraints."
+            )
         if has_pending:
-            errors.append("Specification contains '[Pending]' assumptions which blocks final APPROVED status.")
+            _fail("Specification contains '[Pending]' assumptions which blocks final APPROVED status.")
 
     # 6. Elevated DBA Constraint Flag
-    dba_regex = r"\[HIGH_RISK_SCHEMA_CHANGE\]"
-    if re.search(dba_regex, content, re.IGNORECASE):
+    if re.search(r"\[HIGH_RISK_SCHEMA_CHANGE\]", content, re.IGNORECASE):
         high_risk_dba = True
 
-    # 7. Status Sign-off APPROVED Check
-    is_approved = False
-    status_match = re.search(r"\*\*Status\*\*:\s*APPROVED", content, re.IGNORECASE)
-    if status_match:
-        is_approved = True
-        
-    # Check if local bypass applies
+    # 7. Status Sign-off APPROVED Check (mode-conditional)
+    is_approved = bool(re.search(r"\*\*Status\*\*:\s*APPROVED", content, re.IGNORECASE))
     pre_commit_env = os.environ.get("PRE_COMMIT") == "1"
     ci_env = os.environ.get("CI") == "1" or os.environ.get("GITHUB_ACTIONS") == "true"
-    
+
     if not is_approved:
-        if not pre_commit_env and not ci_env:
-            # Local draft warning bypass
-            print(f"⚠️  [REVIEW-GATE] Specification '{spec_id}' is currently in DRAFT status. Local execution bypass active.")
+        if mode == "discovery":
+            print(f"ℹ️  [DISCOVERY MODE] Specification '{spec_id}' is in DRAFT status. Not blocking in discovery mode.")
+        elif mode == "contractual":
+            # Contractual: APPROVED is required even in local (non-CI) mode
+            errors.append("Specification status must be set to 'APPROVED' (required in contractual mode — no local bypass).")
         else:
-            errors.append("Specification status must be set to 'APPROVED' prior to commit/PR gate execution.")
+            # incremental: local mode prints a warning and proceeds; CI/pre-commit blocks
+            if not pre_commit_env and not ci_env:
+                print(f"⚠️  [REVIEW-GATE] Specification '{spec_id}' is currently in DRAFT status. Local execution bypass active.")
+            else:
+                errors.append("Specification status must be set to 'APPROVED' prior to commit/PR gate execution.")
 
     return len(errors) == 0, errors, high_risk_dba
 
@@ -482,15 +573,33 @@ def handle_pass2_outcome(verdict: SpecQualityVerdict, spec_id: str, input_tokens
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Specification Quality Gate")
-    parser.add_argument("--skip-spec-gate", action="store_true", help="Bypass the specification quality gate (requires valid SKIP_REASON)")
+    parser.add_argument("--skip-spec-gate", action="store_true",
+                        help="Bypass the specification quality gate (requires valid SKIP_REASON)")
     parser.add_argument("spec_id", nargs="?", help="Specific SPEC ID to validate (e.g. SPEC-002)")
     # Mocks for air-gapped unit tests
     parser.add_argument("--mock-quality-verdict", help=argparse.SUPPRESS)
     parser.add_argument("--mock-blocking-concerns", help=argparse.SUPPRESS)
-    
+    # Mode override for tests — not documented to users
+    parser.add_argument("--mode-override", help=argparse.SUPPRESS)
+
     args = parser.parse_args()
-    
-    # 1. Bypass & Safety Check
+
+    # 1. Load mode FIRST — required before skip-gate check (Correction 3)
+    if args.mode_override and args.mode_override.lower() in _VALID_MODES:
+        mode = args.mode_override.lower()
+    else:
+        mode = _load_outer_loop_mode()
+
+    # 2. Contractual mode: --skip-spec-gate is unavailable
+    if args.skip_spec_gate and mode == "contractual":
+        print(
+            "❌ [REVIEW-GATE] Spec gate bypass is not available in contractual mode. "
+            "Set outer_loop.mode: incremental to use --skip-spec-gate.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # 3. Bypass & Safety Check (non-contractual modes only)
     if args.skip_spec_gate:
         skip_reason = os.environ.get("SKIP_REASON")
         if not skip_reason:
@@ -499,50 +608,52 @@ def main() -> int:
         if len(skip_reason.strip()) < 10:
             print("❌ [REVIEW-GATE] Safety check failed: 'SKIP_REASON' must be a detailed explanation of at least 10 characters.", file=sys.stderr)
             return 1
-            
-        # Sanitize skip_reason of newlines
+
         clean_reason = skip_reason.replace("\n", " ").replace("\r", " ")
         redacted_reason = redact_api_keys(clean_reason)
-        
-        # Log structured bypass event
         log_harness_event({
             "event_type": "gate_bypass",
             "severity": "WARNING",
-            "payload": {
-                "gate": "spec_quality_gate",
-                "skip_reason": redacted_reason
-            }
+            "payload": {"gate": "spec_quality_gate", "skip_reason": redacted_reason},
         })
         print(f"⚠️  [REVIEW-GATE] Specification quality gate bypassed. Reason: {redacted_reason}")
         return 0
 
-    # 2. Config & Path Resolution
+    # 4. Config & Path Resolution
     config = load_config()
     specs_path = config.get("specs_path", "docs/planning/specs/")
-    
+
     resolution = resolve_spec_file(args.spec_id, specs_path)
     if not resolution:
-        print(f"❌ [REVIEW-GATE] Target specification not found under configured path '{specs_path}'. Ensure active spec file exists (e.g. SPEC-001.md).", file=sys.stderr)
+        print(
+            f"❌ [REVIEW-GATE] Could not resolve target specification under '{specs_path}'. "
+            "Pass spec ID as positional argument (e.g. check_spec.py SPEC-001) or set SPEC_ID env var.",
+            file=sys.stderr,
+        )
         return 1
-        
+
     spec_id, spec_path = resolution
-    
+
     try:
         content = spec_path.read_text(encoding="utf-8")
     except Exception as e:
         print(f"❌ [REVIEW-GATE] Failed to read specification file: {e}", file=sys.stderr)
         return 1
 
+    # 5. Mode display header (2d)
+    print(f"🔍 Spec Quality Gate — mode: {mode} — checking {spec_id}")
     print(f"🔍 [REVIEW-GATE] Running Pass 1: Static Structural Checks for '{spec_id}'...")
-    pass1_ok, pass1_errors, high_risk_dba = run_pass1(content, spec_id)
+
+    # 6. Pass 1 with mode
+    pass1_ok, pass1_errors, high_risk_dba = run_pass1(content, spec_id, mode)
     if not pass1_ok:
         print(f"❌ [REVIEW-GATE] Pass 1 Structural Checks FAILED for '{spec_id}':", file=sys.stderr)
         for err in pass1_errors:
             print(f"  ❌ {err}", file=sys.stderr)
         return 1
-        
+
     print(f"✅ [REVIEW-GATE] Pass 1 Structural Checks PASSED for '{spec_id}'.")
-    
+
     print(f"🔍 [REVIEW-GATE] Running Pass 2: Quality Review for '{spec_id}'...")
     exit_code, _ = run_pass2(content, spec_id, high_risk_dba, config)
     return exit_code

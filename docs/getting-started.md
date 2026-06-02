@@ -234,6 +234,43 @@ The mandatory session startup protocol in `AGENTS.md §1` takes effect from sess
 
 ---
 
+## Outer Loop Methodology
+
+The framework defaults to `incremental` mode — the assumption that your project
+has a known overall scope and each feature is delivered against an approved
+specification.
+
+**Three modes are available** via `.agent/config.yaml`:
+
+| Mode | Use when | Spec gate behaviour |
+|---|---|---|
+| `discovery` | Exploratory projects, unknown end state, research spikes | Gate advises but never blocks |
+| `incremental` | Known scope, feature-by-feature delivery (default) | Gate blocks on structural failures |
+| `contractual` | Regulated, client-contracted, or compliance-sensitive delivery | Gate is maximally strict, no bypasses |
+
+To change mode, edit `.agent/config.yaml`:
+
+```yaml
+outer_loop:
+  mode: discovery  # or incremental or contractual
+```
+
+**The inner loop is unaffected by this setting.** The commit gate,
+architecture boundary checks, and session lifecycle enforce identically
+in all modes. Methodology flexibility applies to requirements governance
+only — what the agent is allowed to start building and under what
+constraints.
+
+The spec quality gate (`check_spec.py`) reads this value on every run and
+adjusts its enforcement accordingly. The active mode is printed in the gate
+output header so it is always visible:
+
+```
+🔍 Spec Quality Gate — mode: discovery — checking SPEC-001
+```
+
+---
+
 ## Next steps
 
 - [Configuration Reference](configuration.md) — customise `.agent/config.yaml` for your stack
