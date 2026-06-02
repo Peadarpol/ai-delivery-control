@@ -164,7 +164,9 @@ def main() -> None:
     if SKILL_OWNERSHIP_PATH.exists():
         try:
             with open(SKILL_OWNERSHIP_PATH, "r", encoding="utf-8") as f:
-                skill_map = yaml.safe_load(f).get("skills", {})
+                raw_data = yaml.safe_load(f) or {}
+                if isinstance(raw_data, dict):
+                    skill_map = raw_data.get("skills", raw_data)
         except Exception as e:
             print(f"[DREAM] Error loading skill_ownership.yaml: {e}")
             sys.exit(1)
@@ -277,11 +279,13 @@ def main() -> None:
 
                 for skill_name, rules in skill_map.items():
                     # Check event_type matches
-                    if event_type in rules.get("event_type", []):
+                    event_types_list = rules.get("event_types", rules.get("event_type", []))
+                    if event_type in event_types_list:
                         matched_skills.append(skill_name)
                         continue
                     # Check keywords match
-                    for kw in rules.get("keyword", []):
+                    keywords_list = rules.get("keywords", rules.get("keyword", []))
+                    for kw in keywords_list:
                         if (
                             kw.lower() in payload_str
                             or kw.lower() in event_type.lower()
@@ -322,7 +326,7 @@ def main() -> None:
                 if verdict != "FAIL":
                     continue
 
-                check_type = log.get("check_type", "review_failure")
+                check_type = log.get("blocking_concern", log.get("check_type", "review_failure"))
                 comments = log.get("comments", "").lower()
                 session_id = log.get("session_id") or "unknown"
                 severity = log.get("severity", "warning")
@@ -330,10 +334,12 @@ def main() -> None:
                 # Try to map to skill
                 matched_skills = []
                 for skill_name, rules in skill_map.items():
-                    if check_type in rules.get("check_type", []):
+                    check_types_list = rules.get("check_types", rules.get("check_type", []))
+                    if check_type in check_types_list:
                         matched_skills.append(skill_name)
                         continue
-                    for kw in rules.get("keyword", []):
+                    keywords_list = rules.get("keywords", rules.get("keyword", []))
+                    for kw in keywords_list:
                         if kw.lower() in comments or kw.lower() in check_type.lower():
                             matched_skills.append(skill_name)
                             break
