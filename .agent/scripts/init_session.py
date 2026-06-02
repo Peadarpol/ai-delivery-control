@@ -665,12 +665,14 @@ def maybe_run_wiki_compile() -> None:
         return
     WIKI_STATE_FILE = STATE_DIR / "wiki_compile_state.json"
     last_run_utc = "1970-01-01T00:00:00Z"
+    last_failure_utc = None
 
     if WIKI_STATE_FILE.exists():
         try:
             with open(WIKI_STATE_FILE, "r", encoding="utf-8") as f:
                 state_data = json.load(f)
                 last_run_utc = state_data.get("last_run_utc", last_run_utc)
+                last_failure_utc = state_data.get("last_failure_utc")
         except Exception:
             pass
 
@@ -680,6 +682,16 @@ def maybe_run_wiki_compile() -> None:
         last_run_dt = datetime.min
 
     now = datetime.now(UTC).replace(tzinfo=None)
+
+    if last_failure_utc:
+        try:
+            last_failure_dt = parse_iso_datetime(last_failure_utc)
+            if (now - last_failure_dt).total_seconds() < 24 * 3600:
+                # Failure cooldown active (24 hours)
+                return
+        except Exception:
+            pass
+
     if (now - last_run_dt).days < 7:
         # Cooldown active, skip quietly
         return

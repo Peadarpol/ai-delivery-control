@@ -389,6 +389,90 @@ class Validator:
                 
         return True, "All critical harness state files are correctly ignored by git."
 
+    def validate_outer_loop_mode(self) -> Tuple[bool, str]:
+        """Warn if outer_loop.mode is set to an unrecognised value."""
+        config_path = self.project_path / ".agent" / "config.yaml"
+        if not config_path.exists():
+            return True, "No config.yaml — outer_loop.mode defaults to incremental."
+
+        valid_modes = {"discovery", "incremental", "contractual"}
+        try:
+            content = config_path.read_text(encoding="utf-8")
+            in_outer_loop = False
+            for line in content.splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                indent = len(line) - len(line.lstrip())
+                if stripped == "outer_loop:":
+                    in_outer_loop = True
+                    continue
+                if in_outer_loop:
+                    if indent == 0:
+                        break
+                    import re as _re
+                    m = _re.match(r"mode:\s*['\"]?([a-zA-Z]+)['\"]?", stripped)
+                    if m:
+                        mode = m.group(1).strip().lower()
+                        if mode in valid_modes:
+                            return True, f"outer_loop.mode: {mode}"
+                        self.warnings += 1
+                        return True, (
+                            f"⚠️  outer_loop.mode '{mode}' is not a recognised mode. "
+                            "Valid values: discovery, incremental, contractual. "
+                            "Defaulting to incremental."
+                        )
+        except Exception as e:
+            return True, f"Could not read outer_loop.mode: {e}"
+
+        return True, "outer_loop.mode not set — defaulting to incremental."
+
+    def validate_wiki_state(self) -> Tuple[bool, str]:
+        """Verify wiki compile state."""
+        import json
+        from datetime import datetime, UTC
+        state_file = self.project_path / ".agent" / "state" / "wiki_compile_state.json"
+        if not state_file.exists():
+            return True, "No wiki compilation state found."
+
+        try:
+            content = state_file.read_text(encoding="utf-8")
+            state = json.loads(content)
+        except Exception as e:
+            return True, f"Could not parse wiki state file: {e}"
+
+        last_failure_utc = state.get("last_failure_utc")
+        last_run_utc = state.get("last_run_utc", "1970-01-01T00:00:00Z")
+
+        def safe_parse_dt(dt_str: str) -> datetime | None:
+            if not dt_str:
+                return None
+            try:
+                if dt_str.endswith("Z"):
+                    dt_str = dt_str[:-1] + "+00:00"
+                dt = datetime.fromisoformat(dt_str)
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(UTC).replace(tzinfo=None)
+                return dt
+            except Exception:
+                return None
+
+        now = datetime.now(UTC).replace(tzinfo=None)
+
+        if last_failure_utc:
+            fail_dt = safe_parse_dt(last_failure_utc)
+            if fail_dt and (now - fail_dt).total_seconds() < 48 * 3600:
+                self.warnings += 1
+                print(f"{SYMBOL_WARN} Warning: Wiki compile failed recently. Run `python .agent/scripts/wiki_compile.py` to retry. Check Ollama is running if using local model.")
+                return True, "Wiki compile failed recently."
+
+        run_dt = safe_parse_dt(last_run_utc)
+        if (not run_dt or run_dt.year == 1970) and not last_failure_utc:
+            print(f"{SYMBOL_INFO} Info: Wiki not yet compiled. Will compile on first session start.")
+            return True, "Wiki not yet compiled."
+
+        return True, "Wiki compile state verified."
+
     def run_all(self) -> int:
         # Check if .agent/ exists as the very first check
         agent_dir = self.project_path / ".agent"
@@ -416,8 +500,10 @@ class Validator:
         self.run_check("Repository Guard (P-14)", self.validate_repo_guard)
         self.run_check("Universal Context File", self.validate_universal_context)
         self.run_check("Harness Configurations Validity", self.validate_configs)
+        self.run_check("Outer Loop Methodology Mode", self.validate_outer_loop_mode)
         self.run_check("Pre-commit Git Hook Layout", self.validate_precommit_setup)
         self.run_check("Gitignored Harness State Files", self.validate_gitignored_states)
+        self.run_check("Wiki Compilation State", self.validate_wiki_state)
         self.run_check("AI Review Gate Setup", self.validate_ai_review_wiring)
         
         print(f"\n==================================================")

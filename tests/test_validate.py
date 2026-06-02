@@ -219,3 +219,116 @@ class TestValidateGitignoredStates:
         assert v.warnings >= 1
         assert "session.json" in details or "warning" in details.lower()
 
+
+class TestValidateWikiState:
+    def test_validate_warns_on_recent_wiki_failure(self, validate_mod, tmp_path):
+        """If last_failure_utc is set within 48h, validator emits warning."""
+        from datetime import datetime, UTC, timedelta
+        import json
+        
+        state_dir = tmp_path / ".agent" / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_file = state_dir / "wiki_compile_state.json"
+        
+        recent_fail = (datetime.now(UTC) - timedelta(hours=10)).replace(tzinfo=None).isoformat() + "Z"
+        state_data = {
+            "last_run_utc": "1970-01-01T00:00:00Z",
+            "last_failure_utc": recent_fail,
+            "domains_compiled": 0
+        }
+        state_file.write_text(json.dumps(state_data), encoding="utf-8")
+        
+        v = validate_mod.Validator(tmp_path)
+        with patch("builtins.print") as mock_print:
+            passed, details = v.validate_wiki_state()
+            
+        assert passed is True
+        assert v.warnings >= 1
+        assert "failed recently" in details.lower()
+
+    def test_validate_info_on_uncompiled_wiki(self, validate_mod, tmp_path):
+        """If last_run_utc is epoch zero and no failure, validator info card prints."""
+        import json
+        
+        state_dir = tmp_path / ".agent" / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_file = state_dir / "wiki_compile_state.json"
+        
+        state_data = {
+            "last_run_utc": "1970-01-01T00:00:00Z",
+            "domains_compiled": 0
+        }
+        state_file.write_text(json.dumps(state_data), encoding="utf-8")
+        
+        v = validate_mod.Validator(tmp_path)
+        with patch("builtins.print") as mock_print:
+            passed, details = v.validate_wiki_state()
+
+        assert passed is True
+        assert v.warnings == 0
+        assert "not yet compiled" in details.lower()
+
+
+# ── T1-L-00: Outer loop mode validation ─────────────────────────────────────
+
+
+class TestOuterLoopModeValidation:
+    """T1-L-00 — validate_outer_loop_mode() warns on unrecognised values."""
+
+    def test_valid_mode_incremental_passes(self, validate_mod, tmp_path):
+        """Known mode 'incremental' → passes with no warning."""
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir()
+        (agent_dir / "config.yaml").write_text(
+            "outer_loop:\n  mode: incremental\n", encoding="utf-8"
+        )
+        v = validate_mod.Validator(tmp_path)
+        passed, details = v.validate_outer_loop_mode()
+        assert passed is True
+        assert v.warnings == 0
+        assert "incremental" in details
+
+    def test_valid_mode_discovery_passes(self, validate_mod, tmp_path):
+        """Known mode 'discovery' → passes with no warning."""
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir()
+        (agent_dir / "config.yaml").write_text(
+            "outer_loop:\n  mode: discovery\n", encoding="utf-8"
+        )
+        v = validate_mod.Validator(tmp_path)
+        passed, details = v.validate_outer_loop_mode()
+        assert passed is True
+        assert v.warnings == 0
+
+    def test_unknown_mode_emits_warning(self, validate_mod, tmp_path):
+        """Unknown mode 'waterfall' → passed=True but warnings incremented."""
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir()
+        (agent_dir / "config.yaml").write_text(
+            "outer_loop:\n  mode: waterfall\n", encoding="utf-8"
+        )
+        v = validate_mod.Validator(tmp_path)
+        passed, details = v.validate_outer_loop_mode()
+        assert passed is True, "Unknown mode must not fail validation (WARN not ERROR)"
+        assert v.warnings == 1
+        assert "waterfall" in details
+        assert "not a recognised mode" in details.lower() or "not recognised" in details.lower()
+
+    def test_absent_outer_loop_section_passes(self, validate_mod, tmp_path):
+        """Missing outer_loop section → passes silently, no warning."""
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir()
+        (agent_dir / "config.yaml").write_text(
+            "project:\n  name: test\n", encoding="utf-8"
+        )
+        v = validate_mod.Validator(tmp_path)
+        passed, details = v.validate_outer_loop_mode()
+        assert passed is True
+        assert v.warnings == 0
+
+    def test_absent_config_passes(self, validate_mod, tmp_path):
+        """Absent config.yaml → passes (no harness installed yet)."""
+        v = validate_mod.Validator(tmp_path)
+        passed, _ = v.validate_outer_loop_mode()
+        assert passed is True
+
