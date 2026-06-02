@@ -1,0 +1,70 @@
+# Dream phase routing map — maps harness event patterns to skill files.
+# Each entry: skill name → list of ownership rules (check_type, event_type, keyword)
+# distill_dream.py reads this file to route detected patterns to the correct skill.
+
+branch-isolation:
+  check_types:
+    - BRANCH_ISOLATION
+  event_types:
+    - high_risk_gate_closed
+    - gate_bypass
+  keywords:
+    - branch
+    - tenant
+    - isolation
+
+schema-hardening:
+  check_types:
+    - ANTI_PATTERNS
+    - MASS_ASSIGNMENT
+  event_types:
+    - spec_quality_check
+  keywords:
+    - schema
+    - model
+    - extra
+    - forbid
+
+security-audit:
+  check_types:
+    - RBAC
+    - AUTH
+  event_types:
+    - high_risk_gate_closed
+  keywords:
+    - auth
+    - permission
+    - rbac
+    - role
+
+database-design:
+  check_types:
+    - TRANSACTIONAL_INTEGRITY
+    - MIGRATIONS
+  event_types:
+    - high_risk_gate_closed
+  keywords:
+    - migration
+    - commit
+    - uow
+    - repository
+
+agent-framework:
+  check_types: []
+  event_types:
+    - halt_bypass
+    - governance_observation
+  keywords:
+    - harness
+    - session
+    - workflow
+
+code-review:
+  check_types:
+    - CODE_QUALITY
+    - INTENT_ALIGNMENT
+  event_types: []
+  keywords:
+    - quality
+    - review
+    - pattern

@@ -300,3 +300,135 @@ class TestBypassSafety:
             exit_code = check_spec.main()
             assert exit_code == 0
             assert mock_log.called
+
+
+# ── T1-L-00: Outer Loop Methodology Mode ─────────────────────────────────────
+
+
+class TestOuterLoopMode:
+    """T1-L-00 — mode-conditional Pass 1 and contractual bypass rejection."""
+
+    def test_discovery_mode_downgrades_block_to_warn(self, base_spec_content):
+        """Missing heading in discovery mode → exit 0 (advisory only)."""
+        bad = base_spec_content.replace("## 1. Goal & Context", "## 1. Vague Header")
+        ok, errors, _ = check_spec.run_pass1(bad, "SPEC-001", mode="discovery")
+        assert ok is True, "Discovery mode must never block on structural checks"
+        assert errors == [], "No errors should accumulate in discovery mode"
+
+    def test_incremental_mode_blocks_missing_heading(self, base_spec_content):
+        """Missing heading in incremental mode → exit 1 (existing behaviour unchanged)."""
+        bad = base_spec_content.replace("## 1. Goal & Context", "## 1. Vague Header")
+        ok, errors, _ = check_spec.run_pass1(bad, "SPEC-001", mode="incremental")
+        assert ok is False
+        assert any("Goal & Context" in e for e in errors)
+
+    def test_discovery_mode_skips_gherkin_requirement(self, base_spec_content):
+        """Missing Gherkin keywords in discovery mode → advisory, not a block."""
+        bad = base_spec_content.replace("Then they should be redirected", "And they should proceed")
+        ok, errors, _ = check_spec.run_pass1(bad, "SPEC-001", mode="discovery")
+        assert ok is True
+        assert errors == []
+
+    def test_contractual_mode_blocks_draft_locally(self, base_spec_content):
+        """DRAFT status in local (non-CI) mode blocks in contractual — no local bypass."""
+        draft = base_spec_content.replace("**Status**: APPROVED", "**Status**: DRAFT")
+        with patch.dict(os.environ, {"PRE_COMMIT": "0", "CI": "0"}, clear=False):
+            ok, errors, _ = check_spec.run_pass1(draft, "SPEC-001", mode="contractual")
+        assert ok is False
+        assert any("APPROVED" in e for e in errors)
+
+    def test_contractual_mode_rejects_skip_flag(self):
+        """--skip-spec-gate in contractual mode → exit 1 with explanation."""
+        with patch("sys.argv", ["check_spec.py", "--mode-override", "contractual",
+                                "--skip-spec-gate"]):
+            exit_code = check_spec.main()
+        assert exit_code == 1
+
+    def test_contractual_mode_blocks_pending_assumption(self, base_spec_content):
+        """[Pending] assumption in contractual mode → exit 1 (no local bypass)."""
+        pending = base_spec_content.replace(
+            "- [Resolved: existing middleware] Auth handled.",
+            "- [Pending: needs discussion] Auth approach unclear.",
+        )
+        with patch.dict(os.environ, {"PRE_COMMIT": "0", "CI": "0"}, clear=False):
+            ok, errors, _ = check_spec.run_pass1(pending, "SPEC-001", mode="contractual")
+        assert ok is False
+        assert any("pending" in e.lower() for e in errors)
+
+    def test_mode_displayed_in_output(self, base_spec_content, tmp_path, capsys):
+        """Any mode → header line contains 'mode: {mode}'."""
+        specs_dir = tmp_path / "docs" / "planning" / "specs"
+        specs_dir.mkdir(parents=True)
+        spec_file = specs_dir / "SPEC-001.md"
+        spec_file.write_text(base_spec_content, encoding="utf-8")
+
+        with patch("sys.argv", ["check_spec.py", "--mode-override", "discovery", "SPEC-001"]), \
+             patch.object(check_spec, "PROJECT_ROOT", tmp_path), \
+             patch("check_spec.run_pass2", return_value=(0, None)):
+            check_spec.main()
+
+        captured = capsys.readouterr().out
+        assert "mode: discovery" in captured
+
+
+# ── T1-L-00: Spec ID Resolution Hardening ─────────────────────────────────────
+
+
+class TestSpecIdResolution:
+    """T1-L-00 — 5-step spec ID resolution including active_context.md."""
+
+    def test_spec_id_from_active_context(self, tmp_path):
+        """active_context.md containing SPEC-042 → resolved as SPEC-042."""
+        specs_dir = tmp_path / "docs" / "planning" / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "SPEC-042.md").write_text("# Spec 042", encoding="utf-8")
+
+        state_dir = tmp_path / ".agent" / "state"
+        state_dir.mkdir(parents=True)
+        (state_dir / "active_context.md").write_text(
+            "## Current Task\nWorking on SPEC-042 feature.\n", encoding="utf-8"
+        )
+
+        with patch.object(check_spec, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {}, clear=True), \
+             patch("check_spec.get_active_branch_spec", return_value=None):
+            result = check_spec.resolve_spec_file(None, "docs/planning/specs/")
+
+        assert result is not None
+        spec_id, spec_path = result
+        assert spec_id == "SPEC-042"
+
+    def test_active_context_missing_falls_through(self, tmp_path):
+        """No active_context.md → resolution falls through to next step."""
+        specs_dir = tmp_path / "docs" / "planning" / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "SPEC-005.md").write_text("# Spec 005", encoding="utf-8")
+
+        # No active_context.md, no env var, no branch match → single-file scan
+        with patch.object(check_spec, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {}, clear=True), \
+             patch("check_spec.get_active_branch_spec", return_value=None):
+            result = check_spec.resolve_spec_file(None, "docs/planning/specs/")
+
+        # Should fall through to single-file scan and find SPEC-005
+        assert result is not None
+        assert result[0] == "SPEC-005"
+
+    def test_multiple_specs_no_env_exits_with_error(self, tmp_path, capsys):
+        """Multiple spec files, no env var, no branch → exit 1 with list of specs."""
+        specs_dir = tmp_path / "docs" / "planning" / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "SPEC-001.md").write_text("# Spec 001", encoding="utf-8")
+        (specs_dir / "SPEC-002.md").write_text("# Spec 002", encoding="utf-8")
+
+        with patch.object(check_spec, "PROJECT_ROOT", tmp_path), \
+             patch.dict(os.environ, {}, clear=True), \
+             patch("check_spec.get_active_branch_spec", return_value=None), \
+             patch("check_spec.get_spec_from_active_context", return_value=None):
+            result = check_spec.resolve_spec_file(None, "docs/planning/specs/")
+
+        assert result is None
+        captured = capsys.readouterr().err
+        assert "Multiple spec files found" in captured
+        assert "SPEC-001.md" in captured
+        assert "SPEC-002.md" in captured

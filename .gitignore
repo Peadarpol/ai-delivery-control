@@ -28,3 +28,6 @@ scratch/
 # Hypothesis and IDE local configs
 .hypothesis/
 .claude/
+
+# E2E test project local files
+tests/e2e/test_project/src/scripts/ai_review.py

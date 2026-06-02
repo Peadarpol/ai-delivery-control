@@ -876,3 +876,108 @@ be forged.
 
 **References**: `SECURITY.md` — "The Context-Injection Attack Vector" section.
 `FRAMEWORK_BACKLOG.md` — T1-K-02, T1-K-03, S0-16, S0-17, S0-18.
+
+---
+
+## HIB-041 — Naive YAML parser is too strict on multi-line text blocks
+
+**Date**: 2026-05-30
+**Source**: Gym Management System upgrade failure (v1.1.5.2 to v1.2.0)
+**Pillar**: Bootstrap / upgrade reliability
+**Status**: 📅 Backlog — minor quick fix
+
+**Problem**: The `_validate_config` method implemented in several migration files (e.g., `v1_1_5_to_v1_2_0.py`, `v1_1_0_to_v1_1_5.py`) validates YAML syntax line-by-line using `":" not in line and not stripped.startswith("-")`. This fails on perfectly valid YAML multi-line block scalars (blocks starting with `|` or `>`) if a text line inside the block lacks a colon (such as comment lines or instruction steps like `"Dependabot auto-creates PRs..."`).
+
+**Consequence**: During upgrades, the `UpgradeManager` runs config validation on `config.yaml`. If any multi-line block text contains a line without a colon, it throws a `ValueError: Malformed YAML`, halting the upgrade and triggering a full rollback.
+
+**Suggested changes**:
+1. Refactor `_validate_config` in all migration scripts to be robust against multi-line text blocks.
+2. A simple state machine can track block scalar starts (e.g., detection of `|` or `>` at the end of a line) and bypass validation for lines indented deeper than the block key until indentation decreases back to the root or sibling level.
+3. Alternatively, simplify `_validate_config` to check only basic structural sanity, or rely on a standard Python YAML parser try-except pattern during validation.
+
+---
+
+## HIB-042 — pre-commit-config.yaml.template uses Windows-only `cmd /c` for all local hooks
+
+**Date**: 2026-05-31
+**Source**: Sprint 1 implementation plan review — T1-L-04 traceability hook wiring
+**Pillar**: Bootstrap / cross-platform portability
+**Status**: 📅 Backlog — portability fix, medium priority
+
+**Problem**: Every local hook in `bootstrap/templates/pre-commit-config.yaml.template` uses `cmd /c [PROJECT_PACKAGE_MANAGER] run python ...` as its `entry`. `cmd /c` is Windows shell syntax. On Linux and macOS, pre-commit's `language: system` invokes the entry string directly — `cmd` is not present and the hook fails to execute entirely. This affects all custom local hooks: mypy, architecture-checks, skills-hygiene, behaviour-checks, regression-check, governance-audit, session-heartbeat, and the AI adversarial review gate.
+
+This was identified when specifying the T1-L-04 traceability hook (Sprint 1 plan) but the issue predates that — it is present in the existing template for every local hook.
+
+**Impact**: Any non-Windows installation that runs `pre-commit install` from this template gets a set of hooks that silently fail. The AI review gate, the session heartbeat, and the architecture checks all appear installed but never execute on Linux/macOS.
+
+**Suggested fix**: Replace `cmd /c [PROJECT_PACKAGE_MANAGER] run python` with a cross-platform entry pattern. The cleanest option compatible with `language: system` is to use the package manager directly without the shell wrapper:
+
+```yaml
+entry: uv run python .agent/scripts/check_traceability.py
+```
+
+Since `[PROJECT_PACKAGE_MANAGER]` is already a template placeholder, the installer substitutes it — the fix is to drop `cmd /c` from the wrapper and let the package manager binary handle subprocess creation cross-platform. Alternatively, use `python` directly if the project's virtual environment is activated by pre-commit's environment setup.
+
+**Scope**: All local hooks in `pre-commit-config.yaml.template`. Also update `install.py` documentation and `getting-started.md` if it instructs non-Windows users on pre-commit setup.
+
+---
+
+## HIB-043 — Review gate model diversification guidance
+
+**Date**: 2026-05-31
+**Source**: Multi-agent monoculture research / gap analysis
+**Pillar**: T1-G / Gate trust & calibration
+**Status**: 📅 Backlog — documentation only, low effort
+
+**Problem**: The adversarial gate correctly separates writer context from reviewer context, but same-model review creates correlated blind spots. A hallucination the writing agent produces may not be caught by a reviewer using identical weights and priors — both models share the same training-time failure modes and are susceptible to the same class of coherent-but-wrong reasoning. This is confirmed by multi-agent monoculture research: diversity of model family (not just model instance) is required to achieve genuinely independent review.
+
+**Suggested changes**:
+1. Add a note to `docs/configuration.md` under the `model_routing:` section recommending that `review_provider` and `review_model` be configured to a *different model family* than the primary writing agent where possible (e.g. writing on Claude Code → review gate on OpenAI or Ollama; writing on GPT-4 → review gate on Anthropic or Ollama).
+2. Add the same note to `review_context_universal.md` in the gate system prompt preamble so it surfaces during gate configuration.
+3. Document explicitly: same-model review is still better than no gate (catches structural violations, format errors, and many semantic errors even with correlated priors), but the residual risk is correlated blind spots that only cross-family review eliminates.
+4. No code change required — documentation and configuration guidance only.
+
+---
+
+## HIB-044 — T1-E-01 sandboxing requirement for Tool ABC subclasses
+
+**Date**: 2026-05-31
+**Source**: Gap analysis — T1-E-01 pre-implementation design requirement
+**Pillar**: Security / Tool execution safety
+**Status**: 📅 Backlog — design constraint, must be captured before T1-E-01 implementation begins
+
+**Problem**: T1-E-01 (Formalise skills as Tool ABC subclasses with `run()` methods) enables code-as-skill execution. Without an explicit sandboxing requirement in the `Tool` base class contract, concrete subclasses may inadvertently access unrestricted filesystem paths, make undeclared network calls, or use dangerous builtins (`exec`, `eval`, `__import__`). The existing T1-G-05 (restricted globals for `eval_runner.py`) covers evaluation cases; T1-E-01 needs the same treatment applied to the `Tool` ABC `run()` contract itself.
+
+**Suggested changes**:
+1. Before any concrete `Tool` subclass is implemented, add an explicit sandboxing contract to the `Tool` base class design:
+   - **Restricted builtins**: `run()` methods must not use `exec`, `eval`, `__import__`, `open()` outside the declared project path, or `subprocess` without a declared `requires_subprocess: bool = True` in `schema()`.
+   - **Filesystem boundary**: write access restricted to within `project_root` (resolved at instantiation from config). Reads outside project root require `requires_external_read: bool = True` in `schema()`.
+   - **Network isolation**: no network calls unless `requires_network: bool = True` declared in `schema()`. Undeclared network access raises `ToolSandboxViolation`.
+2. Add `ToolSandboxViolation` exception to the base class.
+3. Add a static analysis check to `check_skills_hygiene.py` that scans `Tool` subclasses for undeclared dangerous builtins at commit time.
+4. Update the T1-E-01 backlog description to reference this constraint.
+
+**Note**: This constraint is a design gate for T1-E-01, not a separate implementation sprint. It should be captured in the `Tool` ABC interface document before the first concrete subclass is written.
+
+---
+
+## HIB-045 — False-positive rate as a proactive harness health metric
+
+**Date**: 2026-05-31
+**Source**: Gap analysis — reactive vs proactive false-positive handling; Google rule-disablement research
+**Pillar**: T1-G / Gate trust & calibration; T1-D-03 / Dream phase
+**Status**: 📅 Backlog — medium effort, v1.3.0+ consideration
+
+**Problem**: `harness_health.py` tracks verdict distributions but does not compute per-capability false-positive rate as a trend metric. The current false-positive handling (T1-L-10 eval regression, T1-G-06 rebuttal protocol) is entirely reactive — a developer must file a rebuttal before the calibration issue is surfaced. Research finding: false-positive rate is the primary predictor of governance tool abandonment. Google's internal tooling uses >10% false-positive rate as the threshold for automatic rule disablement review. The harness has no equivalent proactive signal.
+
+**Suggested changes**:
+1. For each capability (BRANCH_ISOLATION, ANTI_PATTERNS, CLEAN_ARCH, etc.), compute:
+   ```
+   bypass_rate = structured_bypasses_last_30d / (FAIL_verdicts_last_30d + structured_bypasses_last_30d)
+   ```
+   where `structured_bypasses_last_30d` counts `SKIP_REASON` events and accepted rebuttals for that capability from `harness_events.jsonl` and `.ai-review-log.jsonl`.
+2. If `bypass_rate > 0.15` for any capability, emit a `DEGRADING` signal in `harness_health.py` output.
+3. Automatically generate a dream phase proposal flagging the calibration issue — rather than waiting for a developer to file a rebuttal. Proposal format: same as existing `__open.md` proposals but with `action: calibrate_capability`, `capability: BRANCH_ISOLATION`, `evidence: bypass_rate=0.22 over 30d (11 bypasses / 50 FAILs)`.
+4. Add `bypass_rate` to the per-capability health report table in `harness_health.py` output regardless of whether it crosses the threshold — visibility is the first step.
+
+**Rationale**: Closes the gap between reactive false-positive handling (T1-L-10, T1-G-06) and proactive calibration monitoring. The dream phase proposal mechanism (T1-D-03) is already in place — this HIB wires a new trigger signal into it.
