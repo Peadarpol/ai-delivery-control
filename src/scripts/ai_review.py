@@ -508,6 +508,65 @@ HIGH_RISK_PATTERNS = {
 }
 
 
+def _load_layer_paths_from_config() -> Dict[str, str]:
+    """Load layer name → path from architecture.layers in .agent/config.yaml.
+
+    Returns a dict mapping each layer name to its path prefix, e.g.
+    {"domain": "src/domain", "application": "src/application", ...}.
+    Returns an empty dict when the config is absent, the architecture.layers
+    section is missing, or all paths are unresolved install-time placeholders.
+    """
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return {}
+
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        layers: Dict[str, str] = {}
+        in_architecture = False
+        in_layers = False
+        current_name: Optional[str] = None
+
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            indent = len(line) - len(line.lstrip())
+
+            if stripped == "architecture:":
+                in_architecture = True
+                in_layers = False
+                current_name = None
+                continue
+
+            if in_architecture:
+                if indent == 0:
+                    break  # Exited architecture: section
+
+                if stripped == "layers:":
+                    in_layers = True
+                    current_name = None
+                    continue
+
+                if in_layers:
+                    if indent <= 2 and not stripped.startswith("-"):
+                        in_layers = False
+                        continue
+
+                    if stripped.startswith("- name:"):
+                        current_name = stripped.split(":", 1)[1].strip().strip("\"'")
+                    elif stripped.startswith("path:") and current_name is not None:
+                        path_val = stripped.split(":", 1)[1].strip().strip("\"'")
+                        # Skip unresolved install-time placeholders like "[PROJECT_SRC_PATH]/domain"
+                        if path_val and not path_val.startswith("["):
+                            layers[current_name] = path_val
+
+        return layers
+    except Exception:
+        return {}
+
+
 def _load_high_risk_patterns() -> Dict[str, List[str]]:
     """Load high_risk_patterns from .agent/config.yaml.
 
@@ -647,23 +706,42 @@ def build_route_decision(
     # 1. Determine active capability tools by path and content matching
     changed_normalized = [f.replace("\\", "/") for f in changed_files]
 
-    has_db_or_srv = any(
-        "src/infrastructure/database/repositories/" in f
-        or "src/application/services/" in f
-        for f in changed_normalized
-    )
-    has_domain_or_models = any(
-        "src/domain/schemas/" in f or "src/infrastructure/database/models.py" in f
-        for f in changed_normalized
-    )
-    has_api = any("src/presentation/api/" in f for f in changed_normalized)
+    # Config-driven layer path routing (replaces GymBase hardcoded paths).
+    # Reads architecture.layers from .agent/config.yaml; falls back to
+    # ADR-annotation-only activation when no layers are configured.
+    _layer_paths = _load_layer_paths_from_config()
+
+    if _layer_paths:
+        _app_paths = [p for n, p in _layer_paths.items()
+                      if any(k in n.lower() for k in ("application", "service"))]
+        _infra_paths = [p for n, p in _layer_paths.items()
+                        if any(k in n.lower() for k in ("infrastructure", "repository"))]
+        _domain_paths = [p for n, p in _layer_paths.items()
+                         if any(k in n.lower() for k in ("domain", "model"))]
+        _api_paths = [p for n, p in _layer_paths.items()
+                      if any(k in n.lower() for k in ("presentation", "api"))]
+
+        def _touches(paths: List[str]) -> bool:
+            return any(
+                f.startswith(lp.rstrip("/") + "/")
+                for f in changed_normalized
+                for lp in paths
+            )
+
+        has_db_or_srv = _touches(_app_paths) or _touches(_infra_paths)
+        has_domain_or_models = _touches(_domain_paths)
+        has_api = _touches(_api_paths)
+        has_clean_arch = _touches(list(_layer_paths.values()))
+    else:
+        # No layers configured — path-based routing disabled.
+        # TRANSACTIONAL_INTEGRITY and BRANCH_ISOLATION activate only via
+        # ADR annotations or content-based pattern matching.
+        has_db_or_srv = False
+        has_domain_or_models = False
+        has_api = False
+        has_clean_arch = False
+
     has_migrations = any("migrations/versions/" in f for f in changed_normalized)
-    has_clean_arch = any(
-        f.startswith("src/domain/")
-        or f.startswith("src/application/")
-        or f.startswith("src/infrastructure/")
-        for f in changed_normalized
-    )
 
     # Content-based checks
     is_tx = has_db_or_srv or any(
@@ -1011,13 +1089,10 @@ Your review must cover:
 - CODE QUALITY: Bugs, security issues (injection, unvalidated input, exposed secrets),
   unhandled errors/edge cases, breaking changes to interfaces or contracts.
 - ANTI-PATTERNS: Language-specific bad practices, dead code, stale comments left behind.
-- TRANSACTIONAL INTEGRITY: In service methods, verify that flush()/commit() usage follows
-  the Unit of Work pattern. Services MUST call uow.commit() explicitly inside a 'with self.uow:'
-  block. Repositories must NEVER call commit().
-- BRANCH ISOLATION: In repository query methods, verify that branch-scoped entities use
-  _apply_branch_filter(stmt). The pattern 'if self.branch_id: stmt = stmt.where(...)' is a
-  security bug.
-- MASS ASSIGNMENT: Verify that new Pydantic input schemas set model_config = {"extra": "forbid"}.
+- PROJECT-SPECIFIC CHECKS: Apply all project-specific capability checks
+  listed in the Project Architecture Guidelines section of this review.
+- MASS ASSIGNMENT: Verify input schemas protect against mass assignment
+  vulnerabilities per the project's configured validation framework.
 
 Severity calibration (critical — follow precisely):
 - HIGH: Actual bugs that would cause runtime failures, security vulnerabilities (injection,
@@ -1273,10 +1348,12 @@ def _write_halt_file(msg: str):
     # ISO 8601 UTC timestamp
     now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
     
+    session_id = _get_active_session_id() or "unknown-session"
     data = {
         "reason": "token_budget_exhausted",
         "message": msg,
         "timestamp": now_utc,
+        "session_id": session_id,
     }
     
     halt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2551,23 +2628,26 @@ def _run_review() -> int:
             
     spent = 0
     if session_file.exists():
-        with _lock_session(session_file):
-            try:
-                with open(session_file, "r", encoding="utf-8") as f:
-                    sdata = json.load(f)
-                    usage = sdata.get("token_usage", {})
-                    
-                    # Deliberate conservative accounting: cache_read_input_tokens is included in the budget sum
-                    # at full token weight (1:1), even though Anthropic prices cache reads at roughly 10% of regular
-                    # input token cost. This is safe and prevents underestimating actual spend.
-                    spent = (
-                        usage.get("input_tokens", 0)
-                        + usage.get("output_tokens", 0)
-                        + usage.get("reasoning_tokens", 0)
-                        + usage.get("cache_read_input_tokens", 0)
-                    )
-            except Exception:
-                pass
+        try:
+            with _lock_session(session_file):
+                try:
+                    with open(session_file, "r", encoding="utf-8") as f:
+                        sdata = json.load(f)
+                        usage = sdata.get("token_usage", {})
+                        
+                        # Deliberate conservative accounting: cache_read_input_tokens is included in the budget sum
+                        # at full token weight (1:1), even though Anthropic prices cache reads at roughly 10% of regular
+                        # input token cost. This is safe and prevents underestimating actual spend.
+                        spent = (
+                            usage.get("input_tokens", 0)
+                            + usage.get("output_tokens", 0)
+                            + usage.get("reasoning_tokens", 0)
+                            + usage.get("cache_read_input_tokens", 0)
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"⚠️  [GATE WARNING] Failed to lock session file: {e}", file=sys.stderr)
 
     if budget is not None and spent >= budget:
         msg = f"Your session has passed 100% of its token budget ({spent} / {budget} tokens). Run context compaction before starting your next session."
@@ -2857,57 +2937,60 @@ def _run_review() -> int:
 
         # Update session.json rolling spent and trigger Warn/Halt checks
         if session_file.exists():
-            with _lock_session(session_file):
-                try:
-                    with open(session_file, "r", encoding="utf-8") as f:
-                        sdata = json.load(f)
-                    
-                    usage = sdata.setdefault("token_usage", {})
-                    usage["input_tokens"] = usage.get("input_tokens", 0) + in_tokens
-                    usage["output_tokens"] = usage.get("output_tokens", 0) + out_tokens
-                    usage["reasoning_tokens"] = usage.get("reasoning_tokens", 0) + reas_tokens
-                    usage["cache_read_input_tokens"] = usage.get("cache_read_input_tokens", 0) + cache_tokens
-                    usage["context_load_estimated_tokens"] = usage.get("context_load_estimated_tokens", 0) + int(context_load_est)
-                    usage["repo_map_estimated_tokens"] = usage.get("repo_map_estimated_tokens", 0) + int(repo_map_est)
-                    usage["adr_injection_estimated_tokens"] = usage.get("adr_injection_estimated_tokens", 0) + int(adr_injection_est)
-                    usage["call_count"] = usage.get("call_count", 0) + 1
-                    
-                    with open(session_file, "w", encoding="utf-8") as f:
-                        json.dump(sdata, f, indent=4)
+            try:
+                with _lock_session(session_file):
+                    try:
+                        with open(session_file, "r", encoding="utf-8") as f:
+                            sdata = json.load(f)
                         
-                    # Deliberate conservative accounting: cache_read_input_tokens is included in the budget sum
-                    # at full token weight (1:1), even though Anthropic prices cache reads at roughly 10% of regular
-                    # input token cost. This is safe and prevents underestimating actual spend.
-                    new_spent = (
-                        usage["input_tokens"]
-                        + usage["output_tokens"]
-                        + usage["reasoning_tokens"]
-                        + usage.get("cache_read_input_tokens", 0)
-                    )
-                    if budget is not None:
-                        if new_spent >= budget:
-                            msg = f"Your session has passed 100% of its token budget ({new_spent} / {budget} tokens). Run context compaction before starting your next session."
-                            _write_halt_file(msg)
+                        usage = sdata.setdefault("token_usage", {})
+                        usage["input_tokens"] = usage.get("input_tokens", 0) + in_tokens
+                        usage["output_tokens"] = usage.get("output_tokens", 0) + out_tokens
+                        usage["reasoning_tokens"] = usage.get("reasoning_tokens", 0) + reas_tokens
+                        usage["cache_read_input_tokens"] = usage.get("cache_read_input_tokens", 0) + cache_tokens
+                        usage["context_load_estimated_tokens"] = usage.get("context_load_estimated_tokens", 0) + int(context_load_est)
+                        usage["repo_map_estimated_tokens"] = usage.get("repo_map_estimated_tokens", 0) + int(repo_map_est)
+                        usage["adr_injection_estimated_tokens"] = usage.get("adr_injection_estimated_tokens", 0) + int(adr_injection_est)
+                        usage["call_count"] = usage.get("call_count", 0) + 1
+                        
+                        with open(session_file, "w", encoding="utf-8") as f:
+                            json.dump(sdata, f, indent=4)
                             
-                            # Print 100% Halt warning
-                            print("\n" + "\033[91m" + "=" * 60 + "\033[0m")
-                            print("\033[91;1m  ⚠️ [GATE WARNING] SESSION TOKEN BUDGET EXHAUSTED  \033[0m")
-                            print(f"  Total Spent: {new_spent} tokens | Budget: {budget} tokens")
-                            print("  Your commit has been recorded, but subsequent commits will be blocked.")
-                            print("\n  Please run context compaction meta-skill:")
-                            print("     python .agent/skills/meta/validate.py")
-                            print("  And re-initialize your session:")
-                            print("     python .agent/scripts/init_session.py")
-                            print("\033[91m" + "=" * 60 + "\033[0m\n")
-                        elif new_spent >= 0.8 * budget:
-                            # Print 80% Warning
-                            print("\n" + "\033[93m" + "=" * 60 + "\033[0m")
-                            print("\033[93;1m  ⚠️  [GATE] BUDGET WARNING: SESSION NEAR CEILING  \033[0m")
-                            print(f"  Spent: {new_spent} tokens | Budget: {budget} tokens (>= 80% limit)")
-                            print("  Your session has passed 80% of its token budget. Run context compaction before starting your next session.")
-                            print("\033[93m" + "=" * 60 + "\033[0m\n")
-                except Exception:
-                    pass
+                        # Deliberate conservative accounting: cache_read_input_tokens is included in the budget sum
+                        # at full token weight (1:1), even though Anthropic prices cache reads at roughly 10% of regular
+                        # input token cost. This is safe and prevents underestimating actual spend.
+                        new_spent = (
+                            usage["input_tokens"]
+                            + usage["output_tokens"]
+                            + usage["reasoning_tokens"]
+                            + usage.get("cache_read_input_tokens", 0)
+                        )
+                        if budget is not None:
+                            if new_spent >= budget:
+                                msg = f"Your session has passed 100% of its token budget ({new_spent} / {budget} tokens). Run context compaction before starting your next session."
+                                _write_halt_file(msg)
+                                
+                                # Print 100% Halt warning
+                                print("\n" + "\033[91m" + "=" * 60 + "\033[0m", file=sys.stderr)
+                                print("\033[91;1m  ⚠️ [GATE WARNING] SESSION TOKEN BUDGET EXHAUSTED  \033[0m", file=sys.stderr)
+                                print(f"  Total Spent: {new_spent} tokens | Budget: {budget} tokens", file=sys.stderr)
+                                print("  Your commit has been recorded, but subsequent commits will be blocked.", file=sys.stderr)
+                                print("\n  Please run context compaction meta-skill:", file=sys.stderr)
+                                print("     python .agent/skills/meta/validate.py", file=sys.stderr)
+                                print("  And re-initialize your session:", file=sys.stderr)
+                                print("     python .agent/scripts/init_session.py", file=sys.stderr)
+                                print("\033[91m" + "=" * 60 + "\033[0m\n", file=sys.stderr)
+                            elif new_spent >= 0.8 * budget:
+                                # Print 80% Warning
+                                print("\n" + "\033[93m" + "=" * 60 + "\033[0m", file=sys.stderr)
+                                print("\033[93;1m  ⚠️  [GATE] BUDGET WARNING: SESSION NEAR CEILING  \033[0m", file=sys.stderr)
+                                print(f"  Spent: {new_spent} tokens | Budget: {budget} tokens (>= 80% limit)", file=sys.stderr)
+                                print("  Your session has passed 80% of its token budget. Run context compaction before starting your next session.", file=sys.stderr)
+                                print("\033[93m" + "=" * 60 + "\033[0m\n", file=sys.stderr)
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"⚠️  [GATE WARNING] Failed to lock session file for update: {e}", file=sys.stderr)
 
     except ValidationError as exc:
         fail_reason = f"ReviewVerdict validation failed: {exc}"

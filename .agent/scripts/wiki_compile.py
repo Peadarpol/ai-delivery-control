@@ -31,59 +31,54 @@ CONFIG_PATH = Path(".agent/config.yaml")
 STATE_FILE = Path(".agent/state/wiki_compile_state.json")
 WIKI_DIR = Path(".agent/wiki")
 
-DOMAIN_REGISTRY = {
-    "clean_architecture": {
-        "sources": [
-            "docs/decisions/adr/adr_001_clean_architecture.md",
-            "docs/decisions/adr/adr_006_clean_architecture_refactoring.md",
-        ],
-        "output": ".agent/wiki/clean_architecture.md",
-    },
-    "branch_isolation": {
-        "sources": ["docs/decisions/adr/adr_002_multi_tenant_branch_isolation.md"],
-        "output": ".agent/wiki/branch_isolation.md",
-    },
-    "multi_branch_schema": {
-        "sources": ["docs/decisions/adr/adr_003_multi_branch_schema.md"],
-        "output": ".agent/wiki/multi_branch_schema.md",
-    },
-    "session_authentication": {
-        "sources": ["docs/decisions/adr/adr_004_session_authentication.md"],
-        "output": ".agent/wiki/session_authentication.md",
-    },
-    "saas_architecture": {
-        "sources": ["docs/decisions/adr/adr_005_saas_architecture.md"],
-        "output": ".agent/wiki/saas_architecture.md",
-    },
-    "public_brand_config_api": {
-        "sources": ["docs/decisions/adr/adr_007_public_brand_config_api.md"],
-        "output": ".agent/wiki/public_brand_config_api.md",
-    },
-    "communication_system_strategy": {
-        "sources": ["docs/decisions/adr/adr_008_communication_system_strategy.md"],
-        "output": ".agent/wiki/communication_system_strategy.md",
-    },
-    "payment_hardware_strategy": {
-        "sources": ["docs/decisions/adr/adr_009_payment_hardware_strategy.md"],
-        "output": ".agent/wiki/payment_hardware_strategy.md",
-    },
-    "trainer_conflict_global_integrity": {
-        "sources": ["docs/decisions/adr/adr_010_trainer_conflict_global_integrity.md"],
-        "output": ".agent/wiki/trainer_conflict_global_integrity.md",
-    },
-    "pos_booking_payments": {
-        "sources": ["docs/decisions/adr/adr_011_pos_booking_payments.md"],
-        "output": ".agent/wiki/pos_booking_payments.md",
-    },
-    "pt_infrastructure_hardening": {
-        "sources": ["docs/decisions/adr/adr_012_pt_infrastructure_hardening.md"],
-        "output": ".agent/wiki/pt_infrastructure_hardening.md",
-    },
-    "remove_uow_autocommit": {
-        "sources": ["docs/decisions/adr/adr_013_remove_uow_autocommit.md"],
-        "output": ".agent/wiki/remove_uow_autocommit.md",
-    },
-}
+def load_domain_registry(config_path: "Path | None" = None) -> dict:
+    """Load the wiki domain registry from .agent/config.yaml::wiki_domains.
+
+    Each entry maps a domain name to a list of ADR source file paths.
+    The output path is derived automatically as .agent/wiki/{domain}.md.
+
+    Domains whose source files are ALL missing are silently skipped — no
+    [FILE NOT FOUND] pages are compiled for absent ADRs. This makes the
+    framework safe to install on projects that have not yet written their ADRs.
+
+    Returns an empty dict when:
+    - config.yaml is absent
+    - the wiki_domains section is missing or empty
+    - all configured domains have no existing source files
+    """
+    resolved_config = Path(config_path) if config_path else CONFIG_PATH
+    if not resolved_config.exists():
+        return {}
+
+    try:
+        with open(resolved_config, encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+
+    wiki_domains = raw.get("wiki_domains") or {}
+    if not wiki_domains:
+        return {}
+
+    registry = {}
+    for domain_name, sources in wiki_domains.items():
+        if not isinstance(sources, list) or not sources:
+            continue
+        # Skip domains where every source file is missing
+        existing = [s for s in sources if Path(s).exists()]
+        if not existing:
+            continue
+        registry[domain_name] = {
+            "sources": sources,          # keep full list; compile_domain handles per-file
+            "output": f".agent/wiki/{domain_name}.md",
+        }
+
+    return registry
+
+
+# Module-level constant populated from config for backward-compat imports
+# (ai_review.py does: from wiki_compile import DOMAIN_REGISTRY)
+DOMAIN_REGISTRY = load_domain_registry()
 
 COMPILE_PROMPT = """You are compiling a concise wiki page for an AI code review system.
 
@@ -372,7 +367,7 @@ def main() -> None:
             f"Wiki compile: {updated_count}/{len(DOMAIN_REGISTRY)} pages updated ({provider} unreachable — will retry next session)"
         )
         # Still update state for the ones that succeeded
-        state["last_run_utc"] = now_utc
+        state["last_failure_utc"] = now_utc
         state["domains_compiled"] = len(state["last_source_hashes"])
         generate_index_md(state)
         save_state(state)
@@ -380,6 +375,7 @@ def main() -> None:
 
     if not args.dry_run:
         state["last_run_utc"] = now_utc
+        state.pop("last_failure_utc", None)
         state["domains_compiled"] = len(state["last_source_hashes"])
         generate_index_md(state)
         save_state(state)

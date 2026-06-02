@@ -277,3 +277,35 @@ architecture_checks:
 spec_gate:
   specs_path: docs/planning/specs/
 
+# Outer loop methodology profile
+# Controls how the spec quality gate and BA/PM workflows enforce requirements.
+#
+# discovery    — exploratory projects where end state is unknown. Spec gate
+#               downgrades from BLOCK to WARN (exit 0). Assumption resolution
+#               is advisory. Gherkin not required in acceptance criteria.
+#
+# incremental  — (DEFAULT) macro scope known, delivery is feature-by-feature.
+#               Spec gate blocks on structural failures. Gherkin required.
+#               This is the designed-for mode.
+#
+# contractual  — fixed requirements baseline, regulated or client-contracted
+#               delivery. Spec gate is maximally strict. No bypass paths
+#               available. All assumptions must be resolved before APPROVED.
+#               Traceability check (T1-L-04, when delivered) will be mandatory
+#               with no --no-trace flag.
+outer_loop:
+  mode: incremental
+
+# Wiki Knowledge Base Domains (T1-H-06)
+# Add one entry per architectural domain you want compiled into the harness wiki.
+# Each entry: domain_name followed by a list of source ADR file paths (relative to project root).
+# Domains whose source files are all absent are skipped gracefully — no errors, no empty pages.
+# Example:
+# wiki_domains:
+#   branch_isolation:
+#     - docs/decisions/adr/adr_002_multi_tenant_branch_isolation.md
+#   clean_architecture:
+#     - docs/decisions/adr/adr_001_clean_architecture.md
+#     - docs/decisions/adr/adr_006_clean_architecture_refactoring.md
+wiki_domains: {}
+
