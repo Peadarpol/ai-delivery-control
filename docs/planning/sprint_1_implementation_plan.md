@@ -28,17 +28,17 @@ The scope includes three key capabilities that complete the requirement-to-repos
 
 > [!IMPORTANT]
 > **T1-L-00 Completion Checklist — verify all six before proceeding**
-> - [ ] `outer_loop.mode: discovery | incremental | contractual` added to
+> - [x] `outer_loop.mode: discovery | incremental | contractual` added to
 >       `bootstrap/templates/config.yaml.template` with `incremental` as default
-> - [ ] `check_spec.py` retrofitted — `discovery` mode downgrades gate to advisory
+> - [x] `check_spec.py` retrofitted — `discovery` mode downgrades gate to advisory
 >       (WARN + exit 0); `contractual` mode tightens assumption-resolution requirement
-> - [ ] `business-analyst.md` updated — mode-conditional steps documented at each
+> - [x] `business-analyst.md` updated — mode-conditional steps documented at each
 >       phase where enforcement differs by mode
-> - [ ] `outer_loop.mode` read and respected in `check_traceability.py` design
+> - [x] `outer_loop.mode` read and respected in `check_traceability.py` design
 >       confirmed (discovery → advisory; contractual → no `--no-trace` available)
-> - [ ] `outer_loop.mode` read and respected in `acceptance_check.py` design
+> - [x] `outer_loop.mode` read and respected in `acceptance_check.py` design
 >       confirmed (discovery → advisory; contractual → `--strict` implied)
-> - [ ] Mode assumptions documented in `docs/getting-started.md` — users understand
+> - [x] Mode assumptions documented in `docs/getting-started.md` — users understand
 >       which mode they are in and what it means for outer loop enforcement
 
 > [!IMPORTANT]

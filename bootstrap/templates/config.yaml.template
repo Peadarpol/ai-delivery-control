@@ -296,6 +296,19 @@ spec_gate:
 outer_loop:
   mode: incremental
 
+# Requirement Traceability Gate (T1-L-04)
+traceability:
+  specs_path: docs/planning/specs/
+
+# Acceptance Gate (T1-L-05)
+acceptance_gate:
+  base_branch: main
+  migration_paths:
+    - migrations/versions/
+    - alembic/versions/
+    - db/migration/
+    - migrations/
+
 # Wiki Knowledge Base Domains (T1-H-06)
 # Add one entry per architectural domain you want compiled into the harness wiki.
 # Each entry: domain_name followed by a list of source ADR file paths (relative to project root).

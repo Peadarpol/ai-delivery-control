@@ -11,12 +11,15 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows
 if sys.platform == "win32":
     import io
-
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+    try:
+        if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+        if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+    except Exception:
+        pass
 
 EVENTS_LOG_PATH = Path(".agent/state/harness_events.jsonl")
 SESSION_FILE = Path(".agent/state/session.json")

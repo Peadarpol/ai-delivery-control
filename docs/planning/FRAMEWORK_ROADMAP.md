@@ -224,16 +224,15 @@ S0-05 must be cut before any beta invitations are sent.
 | ID | Item | Effort | Status |
 |----|------|--------|--------|
 | T1-I-02 | Token budget tracking per session | Low | ✅ |
-| T1-I-07 | Session token budget with WARN/HALT | Low | ⬜ |
+| T1-I-07 | Session token budget with WARN/HALT | Low | ✅ (2026-06-02 pre-sprint) — wiring of ai_review.py → session.json completed 2026-06-02 pre-sprint |
 | T1-M-06 | Context compaction template | Low | ✅ |
 | T1-G-08 | Diff size review strategy | Low | ✅ |
 
-> **T1-I-07 partial delivery note (identified 2026-06-02)**: The HALT mechanism,
-> file format, and threshold logic exist. `ai_review.py` does not write back to
-> `session.json` token counters after each review call — the running session
-> total is always zero for review calls, so the 80% WARN and 100% HALT
-> thresholds never fire during a session. Wiring `ai_review.py` → `session.json`
-> is the missing component; scheduled as a pre-Sprint-1 immediate item.
+> **T1-I-07 resolved (2026-06-02 pre-sprint)**: The HALT mechanism, file format,
+> and threshold logic existed at v1.1.5 delivery. The missing wiring —
+> `ai_review.py` incrementing the session token counter after each review call —
+> was completed as a pre-Sprint-1 item. The 80% WARN and 100% HALT thresholds
+> now fire correctly during sessions that include review gate calls.
 
 ---
 
@@ -319,7 +318,7 @@ S0-05 must be cut before any beta invitations are sent.
 |----|------|----------|--------|
 | T1-I-00a | Consolidate audit logs → harness_events.jsonl | Memory prereq | ⬜ |
 | T1-I-00b | Audit audit_logger.py wiring | Memory prereq | ⬜ |
-| T1-D-00 | skill_ownership.yaml — dream phase routing map | Chain B prereq | ⬜ |
+| T1-D-00 | skill_ownership.yaml — dream phase routing map | Chain B prereq | ✅ (2026-06-02 pre-sprint) |
 | T1-C-01 | Retrospective session outcome inference + post-commit heartbeat | Chain B foundation | ✅ (v1.1.5) |
 | T1-I-03 | Outcome-aware session startup orientation | Chain B | ✅ (v1.1.5) |
 | T1-D-03 | Dream phase distillation (distill_dream.py) | Chain B capstone | ✅ (v1.1.5) |
@@ -470,13 +469,12 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - ✅ HIB-038 — Migration chain contiguity assertion (`_assert_chain_contiguous`, fork resolution)
 - ✅ BUG-10 — Harness Gitignore Enforcements (v1.2.0.1 patch release, 2026-05-31)
 
-**Immediate pre-sprint items (before Sprint 1 begins — low effort, high impact)**:
+**Pre-sprint items — all delivered ✅ (2026-06-02)**:
 
 These items were identified by direct code inspection (`docs/planning/CAPABILITY_INVENTORY.md`,
-2026-06-02) as blocking core value propositions. All are low effort. All should
-be completed before Sprint 1 begins.
+2026-06-02) as blocking core value propositions. All were completed before Sprint 1 began.
 
-1. **T1-D-00 + BUG-11** (same PR) — Create `.agent/config/skill_ownership.yaml`.
+1. ✅ **T1-D-00 + BUG-11** (same PR) — Create `.agent/config/skill_ownership.yaml`.
    The dream phase (T1-D-03 ✅) is live but routing ALL patterns to fallback
    skills because the routing map was never created. Every dream proposal
    generated today is mis-attributed. Configuration file only, no code required.
@@ -484,18 +482,18 @@ be completed before Sprint 1 begins.
    `.ai-review-log.jsonl` uses `blocking_concern` — all AI review FAILs are
    classified as `"review_failure"` regardless of actual concern. One-line fix.
 
-2. **BUG-12** — Fix wiki compile cold-start failure. `wiki_compile.py` updates
+2. ✅ **BUG-12** — Fix wiki compile cold-start failure. `wiki_compile.py` updates
    the 7-day cooldown timestamp even when compilation fails (Ollama not running,
    ADR files missing). A developer without Ollama silently has no wiki context
    for their first week. Fix: do not update `last_run_utc` on failure; use 1-day
    retry cooldown on failure instead of 7-day success cooldown.
 
-3. **BUG-13** — Sync E2E test project `ai_review.py`. The file at
+3. ✅ **BUG-13** — Sync E2E test project `ai_review.py`. The file at
    `tests/e2e/test_project/src/scripts/ai_review.py` is stale (git status shows
    M) and does not include the rebuttal protocol (T1-G-06 ✅). E2E tests do not
    test what ships. Sync to current framework source.
 
-4. **T1-I-07 wiring** — Wire `ai_review.py` token counts to `session.json`.
+4. ✅ **T1-I-07 wiring** — Wire `ai_review.py` token counts to `session.json`.
    The HALT mechanism and file format exist. No code path currently increments
    the session token counter from review gate calls — the v1.1.5 success
    criterion ("a session approaching the token budget ceiling receives a WARN")
@@ -503,13 +501,24 @@ be completed before Sprint 1 begins.
    `session.json`, add `token_usage` from the `ReviewVerdict` to the running
    session totals, write back atomically via `_lock_session()`.
 
-5. **S0-24** — De-GymBase-ify functional code (see S0-24 scope note in v1.1.0
+5. ✅ **S0-24** — De-GymBase-ify functional code (see S0-24 scope note in v1.1.0
    section). Must complete before S0-23 (README pre-Reddit additions) goes live.
 
-6. **T1-L-00** — Outer loop methodology profile system. Design gate for all
+6. ✅ **T1-L-00** — Outer loop methodology profile system. Design gate for all
    remaining T1-L work. Retrofit `check_spec.py` and `/business-analyst` workflow
    to add `outer_loop.mode` awareness (`discovery` / `incremental` / `contractual`).
    Estimated: half-day design + audit, small code changes.
+
+**v1.3.0 pre-sprint design gate**:
+T1-L-00 (outer loop methodology profile system) must be completed before
+any T1-L-03 through T1-L-07 implementation begins. Includes retrofit of
+already-delivered T1-L-01 (check_spec.py) and T1-L-02 (/business-analyst
+workflow) to add mode-awareness. Early-stage delivery means retrofit cost
+is low; correctness benefit is high. Estimated: half-day design + audit,
+small code changes to check_spec.py and business-analyst.md.
+
+Note: T1-L-00 is now ✅ delivered as of the pre-sprint foundations work.
+This note is preserved as a historical record of the sequencing decision.
 
 ---
 
@@ -523,6 +532,29 @@ before this begins):
 3. T1-L-05 — Acceptance gate
 4. T1-L-07 — Incident → backlog pipeline
 5. T1-M-03 — Mid-session observability
+
+**Sprint 2** (Proposed Sprint 2 theme — "Close Convention-to-Enforcement Gaps and Complete Two-Layer Architecture"):
+
+The capability inventory revealed the framework's weakest structural point: a significant number of governance mechanisms depend entirely on agent compliance with AGENTS.md text, with no automation backstop. The gate is the only hard mechanism. As the framework moves toward enterprise use cases (Tier 2, Tier 3), convention-only mechanisms will be the first things scrutinised in any governance review.
+
+Sprint 2 should address this as a coherent theme:
+
+Convention → automation items:
+- T1-J-01 (automatic git stash at session start — if not in Sprint 1)
+- BUG-15 (check_halt.py pre-commit hook)
+- T1-N-02 (concurrent write safety — promote from multi-agent milestone)
+- T1-I-00b ✅ verified (circuit_breaker.py caller found) → T1-I-00a required in Sprint 2 before T1-I-01
+
+Two-layer architecture completion:
+- T1-B-01 (Universal Context file — UNIVERSAL_CONTEXT.md)
+- T1-A-09 (AGENTS.md split into universal + project layers)
+
+Memory system foundations:
+- T1-I-01 (memory tiering — hot/warm/cold with explicit retention)
+- T1-I-04 (automated staleness detection)
+
+Bug fixes (can be in Sprint 2 or immediate):
+- BUG-14 through BUG-18 (all low effort, no dependencies)
 
 **Deferred from v1.3.0 to v1.3.1 or v1.4.0** (low effort but not blocking Sprint 1):
 - T1-C-02 — Structured HITL approval queue

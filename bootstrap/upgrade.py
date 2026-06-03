@@ -62,7 +62,7 @@ def colorize_line(line: str) -> str:
     return line
 
 class UpgradeManager:
-    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False, target_version: str = "1.2.0.1"):
+    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False, target_version: str = "1.3.0"):
         self.project_path = project_path.resolve()
         self.framework_path = Path(__file__).resolve().parent.parent
         self.dry_run = dry_run

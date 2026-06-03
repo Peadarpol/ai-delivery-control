@@ -509,14 +509,16 @@ def _read_config_provider() -> str | None:
 def get_provider(
     provider_name: str | None = None,
     model: str | None = None,
+    tier: str | None = None,
 ) -> ReviewProvider:
     """Factory function with availability verification.
 
     Resolution order:
       1. ``provider_name`` argument (explicit)
-      2. ``AI_REVIEW_PROVIDER`` environment variable
-      3. ``.agent/config.yaml`` ``ai_review.provider`` field
-      4. Default: ``"anthropic"``
+      2. ``tier`` argument (resolves provider and model from config model_routing)
+      3. ``AI_REVIEW_PROVIDER`` environment variable
+      4. ``.agent/config.yaml`` ``ai_review.provider`` field
+      5. Default: ``"anthropic"``
 
     SEC-01: Logs selected provider name in stdout for audit traceability.
     The ``verdict_tier`` field in ``ReviewVerdict`` captures cloud vs local.
@@ -527,6 +529,7 @@ def get_provider(
     Args:
         provider_name: Override the provider selection.
         model: Override the model name (provider-specific).
+        tier: Optional model tier (e.g. 'budget', 'review') to resolve from config.
 
     Returns:
         An initialised ``ReviewProvider`` instance.
@@ -535,6 +538,20 @@ def get_provider(
         RuntimeError: If the selected provider is not available (missing
                       API key, unreachable endpoint) or unknown.
     """
+    if tier:
+        try:
+            config_path = Path.cwd() / ".agent" / "config.yaml"
+            if config_path.exists():
+                content = config_path.read_text(encoding="utf-8")
+                p_match = re.search(rf"^\s*{tier}_provider:\s*([^\s\n#]+)", content, re.MULTILINE)
+                m_match = re.search(rf"^\s*{tier}_model:\s*([^\s\n#]+)", content, re.MULTILINE)
+                if p_match and not provider_name:
+                    provider_name = p_match.group(1).strip().strip("\"'")
+                if m_match and not model:
+                    model = m_match.group(1).strip().strip("\"'")
+        except Exception:
+            pass
+
     # 1. Resolve provider name
     name = (
         provider_name
