@@ -27,7 +27,6 @@ import json
 import os
 import random
 import re
-import threading
 import time
 import urllib.error
 import urllib.request
@@ -108,19 +107,6 @@ class ReviewProvider(ABC):
         ...
 
     @property
-    def last_token_usage(self) -> Dict[str, int]:
-        """Return thread-safe token usage of the last request."""
-        if not hasattr(self, "_local_state"):
-            self._local_state = threading.local()
-        return getattr(self._local_state, "last_token_usage", {})
-
-    @last_token_usage.setter
-    def last_token_usage(self, value: Dict[str, int]) -> None:
-        if not hasattr(self, "_local_state"):
-            self._local_state = threading.local()
-        self._local_state.last_token_usage = value
-
-    @property
     @abstractmethod
     def name(self) -> str:
         """Provider identifier for logging (e.g., 'anthropic', 'openai')."""
@@ -198,14 +184,6 @@ class AnthropicProvider(ReviewProvider):
         )
 
         body = json.loads(call_api_with_retry(req).decode("utf-8"))
-        # Thread-safe token usage tracking
-        usage = body.get("usage", {})
-        self.last_token_usage = {
-            "input_tokens": usage.get("input_tokens", 0),
-            "output_tokens": usage.get("output_tokens", 0),
-            "reasoning_tokens": usage.get("thinking_tokens", 0),
-            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
-        }
         raw = body["content"][0]["text"].strip()
         raw = _strip_json_fences(raw)
         return json.loads(raw)
@@ -270,16 +248,6 @@ class OpenAIProvider(ReviewProvider):
         )
 
         body = json.loads(call_api_with_retry(req).decode("utf-8"))
-        # Thread-safe token usage tracking
-        usage = body.get("usage", {})
-        completion_details = usage.get("completion_tokens_details", {})
-        reasoning = completion_details.get("reasoning_tokens", 0)
-        self.last_token_usage = {
-            "input_tokens": usage.get("prompt_tokens", 0),
-            "output_tokens": usage.get("completion_tokens", 0),
-            "reasoning_tokens": reasoning,
-            "cache_read_input_tokens": 0,
-        }
         raw = body["choices"][0]["message"]["content"].strip()
         raw = _strip_json_fences(raw)
         return json.loads(raw)
@@ -344,13 +312,6 @@ class OllamaProvider(ReviewProvider):
         body = json.loads(
             call_api_with_retry(req, timeout=120, max_retries=2).decode("utf-8")
         )
-        # Thread-safe token usage tracking
-        self.last_token_usage = {
-            "input_tokens": body.get("prompt_eval_count", 0),
-            "output_tokens": body.get("eval_count", 0),
-            "reasoning_tokens": 0,
-            "cache_read_input_tokens": 0,
-        }
         raw = body.get("response", "{}").strip()
         raw = _strip_json_fences(raw)
         return json.loads(raw)

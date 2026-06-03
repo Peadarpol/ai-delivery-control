@@ -522,46 +522,34 @@ This note is preserved as a historical record of the sequencing decision.
 
 ---
 
-**v1.3.0 priority order (updated post-inventory)**:
+**v1.3.0 Sprint 1 — DELIVERED (2026-06-03)**
+- ✅ T1-L-03 — /project-manager workflow + pm_scaffold.py
+- ✅ T1-L-04 — Requirement → commit traceability (check_traceability.py)
+- ✅ T1-L-05 — Acceptance gate (acceptance_check.py)
+- ✅ Migration module v1_2_0_1_to_v1_3_0.py
+- ✅ 29 E2E scenarios passing, checksums frozen at v1.3.0
 
-**Sprint 1** (after pre-sprint items above are complete; T1-L-00 sign-off required
-before this begins):
+**v1.3.1 Sprint 2 — DELIVERED (2026-06-03)**
+- ✅ T1-I-00a/T1-I-00b — circuit_breaker.py routed to harness_events.jsonl
+- ✅ BUG-15 — check_halt.py as pre-commit hook with fail_fast
+- ✅ T1-N-02 — concurrent write safety via _lock_file in harness_utils.py
+- ✅ T1-B-01 — UNIVERSAL_CONTEXT.md, tool shims converted
+- ✅ T1-A-09 — AGENTS.md split, AGENTS_PROJECT.md created
+- ✅ T1-I-01/T1-I-06 (partial) — memory_manager.py three-tier foundation
+- ✅ T1-I-04 — AST staleness detection in init_session.py
+- ✅ BUG-14 through BUG-18 — all five closed
+- ✅ T1-N-07 — event_type alignment verified
+- ✅ 250 tests passing, 30 E2E scenarios passing, checksums frozen at v1.3.1
 
-1. T1-L-03 — `/project-manager` workflow (pm_scaffold.py, Gherkin-to-task mapping)
-2. T1-L-04 — Requirement → commit traceability
-3. T1-L-05 — Acceptance gate
-4. T1-L-07 — Incident → backlog pipeline
-5. T1-M-03 — Mid-session observability
+**v1.3.2 — Outer Loop Completion & Recovery Foundations**
+📋 PLANNED — next sprint
 
-**Sprint 2** (Proposed Sprint 2 theme — "Close Convention-to-Enforcement Gaps and Complete Two-Layer Architecture"):
+Scope:
+1. T1-L-01a — Spec collision detection (Jaccard similarity on acceptance criteria keywords, stdlib only, check_spec.py extension)
+2. T1-J-01 + T1-J-01a — Automatic git stash at session start (init_session.py) + mid-task checkpointing convention (AGENTS.md). Deliver in same PR. Recovery safety net now required given BUG-15 enforcement is live.
+3. T1-M-03 — Mid-session observability (session_health.py, lightweight diagnostic tool, wired into AGENTS.md)
 
-The capability inventory revealed the framework's weakest structural point: a significant number of governance mechanisms depend entirely on agent compliance with AGENTS.md text, with no automation backstop. The gate is the only hard mechanism. As the framework moves toward enterprise use cases (Tier 2, Tier 3), convention-only mechanisms will be the first things scrutinised in any governance review.
-
-Sprint 2 should address this as a coherent theme:
-
-Convention → automation items:
-- T1-J-01 (automatic git stash at session start — if not in Sprint 1)
-- BUG-15 (check_halt.py pre-commit hook)
-- T1-N-02 (concurrent write safety — promote from multi-agent milestone)
-- T1-I-00b ✅ verified (circuit_breaker.py caller found) → T1-I-00a required in Sprint 2 before T1-I-01
-
-Two-layer architecture completion:
-- T1-B-01 (Universal Context file — UNIVERSAL_CONTEXT.md)
-- T1-A-09 (AGENTS.md split into universal + project layers)
-
-Memory system foundations:
-- T1-I-01 (memory tiering — hot/warm/cold with explicit retention)
-- T1-I-04 (automated staleness detection)
-
-Bug fixes (can be in Sprint 2 or immediate):
-- BUG-14 through BUG-18 (all low effort, no dependencies)
-
-**Deferred from v1.3.0 to v1.3.1 or v1.4.0** (low effort but not blocking Sprint 1):
-- T1-C-02 — Structured HITL approval queue
-- T1-E-01 — Tool ABC subclasses (dependency for v1.5.0 skill quality work)
-- T1-J-01 — Automatic checkpoint before file changes
-- T1-K-01 — Supply chain malware detection (guarddog)
-- T1-M-04 — Minimal team usage guide
+**Active milestone**: v1.4.0 (planning)
 
 ---
 
