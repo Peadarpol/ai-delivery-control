@@ -425,7 +425,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ---
 
-### v2.0.0 — Shared State (Tier 2) 📋 FUTURE
+### v2.0.0 — Shared State (Tier 2) (Team Edition) 📋 FUTURE
 
 **Goal**: Multi-machine, small-team operation. Shared state layer enables cross-developer session history, decision visibility, and distributed governance.
 
@@ -440,7 +440,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - T2-C-01 through T2-C-03: Team bootstrap, shared skill registry, team dream phase
 - T2-D-01 through T2-D-04: Node.js/Go stack packs, stack-agnostic pre-commit, Ollama provider
 
-### v3.0.0 — Enterprise & Compliance (Tier 3) 📋 FUTURE
+### v3.0.0 — Enterprise & Compliance (Tier 3) (Enterprise Edition) 📋 FUTURE
 
 **Goal**: Production database infrastructure, compliance-grade audit trails, and formal regulatory control mappings.
 
@@ -451,9 +451,13 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - T3-B-01 through T3-B-05: Row-level security, audit-grade immutability, SSO, data residency, RBAC
 - T3-C-01 through T3-C-04: DORA metrics, Jira/Linear integration, harness-as-a-service API, compliance reporting
 
+**Enterprise Edition go-to-market note**: The enterprise product requires a fundamentally different go-to-market than the Developer Edition. The temporal moat (dream phase) that differentiates the Developer Edition is less relevant to enterprise procurement. Enterprise differentiators are compliance control mappings, policy-as-code governance (T1-K-05, HIB-032), audit-grade immutability (T3-B-02), and separation of duties (T2-B-02). The enterprise product should be considered a parallel workstream rather than a future milestone — potentially delivered as a services engagement wrapping the current Tier 1/2 framework before the full v3.0.0 infrastructure is built. The PE distribution channel identified in strategic context is accessible at Developer Edition maturity; it does not require v3.0.0. Source: strategic planning session, June 2026.
+
 ---
 
 ## Current Sprint Status
+
+v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
 **Active milestone**: v1.3.0 (v1.2.0.1 shipped 2026-05-31)
 **Sprint tracking**: `.agent/state/active_context.md`
@@ -576,6 +580,7 @@ The framework's durable differentiation is not the context file patterns or name
 
 4. **Compliance positioning** *(v3.0.0)*: SOCI, ISM, PSPF control mappings for Australian regulated industry contexts. Vendor tools will not go here.
 
+**Context Compilation Pattern (Artur Huk, O'Reilly Radar, June 2026)**: The framework implements what Huk terms the "Context Compilation Pattern" — treating governance documentation as the new compiler. His six-step pipeline (context artifacts → context compiler → boundary hierarchy → generation → adversarial verification → acceptance verification) maps directly onto the harness delivery lifecycle. His phrase for the harness's core function: "automating the word NO." His philosophy statement: "The highest-value engineering skill is no longer writing syntax. It's engineering the conditions under which correct syntax can emerge." Both phrases belong in the README positioning work (S0-20, S0-23). Missing artifact identified: threat_model.md as a distinct first-class governance artifact separate from review_context_project.md (tracked as T1-K-05). DIR (github.com/huka81/decision-intelligence-runtime) governs runtime execution; the harness governs delivery — complementary layers of the same governance stack. BrainAPI (github.com/Lumen-Labs/brainapi2) is the most sophisticated open-source implementation of the T2-A memory architecture — evaluate as Team Edition memory backend foundation.
 
 **Emerging ecosystem signal — agent governance interoperability (monitor from
 v1.3.0 onward)**:

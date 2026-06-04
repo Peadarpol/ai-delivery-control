@@ -15,6 +15,14 @@ agent. It is free, runs entirely on your machine, and requires no server infrast
 
 ## Why this exists
 
+When any agent can prototype anything in hours, the bottleneck shifts. It is no
+longer about writing code. It is about ensuring the code that gets written is the
+right code, built correctly, for the right reason.
+
+This framework is the answer to that shift. It does not make agents more capable —
+it makes them more accountable. The highest-value engineering skill is no longer
+writing syntax. It is engineering the conditions under which correct syntax can emerge.
+
 Most AI coding guidance focuses on getting agents to do more. Less attention goes to
 what happens when they do the wrong thing — and how you find out before it matters.
 
@@ -55,9 +63,15 @@ what decisions it made, and what is still open. You have an audit trail.
 
 ## The gate
 
-The pre-commit AI review is the core of the framework. It is adversarial in a specific
-sense: the reviewing model has no access to the writing agent's reasoning — only the
-diff and your project's rules. It cannot rationalise the implementation.
+The pre-commit AI review is the core of the framework. It implements what Anthropic
+calls the evaluator-optimizer pattern: one model generates, a separate model
+evaluates. The reviewing model has no access to the writing agent's reasoning —
+only the diff and your project's rules. It cannot rationalise the implementation.
+
+This matters because AI models have jagged intelligence — excellent at some tasks,
+surprisingly unreliable at nearby ones. The writing agent and the reviewing model
+have different blind spots. Running both over the same output catches what either
+would miss alone.
 
 It checks against two layers:
 - **Universal rules** — shipped with the framework, covers common failure modes
@@ -65,6 +79,12 @@ It checks against two layers:
 
 Verdicts are `PASS`, `WARN`, or `FAIL`. `FAIL` blocks the commit. All verdicts are
 logged to `.ai-review-log.jsonl` so you can see patterns over time.
+
+The gate also gets smarter the longer you use it. Recurring failure patterns across
+sessions feed a self-improvement loop that proposes targeted updates to your
+project's review rules — calibrated to your specific codebase, not generic best
+practice. A framework installed for six months has a review context shaped by six
+months of real failure patterns. That cannot be fast-followed.
 
 If the gate flags something you believe is wrong, there is a governed path to contest
 it — a structured rebuttal protocol that logs the argument and gets a second opinion,
@@ -85,6 +105,11 @@ workflow applies to the task at hand, and when to stop and ask rather than impro
 - No skipping tests for new code
 - No committing secrets or API keys
 
+These prohibitions encode the minimal footprint principle: prefer reversible over
+irreversible actions, and err toward doing less and confirming when uncertain.
+The gate is hard enforcement. The prohibitions are the structure that makes the
+gate worth having.
+
 **Named workflows** cover the main task types. The agent names the workflow
 it is following at the start of every session.
 
@@ -92,6 +117,7 @@ it is following at the start of every session.
 |---|---|
 | `/feature-implementation` | New features |
 | `/business-analyst` | Requirement → approved specification |
+| `/project-manager` | Approved spec → sprint task backlog |
 | `/bug-fix` | Production bugs |
 | `/architect` | Architecture decisions |
 | `/dba` | Schema and migration changes |
@@ -103,6 +129,28 @@ it is following at the start of every session.
 **Escalation triggers** define the conditions where the agent must stop and ask rather
 than make a decision: destructive scope, auth or access control changes, infrastructure,
 or being stuck at the same point more than twice.
+
+---
+
+## The outer loop
+
+The framework governs the full delivery lifecycle, not just the commit boundary.
+
+A perfectly governed commit can implement the wrong thing. The outer loop closes
+that gap by requiring a governed path from business need to working code:
+
+1. A requirement enters the `/business-analyst` workflow — assumptions are surfaced
+   and resolved, acceptance criteria are written in testable Gherkin, and the spec
+   is approved by the human architect before implementation begins.
+2. The approved spec enters the `/project-manager` workflow — tasks are scaffolded
+   from the Gherkin scenarios with effort estimates and dependency ordering.
+3. Every commit references the spec it implements — the traceability gate blocks
+   commits that cannot be traced to an approved requirement.
+4. Before the PR is raised, an acceptance gate checks that the implementation
+   satisfies the spec's intent — not just that it compiles and passes tests.
+
+The result: a feature cannot start without an approved spec, every commit traces
+back to a requirement, and intent alignment is verified before code is promoted.
 
 ---
 
@@ -144,9 +192,25 @@ Convention degrades under pressure. The gate does not.
 | Pre-commit AI review gate | Blocks commit on FAIL |
 | Architecture boundary checks | Blocks commit on violations |
 | Repository identity guard (P-14) | Blocks git operations in wrong repo |
+| Commit traceability gate | Blocks untraced commits |
 | Session startup protocol | Convention — agent compliance |
 | Workflow phases | Convention — agent compliance |
 | Prohibition table (P-01–P-15) | Convention — agent compliance |
+
+---
+
+## A note on model capability
+
+Better models do not reduce the need for governance. They amplify it.
+
+A more capable agent implements the wrong thing more confidently, makes architectural
+mistakes more fluently, and is harder to manually review. The governance need scales
+with the capability of the agent, not inversely with it.
+
+This framework is not a workaround for immature AI tooling. It is the answer to a
+permanent structural problem: agents are capable but not accountable. Humans remain
+responsible for what ships. The framework is the mechanism that keeps it that way
+without making it burdensome.
 
 ---
 
@@ -200,7 +264,8 @@ Full security model and responsible disclosure: [`SECURITY.md`](SECURITY.md)
 
 ## What it does not do
 
-- Not a replacement for engineering judgement
+- Not a replacement for engineering judgement — ownership is more expensive than
+  creation, and judgement about what deserves to exist remains human work
 - Not production monitoring or alerting
 - Not infrastructure provisioning
 - Not an autonomous delivery agent — you are still making the decisions
@@ -210,9 +275,14 @@ Full security model and responsible disclosure: [`SECURITY.md`](SECURITY.md)
 
 ## Reference implementation
 
-Built and validated while developing a multi-tenant SaaS platform. The framework
-governs its own development: all changes are made on feature branches, gated by the
-same pre-commit AI review, and merged via PR.
+Built and validated while developing a multi-tenant SaaS platform over six months
+of active feature delivery. The framework governs its own development: all changes
+are made on feature branches, gated by the same pre-commit AI review, and merged
+via PR.
+
+The session history, gate verdicts, and dream phase proposals from that development
+are the source of the framework's project-specific calibration — and cannot be
+replicated by installing the framework today.
 
 ---
 
@@ -220,9 +290,9 @@ same pre-commit AI review, and merged via PR.
 
 | Tier | Scope | Status |
 |---|---|---|
-| **Tier 1** | Solo developer or small team. Local only. No server required. | Production-ready |
-| **Tier 2** | Small team, multi-machine, shared session state | Roadmap — v2.0.0 |
-| **Tier 3** | Enterprise, compliance, regulated industries | Roadmap — v3.0.0 |
+| **Tier 1 — Developer Edition** | Solo developer or small team. Local only. No server required. | Production-ready |
+| **Tier 2 — Team Edition** | Small team, multi-machine, shared session state | Roadmap — v2.0.0 |
+| **Tier 3 — Enterprise Edition** | Enterprise, compliance, regulated industries | Roadmap — v3.0.0 |
 
 ---
 

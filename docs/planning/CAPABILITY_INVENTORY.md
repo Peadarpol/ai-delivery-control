@@ -1,7 +1,7 @@
 # AI Delivery Control — Capability Inventory
 
-**Generated**: 2026-06-02
-**Framework Version**: 1.2.0.1 (current as of inventory date)
+**Generated**: 2026-06-04
+**Framework Version**: 1.3.1 (current as of inventory date)
 **Purpose**: Strategic review inventory. Cards reflect what the code actually does, not what the documentation intends. Discrepancies between documentation and implementation are called out explicitly.
 
 ---
@@ -36,18 +36,18 @@
 **Current limitations**:
 - `RouteDecision` class has a docstring "Stub for T1-G-01 capability routing — forward-compatibility only" despite `build_route_decision()` being fully implemented — misleading comment surviving from an earlier draft
 - Path-based routing in `build_route_decision()` is hard-coded to GymBase directory conventions (`src/infrastructure/database/repositories/`, `src/application/services/`, etc.); a generic install will not trigger TRANSACTIONAL_INTEGRITY or BRANCH_ISOLATION unless the project happens to share those paths or uses the `# ADR:` annotation
-- `_persist_verdict()` has no file locking; T1-N-02 (concurrent write safety for parallel subagents) is an undelivered backlog item
-- The `SYSTEM_PROMPT` for the review gate is static and GymBase-specific (references `_apply_branch_filter`, `HardenedBaseModel`, `BranchAwareRepository`); projects without these patterns will receive irrelevant review instructions
+- `_persist_verdict()` file locking resolved: T1-N-02 ✅ v1.3.1 — `_lock_file` context manager wired into the append site in `ai-review-log.jsonl`
 - Co-change estimator (`T1-H-03`) result is injected only if HIGH-confidence warnings exist; MEDIUM-confidence warnings are printed to console but not injected into the LLM context
 - The test project copy was previously out-of-sync; now dynamically synchronized by the E2E verification test runner at runtime to prevent version drift.
 
 **Backlog dependencies**:
-- T1-G-05: Restricted globals sandbox for `eval_runner.py`
-- T1-G-06: Rebuttal protocol — delivered in source but not in the test project copy
-- T1-G-07: Structured SKIP_REASON enforcement — delivered
-- T1-G-08: Diff size review strategy — delivered
+- T1-G-05: Restricted globals sandbox for `eval_runner.py` — ⬜ undelivered
+- T1-G-06: Rebuttal protocol — ✅ delivered; E2E test project synced (BUG-13 ✅ pre-sprint 2026-06-02)
+- T1-G-07: Structured SKIP_REASON enforcement — ✅ delivered
+- T1-G-08: Diff size review strategy — ✅ delivered
 - T1-G-09: User-facing rigor profile system — ⬜ undelivered
-- T1-N-02: Gate concurrent write safety — ⬜ undelivered
+- T1-I-07: Token counter wiring — ✅ completed pre-sprint 2026-06-02; `ai_review.py` now increments `session.json` token counters after each LLM call
+- T1-N-02: Gate concurrent write safety — ✅ v1.3.1
 - T1-N-06: `pause_turn` stop reason handling — ⬜ undelivered
 
 ---
@@ -126,6 +126,7 @@
 - Token budget surprise: initialises the `token_usage` counter in `session.json` at zero so the budget enforcement subsystem has a clean baseline
 - Spec-only session misclassification: detects when spec files were modified (even with no commits) and does not automatically classify the session as `abandoned`
 - Dream phase trigger on sparse data: thresholds gate the dream phase (minimum 15 sessions, 14-day span) to prevent noise from low-data periods
+- AST-based staleness detection (T1-I-04 ✅ v1.3.1): scans `review_context_universal.md` and `review_context_project.md` for referenced code patterns and verifies they still exist in `src/`, outputting a warning card for any stale rules
 
 **How it integrates**:
 - Called by: AGENTS.md session startup protocol (Step 0), business-analyst.md Phase 0, and feature-implementation.md Phase 0 by convention; `--post-commit` mode called by the post-commit hook in `.pre-commit-config.yaml`
@@ -143,7 +144,8 @@
 **Backlog dependencies**:
 - T1-C-01 post-commit heartbeat — ✅ delivered (--post-commit mode)
 - T1-I-02 token budget tracking — ✅ delivered (token_usage initialised)
-- T1-I-07 session token budget WARN/HALT — ✅ delivered (via check_halt.py)
+- T1-I-04 AST staleness detection — ✅ v1.3.1
+- T1-I-07 session token budget WARN/HALT — ✅ delivered (via check_halt.py); wiring to session.json completed pre-sprint 2026-06-02
 - T1-J-01 automatic checkpoint — ⬜ undelivered (no git stash at startup)
 - T1-N-01 multi-agent session hierarchy schema — ⬜ undelivered (parent_session_id not in session.json)
 
@@ -201,12 +203,13 @@
 **What happens when it fires**: Exit code 2 blocks the session start; exit code 2 from a pre-commit hook would block the commit.
 
 **Current limitations**:
-- No pre-commit hook entry for `check_halt.py`. It is only checked at session startup by convention. A commit attempted mid-session after a HALT file is written (e.g., by a token budget exhaustion trigger) is not automatically blocked unless the agent manually re-runs `check_halt.py` before committing or the agent follows AGENTS.md discipline
-- T1-N-03 (HALT sentinel subagent propagation) explicitly notes that Tier 1 HALT propagation works for same-machine subagents only via the pre-commit hook — but this hook doesn't yet exist
+- Pre-commit hook wiring: ✅ resolved (BUG-15 ✅ v1.3.1) — `check_halt.py` registered as a `pre-commit` stage hook with `fail_fast: true`. HALT is now enforced at every commit boundary, not just session startup
+- T1-N-03 (HALT sentinel subagent propagation) is explicitly limited to same-machine subagents via the pre-commit hook — now wired (BUG-15), but multi-machine propagation remains T1-N-03
 - The BYPASS_HALT_REASON escape is available for `token_budget_exhausted` only; governance violation HALTs are genuinely unbypassable, which is intentional
 
 **Backlog dependencies**:
-- T1-I-07: session token budget WARN/HALT — ✅ delivered
+- T1-I-07: session token budget WARN/HALT — ✅ delivered; wiring completed pre-sprint 2026-06-02
+- BUG-15: check_halt.py pre-commit hook — ✅ v1.3.1
 - T1-N-03: HALT sentinel subagent propagation — ⬜ undelivered
 
 ---
@@ -233,19 +236,19 @@
 
 **Retention**: The file is committed to version control (explicitly excluded from the gitignore block since v1.2.0.1). No automated retention/archival is implemented (T1-I-06 is undelivered).
 
-**Current fragmentation state**: The T1-I-00a consolidation (merging `governance_audit.jsonl` + `audit_trail.jsonl` into `harness_events.jsonl`) is **NOT delivered**. Both predecessor files may still exist in installed projects. The `governance_check.py` script and `audit_logger.py` script may write to their own separate files rather than to `harness_events.jsonl`. T1-I-00b (audit `audit_logger.py` wiring) is also undelivered — the actual call paths for `audit_logger.py` have not been verified.
+**Current fragmentation state**: ✅ RESOLVED v1.3.1. T1-I-00a consolidation delivered — `circuit_breaker.py` (confirmed as the single caller of `audit_logger.py` via grep 2026-06-03) now routes events to `harness_events.jsonl` via `harness_utils.py` logging helpers. T1-I-00b (audit `audit_logger.py` wiring) also closed — single caller confirmed. T1-N-07 event_type alignment between `circuit_breaker.py` and `skill_ownership.yaml` verified and corrected ✅ v1.3.1.
 
 **Current limitations**:
 - Severity casing is inconsistent across writers: `ai_review.py` uses uppercase (`"HIGH"`, `"WARNING"`, `"INFO"`, `"ERROR"`); `init_session.py` heartbeat uses lowercase `"info"`; the dream phase reads `evt.get("severity") == "critical"` in lowercase, meaning a `"CRITICAL"` uppercase event would not trigger the bypass
-- T1-I-00a consolidation gap: `distill_dream.py`'s governance_audit input path is via harness_events.jsonl only; any events in the old `governance_audit.jsonl` or `audit_trail.jsonl` files are invisible to the dream phase
 - No schema validation on write — any dict can be appended; schema_version is hardcoded `"1.0"` in all writers but never validated on read
-- Concurrent write safety for parallel subagents (T1-N-02) is not implemented for this file
+- Concurrent write safety — ✅ resolved (T1-N-02 ✅ v1.3.1 — `_lock_file` context manager wired into append site)
 
 **Backlog dependencies**:
-- T1-I-00a: consolidate governance_audit.jsonl + audit_trail.jsonl — ⬜ undelivered
-- T1-I-00b: audit audit_logger.py wiring — ⬜ undelivered
+- T1-I-00a: consolidate governance_audit.jsonl + audit_trail.jsonl — ✅ v1.3.1
+- T1-I-00b: audit audit_logger.py wiring — ✅ v1.3.1
 - T1-I-06: memory retention policy — ⬜ undelivered
-- T1-N-02: concurrent write safety — ⬜ undelivered
+- T1-N-02: concurrent write safety — ✅ v1.3.1
+- T1-N-07: event_type alignment — ✅ v1.3.1
 
 ---
 ## `ai-review-log.jsonl`
@@ -278,12 +281,12 @@
 
 **Current limitations**:
 - Timestamp uses local time (not UTC), unlike `harness_events.jsonl` which uses UTC. Cross-referencing the two logs by time requires timezone awareness
-- No file locking on append (T1-N-02 undelivered)
-- `distill_dream.py` reads `log.get("check_type", "review_failure")` from each FAIL record, but the actual log schema uses `blocking_concern` (not `check_type`) for the failing concern — this is a field name mismatch; in practice distill_dream.py will always fall through to `"review_failure"` as the check_type for AI review FAILs, reducing routing specificity
+- File locking on append — ✅ resolved (T1-N-02 ✅ v1.3.1 — `_lock_file` context manager wired into append site)
+- `distill_dream.py` field mismatch — ✅ resolved (BUG-11 ✅ pre-sprint 2026-06-02 — `distill_dream.py` now reads `blocking_concern` with fallback to `check_type` for backwards compatibility)
 
 **Backlog dependencies**:
 - T1-L-10: False positive → eval regression pipeline — ✅ delivered; writes to `tests/data/false_positive_cases.csv`
-- T1-N-02: concurrent write safety — ⬜ undelivered
+- T1-N-02: concurrent write safety — ✅ v1.3.1
 
 ---
 ## Session Ledger (`session_ledger.jsonl`)
@@ -307,14 +310,15 @@
 **How it feeds the dream phase**: `distill_dream.py` reads `session_ledger.jsonl` to build `session_outcomes` (maps session_id → outcome) and `total_sessions_30d`. It uses the outcomes to compute `escalation_rate` (proportion of sessions with `outcome == "escalated"` in the occurrence's contributing sessions). `init_session.py::maybe_run_dream_phase()` reads the ledger to check minimum session count (15) and minimum span (14 days) thresholds before triggering.
 
 **Current limitations**:
-- `harness_version` is hardcoded `"2.0"` across all sessions rather than reading from `harness_version.txt` — the field value cannot be trusted for forensic "which harness version was this session running?" analysis (T1-B-02 rationale)
+- `harness_version` hardcoded — ✅ resolved (BUG-16 ✅ v1.3.1 — `init_session.py` now reads from `harness_version.txt` at session close time)
 - The `date` field uses local time (not UTC), creating inconsistency with `harness_events.jsonl`'s UTC timestamps; cross-referencing sessions in the two logs across timezone-aware environments requires care
 - The previous `.md` format (`session_ledger.md`) may still exist in projects that pre-date the JSONL conversion; `load_hot_tier()` reads only the `.jsonl` file and will miss old entries
 - `token_usage.input_tokens` and `output_tokens` reflect only the calls where `ai_review.py` successfully wrote a `token_usage` field to `.ai-review-log.jsonl` with a `session_id` match; PASS_FAST verdicts report zero tokens (correct), FAIL_OPEN verdicts also report zero tokens (correct), but any FAIL or WARN verdict from a session where `session.json` was absent at write time will not have a session_id and will be excluded from the aggregation
 
 **Backlog dependencies**:
-- T1-I-01: Memory tiering (hot/warm/cold) — ⬜ undelivered; hot tier is implemented (last 3 entries) but the warm/cold tiers with explicit retention policies are not
+- T1-I-01: Memory tiering (hot/warm/cold) — ✅ partial (v1.3.1) — `memory_manager.py` three-tier file-based architecture (hot/warm/cold) delivered; SQLite and MCP tiers deferred to v2.0.0
 - T1-I-06: Memory retention policy — ⬜ undelivered
+- BUG-16: harness_version.txt read dynamically — ✅ v1.3.1
 
 ---
 
@@ -392,16 +396,18 @@
 **Update cadence**: Triggered by `init_session.py::maybe_run_wiki_compile()` at session start when ≥7 days have elapsed since last run. The 7-day cooldown means a project with daily sessions recompiles weekly. Manual trigger available via `python .agent/scripts/wiki_compile.py`.
 
 **Current limitations**:
-- All 13 DOMAIN_REGISTRY entries reference GymBase ADR files that do not exist in a generic install; without these files the compiled wiki contains only `[FILE NOT FOUND]` placeholders, making the wiki injection effectively useless for any project that is not a fork of GymBase
+- GymBase DOMAIN_REGISTRY coupling — ✅ resolved (S0-24 ✅ 2026-06-02) — `load_domain_registry()` now reads from `.agent/config.yaml`; projects without GymBase ADR files skip domains gracefully
 - The wiki compile state file stores only `last_run_utc` and `last_source_hashes` — the backlog spec for `dream_phase_state.json` envisioned `proposals_generated`, `proposals_written`, etc. fields but these are not written
-- `call_anthropic()` uses the `review_model` routing key (intended for the full review model) rather than a `budget_model` key, meaning wiki compilation on Anthropic would use the expensive review-tier model rather than a cheaper haiku
+- `call_anthropic()` budget tier — ✅ resolved (BUG-18 ✅ v1.3.1 — now calls `get_provider(tier="budget").raw_completion()`)
+- Cold-start failure on compilation error — ✅ resolved (BUG-12 ✅ pre-sprint 2026-06-02 — `last_failure_utc` written on failure; 1-day retry cooldown used instead of 7-day success cooldown)
 - `check_cloud_privacy_gate()` prompts the user once on first cloud provider use and then never again (acknowledged flag persisted in state); subsequent sessions silently send ADR content to cloud APIs without any reminder
 
 **Backlog dependencies**:
 - T1-H-06: Compiled wiki layer — ✅ delivered
 - T1-H-07: Knowledge base lint pass — ✅ delivered (in `wiki_lint.py`)
 - T1-H-08: Branch-isolated model roster — ✅ delivered
-- T1-D-05: Model tiering configuration (Gemma4/Sonnet split) — the config keys exist but wiki_compile.py uses `review_model` for Anthropic rather than `budget_model`
+- T1-D-05: Model tiering configuration — ✅ resolved via BUG-18 (wiki_compile.py now uses budget tier)
+- BUG-18: wiki_compile budget tier fix — ✅ v1.3.1
 
 ---
 ## Dream Phase (`distill_dream.py`)
@@ -425,15 +431,17 @@
 
 **Current limitations**:
 - `proposed_rules_catalog` contains 11 hardcoded rule templates. Any `pattern_key` not in the catalog falls back to a generic rule. The catalog is not project-configurable.
-- The `check_type` field that `distill_dream.py` reads from `.ai-review-log.jsonl` is `log.get("check_type", "review_failure")` but the actual log schema field is `blocking_concern` — so all AI review FAILs are classified as `"review_failure"` in the occurrence map, losing the specific concern label that caused the failure
+- `check_type`/`blocking_concern` field mismatch — ✅ resolved (BUG-11 ✅ pre-sprint 2026-06-02 — `distill_dream.py` now reads `blocking_concern` with fallback to `check_type` for backwards compatibility; specific concern labels now correctly route proposals)
+- `skill_ownership.yaml` routing — ✅ resolved (T1-D-00 ✅ pre-sprint 2026-06-02 — `.agent/config/skill_ownership.yaml` created; patterns now route to correct skill files)
 - Contradiction detection uses keyword overlap (2+ non-stopword matches) which is a heuristic with both false positives (two unrelated rules sharing common technical vocabulary) and false negatives (antonymous rules with low word overlap)
 - The `--min-sessions` and `--min-span-days` CLI flags documented in the backlog spec are not implemented in `distill_dream.py`; only `--dry-run` is present
 - No `unrouted__YYYY-MM-DD.md` output for unroutable patterns (described in the backlog spec); patterns that don't match any skill route to the fallback skills rather than being flagged explicitly
 
 **Backlog dependencies**:
-- T1-D-00: skill_ownership.yaml — ✅ delivered
+- T1-D-00: skill_ownership.yaml — ✅ delivered (pre-sprint 2026-06-02)
 - T1-I-05: Memory contradiction detector — ✅ integrated into distill_dream.py
 - T1-D-03: Dream phase — ✅ delivered
+- BUG-11: blocking_concern field fix — ✅ pre-sprint 2026-06-02
 
 ---
 
@@ -452,18 +460,18 @@
 
 **Assumption validation**: Every bullet list line in `# Assumptions` must contain `[Resolved` or `[Pending`. A `[Pending]` entry blocks APPROVED. The check is lenient on format (e.g., `[Resolved: promoted to criterion #X]` vs `[Resolved]` both pass); the guard is presence, not sub-format.
 
-**Mode-awareness (T1-L-00)**: T1-L-00 (outer loop methodology profile system) is NOT delivered. The gate has no `outer_loop.mode` awareness — it always operates in `incremental` mode. The check_spec.py does have a local non-CI mode bypass for the APPROVED check (prints a warning instead of failing), which partially approximates a `discovery` mode degradation.
+**Mode-awareness (T1-L-00)**: ✅ delivered (pre-sprint 2026-06-02). `outer_loop.mode` (`discovery` / `incremental` / `contractual`) now read from `.agent/config.yaml`. In `discovery` mode all Pass 1 blocks downgrade to advisories (exit 0); in `contractual` mode assumption resolution is tightened and `--skip-spec-gate` is unavailable. Mode is displayed in the output header. Spec ID resolution hardened with `active_context.md` as a fourth path.
 
 **What blocks vs warns**: Pass 1 failure → exit 1, prints specific missing sections. Pass 2 FAIL → exit 1, prints blocking concerns. Pass 2 ADVISORY → exit 0, prints advisories (non-blocking).
 
 **Current limitations**:
 - `--skip-spec-gate` requires `SKIP_REASON` of at least 10 characters but does not require structured JSON (unlike the T1-G-07 structured SKIP_REASON enforcement for the review gate); free text is accepted
 - Pass 2 is skipped in CI for local providers, meaning CI only validates structure (Pass 1) and never the quality judgment; spec quality regressions only surface locally
-- Spec ID resolution has a 3-way fallback (SPEC_ID env var → git branch name matching `SPEC-\d+` → single-file scan of the specs directory); if the branch doesn't follow the SPEC-NNN naming convention and there are multiple specs, the gate cannot identify which spec to check and exits with "target specification not found"
+- Spec ID resolution has a 4-way fallback (SPEC_ID env var → git branch name matching `SPEC-\d+` → `active_context.md` scan → single-file scan of the specs directory); the multiple-specs edge case is now less likely to fail but remains possible if neither branch name nor active_context.md reference a spec
 - T1-L-01a (spec collision detection via Jaccard similarity) is not delivered
 
 **Backlog dependencies**:
-- T1-L-00: Outer loop methodology profile system — ⬜ undelivered (mode-awareness retrofit needed)
+- T1-L-00: Outer loop methodology profile system — ✅ delivered (pre-sprint 2026-06-02)
 - T1-L-01a: Spec collision detection — ⬜ undelivered
 
 ---
@@ -485,39 +493,91 @@
 **Handoff to /pm**: The workflow document explicitly states that effort estimation and sprint planning are out of scope; the handoff to `/project-manager` is by naming convention in AGENTS.md §2.
 
 **Current limitations**:
-- No `pm_scaffold.py` exists in the framework source. The backlog (T1-L-03) referenced this as a companion script, but the PM workflow is purely prose-based. The spec in `backlog` for T1-L-03 describes Gherkin-to-task mapping via a scaffold script, but only `project-manager.md` exists.
 - The Session Outcome Override Handshake (writing `outcome_override` to `session.json`) is described in the workflow but depends on the agent explicitly writing to the JSON file — there is no automation; an agent that misses this step will have its planning session logged as `"abandoned"`
-- T1-L-00 retrofit: the workflow has no mode-awareness for `discovery` vs `incremental` vs `contractual` SDLC methodology
+- T1-L-00 mode-awareness retrofit — ✅ resolved (pre-sprint 2026-06-02 — mode-conditional steps added at Phase 0 and Phase 2)
 
 **Backlog dependencies**:
-- T1-L-00: Outer loop methodology profile system — ⬜ retrofit needed
-- T1-L-04: Requirement → commit traceability — ⬜ undelivered
-- T1-L-05: Acceptance gate — ⬜ undelivered
+- T1-L-00: Outer loop methodology profile system — ✅ delivered (pre-sprint 2026-06-02)
+- T1-L-04: Requirement → commit traceability — ✅ delivered (v1.3.0)
+- T1-L-05: Acceptance gate — ✅ delivered (v1.3.0)
 
 ---
 ## Project Manager Workflow (`project-manager.md` + `pm_scaffold.py`)
-**Delivered**: v1.2.0 (2026-05-30) as T1-L-03 (workflow file); no `pm_scaffold.py` exists
+**Delivered**: v1.3.0 (2026-06-03) as T1-L-03 — workflow document replaced and `pm_scaffold.py` delivered
 **Primary files**:
-- `.agent/workflows/project-manager.md` — full orchestration workflow
+- `.agent/workflows/project-manager.md` — five-phase state-machine workflow
+- `.agent/scripts/pm_scaffold.py` — Gherkin-to-task scaffold script
 
-**Phases**: The file is a comprehensive PM orchestration document covering: Pre-Task Anti-Hallucination Check (mandatory decision log review before any task), Initiation & Requirements (delegates to /business-analyst), Solution Design (delegates to /architect), Roadmap ↔ Issue Sync, Implementation Planning (breaks down to atomic tasks), AI Execution Mode (Sprint Planning with confidence scoring), Parallel Execution Monitor, Quality Gate Automation, Sprint Planning Techniques (Planning Poker, estimation for human vs. AI execution), Execution Oversight, Delegation Framework (Appelo's 7 levels), Quality Assurance & Review (delegates to /test-engineer), Closure, and Sprint Retrospective Techniques.
+**Phases**: Phase 0 (`init_session.py`) → Phase 1 (resolve and assert APPROVED SPEC) → Phase 2 (read Gherkin scenarios, report count) → Phase 3 (invoke `pm_scaffold.py`, surface output) → Phase 4 (developer review and approval before handoff to `/feature-implementation`).
 
-**Gherkin-to-task mapping**: No `pm_scaffold.py` exists; task breakdown is entirely prose-based agent instruction.
+**pm_scaffold.py**: Reads approved `SPEC-XXX.md`, parses Gherkin acceptance criteria via line-oriented state machine, synthesises atomic task backlog via budget-tier LLM. Supports `--offline` fallback (skeleton from parsed Gherkin, no LLM). Prompt injection defence via `<untrusted_specification_content>` XML tags. Backup mechanics on re-run (`{output_path}.bak`). Output: `docs/planning/tasks/SPEC-XXX-tasks.md`. Estimation scale: Fibonacci (1, 2, 3, 5, 8, 13 pts). Audit trail event written to `harness_events.jsonl`.
 
-**Offline fallback**: Not documented in the file; it relies on agent file access for reading decision logs.
+**Output location**: `docs/planning/tasks/SPEC-XXX-tasks.md` (not `.agent/state/task.md` — task backlogs are planning artefacts committed alongside specs).
 
-**Output location**: Task breakdowns are written to `task.md` per the workflow instructions.
-
-**Unresolved placeholders**: The workflow contains numerous `{{PLACEHOLDER}}` references that are GymBase-specific and not resolved in a generic install: `{{PATH_ROADMAP}}`, `{{PATH_TECH_SPEC}}`, `{{PATH_CICD_SPEC}}`, `{{PATH_GITHUB_OPS}}`, `{{PATH_WORKFLOW_INTEGRATION}}`, `{{PATH_DEPLOY_MANIFEST}}`, `{{PATH_AGENT_GUIDELINES}}`, `{{PATH_RTM}}`, `{{PATH_PROJECT_PLAN}}`, `{{CAPABILITIES_GITHUB_ISSUE_LIST}}`, `{{CAPABILITIES_GITHUB_ISSUE_CLOSE}}`, `{{CAPABILITIES_GITHUB_ISSUE_CREATE}}`. Any agent following this workflow in a non-GymBase project will encounter undefined references at every step of the Pre-Task Anti-Hallucination Check section.
+**GymBase placeholders**: ✅ resolved (S0-24 + T1-L-00 retrofit 2026-06-02 — `{{PLACEHOLDER}}` references replaced with generic config-driven paths).
 
 **Current limitations**:
-- The workflow is effectively a copy of the GymBase PM workflow with harness-specific additions; it is not a minimal harness PM workflow. The large volume of project-specific placeholders makes it non-functional for a fresh install without significant configuration.
-- No spec input gate: the workflow assumes an approved SPEC exists (from /ba) but does not explicitly call `check_spec.py`; the spec gate is invoked as part of `feature-implementation.md`, not the PM workflow
-- The backlog spec for T1-L-03 stated "Lightweight by design" but the delivered file is one of the longest workflow documents in the framework
+- No spec input gate: the workflow asserts APPROVED status manually in Phase 1 but does not call `check_spec.py`; the spec gate runs as part of `feature-implementation.md`
+- `--offline` flag produces skeleton tasks with `[Est: manual review required]` markers — developer must adjust estimates before handoff
+- Prose-only acceptance criteria (no Gherkin) triggers a warning and fallback extraction, not an exit 1 — valid in `discovery` mode but produces lower-quality estimates
 
 **Backlog dependencies**:
-- T1-L-00: Outer loop methodology profile — ⬜ undelivered
-- T1-L-03: pm_scaffold.py — not implemented
+- T1-L-00: Outer loop methodology profile — ✅ delivered (pre-sprint 2026-06-02)
+- T1-L-03: pm_scaffold.py — ✅ v1.3.0
+
+---
+## Requirement-to-Commit Traceability (`check_traceability.py`)
+**Delivered**: v1.3.0 (2026-06-03) — T1-L-04
+**Primary files**:
+- `.agent/scripts/check_traceability.py` — stdlib-only commit-msg hook (zero external dependencies)
+
+**What it does**: Fires as a `commit-msg` pre-commit hook. Resolves the commit message from `sys.argv[1]`, falls back to `.git/COMMIT_EDITMSG` via `git rev-parse --git-dir` (list-based subprocess, `shell=False`). Exempts merge commits (exits 0 on `"Merge "` prefix). Fast-paths documentation-only commits (all staged files match `.md`/`.txt`/`.rst` or reside under `docs/` — exits 0). Reads `specs_path` from `.agent/config.yaml` via targeted regex (no PyYAML dependency). Scans commit message for `SPEC-\d+` pattern. If found: verifies spec file exists; checks `Status: APPROVED` — DRAFT status warns in local mode, blocks in CI (`CI=true` env var). If no SPEC tag and non-trivial commit: checks for `--no-trace` keyword with minimum 10-char reason, logs `traceability_bypass` event to `harness_events.jsonl`, exits 0. Without either: exits 1 with terminal diagnostic card. Mode-aware: `discovery` mode downgrades all blocks to advisory; `contractual` mode makes `--no-trace` unavailable.
+
+**What it prevents**:
+- Commits that cannot be traced to an approved requirement entering the repository
+- Drift between what was specified and what was implemented, detected at commit time rather than PR review time
+- Infrastructure commits bypassing governance silently — `--no-trace` forces an explicit documented reason
+
+**How it integrates**:
+- Called by: `.pre-commit-config.yaml` (`commit-msg` stage)
+- Reads: `.agent/config.yaml` (`specs_path`, `outer_loop.mode`), `docs/planning/specs/SPEC-XXX.md` (status check), `.git/COMMIT_EDITMSG` (commit message)
+- Writes: `harness_events.jsonl` (`traceability_bypass` events)
+
+**Current limitations**:
+- Spec ID resolution uses `SPEC-\d+` pattern only — projects using different ID schemes must use `--no-trace` bypass
+- No support for multiple SPEC references in a single commit message
+- DRAFT block in CI mode requires `CI=true` env var — not all CI environments set this automatically
+
+**Backlog dependencies**:
+- T1-L-04 → ✅ (v1.3.0)
+- T1-L-01a: Spec collision detection — ⬜ undelivered
+
+---
+## Acceptance Gate (`acceptance_check.py`)
+**Delivered**: v1.3.0 (2026-06-03) — T1-L-05
+**Primary files**:
+- `.agent/scripts/acceptance_check.py` — AI-driven acceptance grader
+
+**What it does**: Command-line utility run once per feature branch before PR promotion. Resolves the active spec via multi-channel hierarchy (`--spec` flag → `SPEC_ID` env var → active branch name). Extracts the branch diff via `git diff {base}...HEAD` where base defaults to `acceptance_gate.base_branch` from config.yaml (default: `main`). Static migration path check: if a configured migration path appears in the diff AND `[HIGH_RISK_SCHEMA_CHANGE]` is absent from the spec — hard `DIVERGED` verdict with no LLM call. Isolates spec content and diff in separate `<untrusted_*>` XML tags for prompt injection defence. Calls budget-tier LLM. Parses response into typed `AcceptanceVerdict` Pydantic model: `verdict` (`SATISFIED`/`PARTIAL`/`DIVERGED`), `satisfied_scenarios`, `partial_scenarios`, `unimplemented_scenarios`, `scope_creep_findings`, `remediation_steps`, `rationale`. Scenario labels extracted as `"Scenario: <label>"` strings (not full Given/When/Then text). Handles standard, numbered (number stripped), and unlabelled (ordinal fallback) label formats. Exit routing: `SATISFIED` → 0, `PARTIAL` → 0 (1 with `--strict`), `DIVERGED` → 1 always. Fails open on LLM unavailability unless `--fail-closed`. Mode-aware: `discovery` mode makes all verdicts advisory; `contractual` mode implies `--strict`.
+
+**What it prevents**:
+- Implementation that satisfies tests but diverges from specified intent
+- Scope creep — code changes that implement behaviour not in the spec
+- Schema migrations shipped without explicit spec acknowledgement
+- A feature branch being promoted to PR when acceptance criteria are only partially implemented
+
+**How it integrates**:
+- Called by: developer or CI pipeline, once per feature branch
+- Reads: `.agent/config.yaml` (`acceptance_gate` config block), `docs/planning/specs/SPEC-XXX.md` (acceptance criteria)
+- Writes: `harness_events.jsonl` (`spec_acceptance_gate` events)
+
+**Current limitations**:
+- Scenario label extraction depends on LLM normalisation — edge cases with non-standard Gherkin formatting may produce ordinal fallback labels
+- `--strict` and `--fail-closed` are independent flags; CI pipelines must explicitly set both for maximum gate strictness
+- No cross-spec acceptance checking — cannot detect when implementation satisfies SPEC-002 but was supposed to implement SPEC-001
+
+**Backlog dependencies**:
+- T1-L-05 → ✅ (v1.3.0)
 
 ---
 
@@ -542,7 +602,7 @@
 **Current skill count**: 22 universal skills (api-design, c4-architect, code-migration, code-review, database-design, debugging, devops-cicd, kaizen, performance-optimization, playwright-skill, python-async, python-automation, python-fastapi, python-testing, refactoring, security-audit, senior-architect, systematic-debugging, test-driven-development, test-writing, testing-patterns, verification-before-completion) plus one stack pack embedded in senior-architect's scripts.
 
 **Current limitations**:
-- `skill_bdd_map.json` referenced by `select_bdd_gate.py` does not exist — the BDD gate selection script fails immediately
+- `skill_bdd_map.json` — ⚠️ partially resolved (BUG-17 ✅ v1.3.1 — default template created in `bootstrap/templates/` and copied to `.agent/config/` by `install.py`; `validate.py` now emits WARN on absence; full stub with all 22 universal skills mapped is still pending)
 - T1-E-01 (Tool ABC subclasses) is undelivered — skills are documentation-only, not testable Python objects with typed `run()` interfaces
 - T1-B-04 (skill deprecation mechanism) is undelivered — no `status` field in skill metadata; no protection against deprecated skills being loaded
 - T1-B-05 (progressive loading) is undelivered — all skills are equally available at session start without lazy loading
@@ -568,7 +628,7 @@
 **What it checks**: Purely a tag-to-filter mapper. Does not verify test existence, test results, or coverage. The output string is intended for use as `pytest -m "output"` by the agent or automation.
 
 **Current limitations**:
-- `skill_bdd_map.json` does not exist in `.agent/config/` — the script prints "Error: skill_bdd_map.json missing." and returns an empty list on any invocation against the current framework source
+- `skill_bdd_map.json` — ⚠️ partially resolved (BUG-17 ✅ v1.3.1 — default template exists; script is functional with template config but full 22-skill tag mapping is still pending)
 - No pre-commit hook wires this; it is purely a utility the agent is instructed to use
 - No test coverage for the BDD gate selector itself
 
@@ -618,6 +678,9 @@
 - `review_context_universal.md` existence (ERROR if absent — gate will fail without it)
 - `review_context_project.md` OR `review_context.md` existence (WARN if absent — gate continues without project context)
 - Gitignored states check (`validate_gitignored_states()`): HALT absent from `.gitignore` → ERROR; `session.json` absent from `.gitignore` → WARN; `harness_events.jsonl` excluded from verification (must be committed)
+- `skill_bdd_map.json` presence (WARN if absent — BUG-17 ✅ v1.3.1)
+- `outer_loop.mode` validity (WARN if value not in `discovery`/`incremental`/`contractual` — T1-L-00 ✅)
+- Recent wiki compile failure (WARN if `last_failure_utc` within 48 hours — BUG-12 ✅ pre-sprint 2026-06-02)
 
 **ERROR vs WARN classification**: ERROR blocks the validation (exits non-zero); WARN is informational. The distinction is intentional: ERRORs are conditions that will cause the gate to fail silently or incorrectly; WARNs are conditions that degrade experience but don't block operation.
 
@@ -693,18 +756,18 @@
 - `tests/e2e/run_e2e_verification.py` — E2E scenario runner
 - `tests/e2e/test_project/` — representative installed project for E2E testing
 
-**Test count**: 181 unit/integration tests (as verified by `pytest --collect-only`). All 181 pass.
+**Test count**: 250 unit/integration tests (as verified by `pytest --collect-only`). All 250 pass.
 
-**Coverage by module**: `test_ai_review.py` — gate routing, pre-flight shortcut, verdict parsing, rebuttal protocol, high-risk classification; `test_check_spec.py` — two-tier gate, Pass 1 structural checks, Pass 2 mock-verdict modes; `test_init_session.py` — outcome inference logic, session lifecycle; `test_upgrade.py` and `test_downgrade.py` — migration chain; `test_install.py` — stack detection, template rendering, hook wiring; `test_validate.py` — all validation checks and ERROR/WARN classification; `test_phase3_enforcement.py` — architecture boundary check engine.
+**Coverage by module**: `test_ai_review.py` — gate routing, pre-flight shortcut, verdict parsing, rebuttal protocol, high-risk classification; `test_check_spec.py` — two-tier gate, Pass 1 structural checks, Pass 2 mock-verdict modes; `test_init_session.py` — outcome inference logic, session lifecycle; `test_upgrade.py` and `test_downgrade.py` — migration chain; `test_install.py` — stack detection, template rendering, hook wiring; `test_validate.py` — all validation checks and ERROR/WARN classification; `test_phase3_enforcement.py` — architecture boundary check engine; `test_check_traceability.py` — commit traceability gate; `test_acceptance_check.py` — acceptance gate verdicts and AcceptanceVerdict parsing; `test_pm_scaffold.py` — Gherkin parsing, offline mode, backup mechanics; `test_distill_dream.py` — dream phase routing and YAML loading; `test_wiki_compile.py` — config-driven domain registry.
 
-**E2E scenario count**: 28 E2E scenarios as of v1.2.0 (per CHANGELOG). These are implemented in `tests/e2e/run_e2e_verification.py` and test the gate against the `test_project/` simulated installation.
+**E2E scenario count**: 30 E2E scenarios as of v1.3.1 (per CHANGELOG). These are implemented in `tests/e2e/run_e2e_verification.py` and test the gate against the `test_project/` simulated installation.
 
 **Golden-path vs adversarial tests**: `test_ai_review.py` covers known-good diffs (should produce PASS), known-violation diffs (should produce FAIL on specific concerns), and false-positive regression cases. `tests/data/false_positive_cases.csv` is the destination for entries from `false_positive_to_eval.py`.
 
 **False-positive regression suite**: The `false_positive_to_eval.py` script writes entries to `tests/data/false_positive_cases.csv`. `test_ai_review.py` reads this file and generates regression tests ensuring previously-confirmed false positives never resurface as FAILs.
 
 **Current limitations**:
-- The test project (`tests/e2e/test_project/`) has a modified/older `ai_review.py` (shown in git status as `M`); E2E tests run against this older copy rather than the current framework source, creating a gap between what is tested and what ships
+- Stale test project `ai_review.py` — ✅ resolved (BUG-13 ✅ pre-sprint 2026-06-02 — E2E setup now copies the current framework source at runtime; stale copy removed from git tracking)
 - `test_providers.py` — providers are tested with mock responses; no integration test exercises an actual live API call
 - No tests currently cover `wiki_compile.py`, `distill_dream.py`, `harness_health.py`, `select_bdd_gate.py`, or `check_repo.py`
 - `tests/data/false_positive_cases.csv` may be empty (no confirmed false positives yet entered); the regression suite would then be empty
@@ -719,9 +782,10 @@
 
 ---
 ## `AGENTS.md`
-**Delivered**: v1.0.0 (2026-05-21); P-14 added (exact version TBC); P-15 added in v1.2.0; context compaction protocol added v1.1.5
+**Delivered**: v1.0.0 (2026-05-21); P-14 added (exact version TBC); P-15 added in v1.2.0; context compaction protocol added v1.1.5; split into universal + project layers in v1.3.1 (T1-A-09)
 **Primary files**:
-- `.agent/AGENTS.md` (framework source template with `[PROJECT_NAME]` placeholder)
+- `.agent/AGENTS.md` — universal framework-owned governance layer (OVERWRITE in upgrade manifest since v1.3.1)
+- `.agent/AGENTS_PROJECT.md` — project-owned extension layer; never overwritten on upgrade (T1-A-09 ✅ v1.3.1)
 - `tests/e2e/test_project/.agent/AGENTS.md` (installed project version)
 
 **Prohibition table (P-01 to P-15)**:
@@ -742,6 +806,8 @@
 | P-13 | Stage agent-generated files or log files |
 | P-14 | Perform git operations without verifying active repository |
 | P-15 | Direct commits to deployment/devops branches for CI/CD fixes |
+
+**Layered governance (T1-A-09 ✅ v1.3.1)**: Agents load `AGENTS.md` first (universal framework governance), then `AGENTS_PROJECT.md` if it exists (project conventions extend but do not override the universal layer). `upgrade.py` migration detects custom sections in existing `AGENTS.md` via `difflib.SequenceMatcher` and writes them to `AGENTS_PROJECT.md`.
 
 **Workflow naming conventions**: §2 maps task type to governing workflow (feature, bug-fix, architect, dba, security, perf, qa, release).
 
@@ -775,12 +841,73 @@
 **Distinction from AGENTS.md**: `governance.md` provides the enforcement layer rationale and full trigger specification; `AGENTS.md` provides the agent-facing quick-reference summary. `governance.md` is the authoritative source that AGENTS.md summarises.
 
 **Current limitations**:
-- governance.md lists P-01 to P-13 (13 prohibitions). AGENTS.md has P-01 to P-15 (15 prohibitions). P-14 (repo identity guard) and P-15 (CI branch commits) are in AGENTS.md but NOT in governance.md — they have no rationale document
+- P-14 and P-15 rationale gap — ✅ resolved (BUG-14 ✅ v1.3.1 — P-14 repository identity guard rationale and P-15 CI branch commits rationale added to governance.md §3)
 - The document assumes the `decisions_log.md` and `business_rules.md` referenced in §1 exist at conventional paths; these paths use GymBase conventions (`docs/decisions/business_rules.md`, `docs/architecture/ARCHITECTURE.md`) that may not exist in a generic install
 
 **Backlog dependencies**:
 - T1-K-02: Formal security review of context-injection attack surface — ⬜ undelivered (v1.3.0)
 - S0-18: `docs/security/` context injection point documentation — ⬜ undelivered (v1.3.0)
+
+---
+## Universal Context File (`UNIVERSAL_CONTEXT.md`)
+**Delivered**: v1.3.1 (2026-06-03) — T1-B-01
+**Primary files**:
+- `.agent/UNIVERSAL_CONTEXT.md` — single canonical context source for all agents and IDEs
+- `CLAUDE.md` — thin shim that loads `UNIVERSAL_CONTEXT.md`
+- `GEMINI.md` — thin shim that loads `UNIVERSAL_CONTEXT.md`
+- `.cursorrules` — thin shim that loads `UNIVERSAL_CONTEXT.md`
+
+**What it does**: `UNIVERSAL_CONTEXT.md` is the single canonical instruction block shared across all AI agents and IDEs. `CLAUDE.md`, `GEMINI.md`, and `.cursorrules` are converted to thin shims that load it. Eliminates three-copy drift — a governance document change now requires updating one file rather than three. Completes the two-layer architecture pattern for the tool supplement layer: `review_context` ✅, compiled wiki ✅, `AGENTS.md` ✅, tool supplements ✅.
+
+**What it prevents**:
+- Divergence between what Claude Code, Gemini CLI, and Cursor know about project governance after a governance document update
+- Silent outdated context in one tool supplement when another is updated
+
+**Current limitations**:
+- Shim files retain minimal tool-specific configuration that cannot be universalised (e.g. Cursor-specific syntax in `.cursorrules`)
+- No automated check that shim content matches the expected template
+
+**Backlog dependencies**:
+- T1-B-01 → ✅ (v1.3.1)
+
+---
+## Project Agent Guidelines (`AGENTS_PROJECT.md`)
+**Delivered**: v1.3.1 (2026-06-03) — T1-A-09
+**Primary files**:
+- `.agent/AGENTS_PROJECT.md` — project-owned extension layer (classified NEVER_TOUCH in upgrade manifest)
+- `.agent/AGENTS.md` — universal framework-owned layer (classified OVERWRITE in upgrade manifest)
+
+**What it does**: `AGENTS_PROJECT.md` is the project-owned extension layer for agent governance. Agents load `AGENTS.md` first (universal framework governance), then `AGENTS_PROJECT.md` if it exists (project conventions extend but do not override). `install.py` creates `AGENTS_PROJECT.md` as a starter template on fresh install. `upgrade.py` classifies `AGENTS.md` as OVERWRITE and `AGENTS_PROJECT.md` as NEVER_TOUCH. Migration from v1.3.0: `upgrade.py` detects custom sections in existing `AGENTS.md` via `difflib.SequenceMatcher`, writes them to `AGENTS_PROJECT.md` under a `# Migrated from AGENTS.md` header, and logs the migration to `decisions_log.md`.
+
+**What it prevents**:
+- CONFLICT classifications on `AGENTS.md` during upgrade — universal governance improvements apply cleanly on every upgrade
+- Accidental overwrite of project-specific team conventions during framework upgrade
+- Governance integrity drift where developers modify `AGENTS.md` and later have their additions silently overwritten by a framework upgrade
+
+**Current limitations**:
+- Migration is best-effort via line diffing — complex inline edits to universal sections may not be fully detected
+- No structural validation that `AGENTS_PROJECT.md` content does not contradict `AGENTS.md` universal prohibitions
+
+**Backlog dependencies**:
+- T1-A-09 → ✅ (v1.3.1)
+- T1-K-03: Governance diff highlighting on upgrade — ⬜ undelivered
+
+---
+## Memory Manager (`memory_manager.py`)
+**Delivered**: v1.3.1 (2026-06-03) — T1-I-01 foundation
+**Primary files**:
+- `.agent/scripts/memory_manager.py` — three-tier file-based memory architecture
+
+**What it does**: Implements file-based three-tier memory management. Hot tier (always loaded at session start): `active_context.md` and the most recent session entries. Warm tier (loaded on relevance signal): session ledger entries from the last 30 days, matched by keyword/tag. Cold tier (archived historical): session summaries older than 90 days, moved to an archive folder automatically. Called from `init_session.py` during session startup.
+
+**Current limitations**:
+- Hot/warm/cold distinction is file-based only — no SQLite index or vector search for warm tier retrieval (T2-A-01 deferred to v2.0.0)
+- Relevance matching for warm tier is keyword-based, not semantic
+- Cold tier archival is time-based only — no relevance-decay scoring (T1-I-06 undelivered)
+
+**Backlog dependencies**:
+- T1-I-01 → ✅ partial (v1.3.1) — file-based foundation; SQLite index (T2-A-01) and MCP server deferred to v2.0.0
+- T1-I-06: Memory retention policy — ⬜ undelivered
 
 ---
 
@@ -873,72 +1000,64 @@ init_session.py
 
 ## Observed Gaps Between Implementation and Backlog Intent
 
-### 1. Dream Phase Routing (T1-D-00 gap)
-**Backlog intent**: The dream phase routes detected patterns to specific skill files via `skill_ownership.yaml`.
-**Implementation reality**: `skill_ownership.yaml` does not exist. All patterns fall back to `"agent-framework"` or `"code-review"`. The routing mechanism — the primary value of the dream phase — is non-functional.
-**Risk**: Dream proposals are generated but attributed to the wrong skills, producing non-actionable generic improvement suggestions. The backlog treats T1-D-03 as ✅ Complete; the dependency T1-D-00 is ⬜ undelivered and blocks effective use of T1-D-03.
+### 1. Dream Phase Routing (T1-D-00 gap) — ✅ RESOLVED (pre-sprint 2026-06-02)
+**Resolution**: `skill_ownership.yaml` created at `.agent/config/skill_ownership.yaml`. All patterns now route to correct skill files. BUG-11 fixed the `blocking_concern` field mismatch in the same PR — specific failure domains (BRANCH_ISOLATION, MASS_ASSIGNMENT, etc.) now generate domain-specific proposals rather than generic `"review_failure"` proposals.
+**Prior state for record**: `skill_ownership.yaml` did not exist; `distill_dream.py` read `log.get("check_type")` instead of `blocking_concern`. Both issues resolved together pre-sprint.
 
-### 2. Wiki Compile Domain Registry (GymBase coupling)
-**Backlog intent**: `wiki_compile.py` compiles project-specific ADR content into domain wiki pages, then injects them into every review.
-**Implementation reality**: `DOMAIN_REGISTRY` contains 13 domains that all reference GymBase ADR files. A generic install compiles wiki pages that contain `[FILE NOT FOUND]` for every domain. The ADR annotation injection then injects empty pages into the gate.
-**Risk**: The "context injection before LLM call" mechanism — described as a key differentiator — is ineffective for any non-GymBase install. CONSTRAINT-01 (≤2,000 tokens injected) is technically met because empty wiki pages consume zero tokens, but the intent of the constraint is violated.
+### 2. Wiki Compile Domain Registry (GymBase coupling) — ✅ RESOLVED (S0-24, 2026-06-02)
+**Resolution**: `DOMAIN_REGISTRY` moved from hardcoded Python to config-driven `load_domain_registry()` reading `.agent/config.yaml`. Projects without GymBase ADR files skip domains gracefully (no `[FILE NOT FOUND]` injection). Generic installs now receive a clean wiki layer on day one.
+**Prior state for record**: All 13 `DOMAIN_REGISTRY` entries referenced GymBase ADR paths; a generic install compiled wiki pages containing only `[FILE NOT FOUND]` placeholders.
 
-### 3. Project Manager Workflow Placeholders
-**Backlog intent**: T1-L-03 delivers a minimal PM workflow for sprint planning and task breakdown.
-**Implementation reality**: `project-manager.md` contains ~20 unresolved `{{PLACEHOLDER}}` references to GymBase-specific decision documents. The mandatory Pre-Task Anti-Hallucination Check section requires reading files that don't exist in a generic install.
-**Risk**: Any agent following the PM workflow in a non-GymBase project encounters undefined references on every task. The workflow is effectively non-operational for a fresh install without significant configuration by the developer.
+### 3. Project Manager Workflow Placeholders — ✅ RESOLVED (S0-24 + T1-L-00, 2026-06-02; T1-L-03, v1.3.0)
+**Resolution**: `{{PLACEHOLDER}}` references replaced with generic config-driven paths (S0-24). T1-L-00 retrofit added mode-aware steps. T1-L-03 delivered a clean replacement `project-manager.md` with five structured phases and `pm_scaffold.py` as the operative scaffold script. PM workflow is now functional for a fresh install.
+**Prior state for record**: ~20 unresolved `{{PLACEHOLDER}}` references to GymBase-specific documents; workflow non-operational on fresh installs.
 
-### 4. ai-review-log.jsonl Field Mismatch (distill_dream.py)
-**Backlog intent**: The dream phase reads FAIL verdicts from the review log and routes them to skills by `check_type`.
-**Implementation reality**: `distill_dream.py` reads `log.get("check_type", "review_failure")` but the log schema uses `blocking_concern` (not `check_type`) for the failing concern. The field `check_type` never appears in `.ai-review-log.jsonl` entries, so all AI review FAIL patterns always have `pattern_key = "review_failure"` regardless of whether they were BRANCH_ISOLATION, MASS_ASSIGNMENT, or TRANSACTIONAL_INTEGRITY failures.
-**Risk**: The dream phase cannot detect patterns in specific failure domains — a project with repeated BRANCH_ISOLATION FAILs will generate a generic "review_failure" proposal rather than a `branch_isolation`-specific proposal.
+### 4. ai-review-log.jsonl Field Mismatch (distill_dream.py) — ✅ RESOLVED (BUG-11, pre-sprint 2026-06-02)
+**Resolution**: `distill_dream.py` now reads `blocking_concern` with a fallback to `check_type` for backwards compatibility. Domain-specific FAIL patterns (BRANCH_ISOLATION, MASS_ASSIGNMENT, TRANSACTIONAL_INTEGRITY) now generate skill-specific proposals rather than generic `"review_failure"` proposals.
+**Prior state for record**: `distill_dream.py` read `log.get("check_type")` which never matched the actual `blocking_concern` field; all FAILs classified as `"review_failure"`.
 
-### 5. Rebuttal Protocol Visibility Gap
-**Backlog intent**: T1-G-06 (Structured Rebuttal Protocol) is marked ✅ in v1.1.5.
-**Implementation reality**: The rebuttal protocol is fully implemented in `src/scripts/ai_review.py` (the framework source). However, the copy at `tests/e2e/test_project/src/scripts/ai_review.py` (shown as modified in git status) does not contain the rebuttal code. The E2E tests run against the test project copy. This creates a test coverage gap for the rebuttal protocol.
+### 5. Rebuttal Protocol Visibility Gap — ✅ RESOLVED (BUG-13, pre-sprint 2026-06-02; T1-N-02, v1.3.1)
+**Resolution**: BUG-13 synced the E2E test project — setup now copies the current framework source at runtime, eliminating the stale copy. T1-N-02 added concurrent write safety to the rebuttal write path via `_lock_file`. Rebuttal protocol is now covered by E2E tests.
+**Prior state for record**: `tests/e2e/test_project/src/scripts/ai_review.py` was a stale modified copy that lacked the rebuttal code; E2E tests did not exercise the rebuttal protocol.
 
-### 6. Token Budget Trigger Gap (T1-I-07)
-**Backlog intent**: T1-I-07 delivers a session token budget with 80% WARN and 100% HALT.
-**Implementation reality**: The HALT mechanism (`check_halt.py`) and the HALT file format support `token_budget_exhausted` as a reason. However, no code path in the framework currently writes a `token_budget_exhausted` HALT file automatically. `session.json` tracks `token_usage.input_tokens` but it is only updated by `check_spec.py`; `ai_review.py` does not write back to `session.json`. The mechanism exists but has no trigger.
-**Risk**: The v1.1.5 success criterion "a session approaching the token budget ceiling receives a WARN" cannot be verified because the counter that feeds the ceiling check is never incremented by the review gate.
+### 6. Token Budget Trigger Gap (T1-I-07) — ✅ RESOLVED (pre-sprint 2026-06-02)
+**Resolution**: `ai_review.py` now increments `session.json` token counters after each LLM call via atomic write through `_lock_session()`. The 80% WARN and 100% HALT thresholds now have a live counter to fire against. The v1.1.5 success criterion is now met.
+**Prior state for record**: `ai_review.py` did not write back to `session.json`; `session.json` token counters were only incremented by `check_spec.py`; the HALT mechanism existed but had no automatic trigger from the review gate.
 
-### 7. Session Ledger harness_version Field
-**Implementation reality**: `harness_version` in `session_ledger.jsonl` is hardcoded `"2.0"` in `init_session.py` rather than reading from `harness_version.txt`. Every session record shows version `"2.0"` regardless of the actual installed framework version. The T1-B-02 rationale ("forensic 'which harness version was running'" analysis) is defeated.
+### 7. Session Ledger harness_version Field — ✅ RESOLVED (BUG-16, v1.3.1)
+**Resolution**: `init_session.py` now reads from `harness_version.txt` at session close time. Session ledger records now carry the actual installed framework version. Forensic analysis of "which harness version was running" is now accurate.
+**Prior state for record**: `harness_version` was hardcoded `"2.0"` in `init_session.py` regardless of the actual installed version.
 
-### 8. Select BDD Gate Missing Config
-**Implementation reality**: `select_bdd_gate.py` requires `skill_bdd_map.json` at `.agent/config/skill_bdd_map.json`. This file does not exist in the framework source. The BDD gate selector script is non-functional on a fresh install.
+### 8. Select BDD Gate Missing Config — ⚠️ PARTIALLY RESOLVED (BUG-17, v1.3.1)
+**Resolution**: Default `skill_bdd_map.json` template created in `bootstrap/templates/` and copied to `.agent/config/` by `install.py`. `validate.py` now emits WARN on absence. The BDD gate selector script is functional with the template config.
+**Remaining gap**: Full skill-to-tag mapping for all 22 universal skills is not yet complete in the template. The template provides the structure; project teams must populate tag mappings for their skill selection to be meaningful.
+**Prior state for record**: `skill_bdd_map.json` did not exist in the framework source; `select_bdd_gate.py` exited immediately with "Error: skill_bdd_map.json missing." on any invocation.
 
-### 9. Check_Halt.py Token Budget has No Auto-Writer
-**Backlog intent**: Token budget enforcement provides a hard ceiling; HALT is written when budget is exhausted.
-**Implementation reality**: The HALT file writing logic for `token_budget_exhausted` is described in CHANGELOG v1.1.5 ("Atomic structured JSON HALT writes") but no session-level counter produces these writes. The HALT file for token exhaustion can only be written manually by the agent or by an external script that hasn't been implemented yet.
+### 9. Check_Halt.py Token Budget has No Auto-Writer — ✅ RESOLVED (pre-sprint 2026-06-02)
+**Resolution**: Same fix as Gap #6. `ai_review.py` now increments the session token counter after each LLM call. When the counter reaches 100% of the configured budget, the token exhaustion logic writes a `token_budget_exhausted` HALT file atomically. The auto-writer mechanism is now live.
+**Prior state for record**: No code path automatically wrote a `token_budget_exhausted` HALT file; the HALT mechanism existed but the trigger was missing.
 
 ---
 
 ## Sequencing Observations
 
-### A. T1-D-00 (skill_ownership.yaml) Should Have Been Delivered Before T1-D-03
+### A. T1-D-00 (skill_ownership.yaml) Should Have Been Delivered Before T1-D-03 — ✅ RESOLVED (pre-sprint 2026-06-02)
 
-**Current state**: T1-D-03 (dream phase) is marked ✅ Complete; T1-D-00 (skill_ownership.yaml routing map) is ⬜ undelivered. T1-D-00 is explicitly listed as a dependency for T1-D-03 in the backlog.
+**Resolution**: `skill_ownership.yaml` created at `.agent/config/skill_ownership.yaml` as a pre-sprint priority item. Dream phase routing is now functional. BUG-11 fixed the field mismatch in the same PR. The sequencing gap has been closed.
 
-**Impact**: The dream phase is live and running, but producing proposals that route to `"agent-framework"` for all event patterns and `"code-review"` for all review failures. Every dream proposal generated today lacks the skill routing that makes it actionable. The backlog recommended sequencing correctly places T1-D-00 before T1-D-03; the actual delivery sequence inverted this.
+**Historical note**: T1-D-03 was marked ✅ at delivery but T1-D-00 was missing; the inversion was caught by the capability inventory review (2026-06-02) and corrected before Sprint 1 began.
 
-**Recommendation**: T1-D-00 should be the first item in the next sprint regardless of other planned scope. It is a configuration file (no code), low effort, and immediately unblocks the primary value mechanism of T1-D-03.
+### B. T1-L-00 (Outer Loop Methodology Profile) is Required Before T1-L-03–T1-L-07 Proceed — ✅ RESOLVED (pre-sprint 2026-06-02)
 
-### B. T1-L-00 (Outer Loop Methodology Profile) is Required Before T1-L-03–T1-L-07 Proceed
+**Resolution**: T1-L-00 delivered as a pre-sprint gate item. `outer_loop.mode` added to `config.yaml.template`; `check_spec.py` and `business-analyst.md` retrofitted with mode-conditional behaviour. T1-L-03 through T1-L-05 (Sprint 1) were built mode-aware from the start.
 
-**Current state**: T1-L-03 (PM workflow) is marked ✅; T1-L-01 (spec gate) and T1-L-02 (BA workflow) were delivered without mode-awareness. T1-L-00 is ⬜ undelivered but listed as a "pre-sprint design gate" for v1.3.0.
+**Historical note**: The roadmap sequencing note was correct; T1-L-00 was enforced as a pre-sprint gate before Sprint 1 began.
 
-**Impact**: The roadmap correctly identifies this. The outer loop currently hard-enforces `incremental` methodology assumptions. Projects in `discovery` mode that install the framework will encounter a blocking spec gate requiring `APPROVED` status before any implementation — governance theatre for exploratory work. This will create adoption friction precisely when the framework is being trialled.
+### C. T1-I-00a/00b (Audit Log Consolidation) Prerequisite for T1-I-01 — ✅ RESOLVED (v1.3.1)
 
-**Recommendation**: T1-L-00 retrofit (adding `outer_loop.mode` to config.yaml and making check_spec.py and business-analyst.md mode-aware) should precede any further outer loop work (T1-L-03 through T1-L-07). The roadmap's sequencing note on this is correct and should be enforced.
+**Resolution**: T1-I-00b audit confirmed via grep (2026-06-03): `circuit_breaker.py` is the single caller of `audit_logger.py`. T1-I-00a delivered: `circuit_breaker.py` now routes events to `harness_events.jsonl` via `harness_utils.py` logging helpers. Single source of truth confirmed. T1-I-01 foundation (memory_manager.py) was then safely delivered in the same sprint.
 
-### C. T1-I-00a/00b (Audit Log Consolidation) Prerequisite for T1-I-01
-
-**Current state**: T1-I-00a (consolidate governance_audit.jsonl + audit_trail.jsonl) and T1-I-00b (audit audit_logger.py wiring) are both ⬜ undelivered. T1-I-01 (memory tiering) is also undelivered. T1-D-03 is live and reading only `harness_events.jsonl`.
-
-**Impact**: If `audit_logger.py` is writing to `governance_audit.jsonl` and `governance_check.py` is writing to `audit_trail.jsonl` (both unverified), the dream phase is missing events from these logs entirely. The dream phase's pattern detection operates on an incomplete event record.
-
-**Recommendation**: T1-I-00b (audit audit_logger.py wiring) should be verified immediately — it's a read-only grep that takes minutes. If callers exist for `audit_logger.py`, T1-I-00a consolidation must precede T1-I-01.
+**Historical note**: The recommendation to verify T1-I-00b first (a read-only grep) was followed; single caller confirmed and consolidated in the same PR.
 
 ### D. E1 (Tool ABC) Dependency Chain Creates Downstream Bottleneck
 
@@ -948,21 +1067,17 @@ init_session.py
 
 **Recommendation**: T1-E-01 is correctly sequenced in v1.3.0 before the v1.5.0 skill quality work. However, the downstream benefit for T1-D-03 executable verification is substantial and should be highlighted as a primary motivation for T1-E-01.
 
-### E. GymBase Coupling Creates Adoption Barrier Before Any Promotion
+### E. GymBase Coupling Creates Adoption Barrier Before Any Promotion — ✅ RESOLVED (S0-24, 2026-06-02)
 
-**Current state**: Multiple components are hard-coupled to GymBase-specific content: `DOMAIN_REGISTRY` in wiki_compile.py (13 GymBase ADR domains), `SYSTEM_PROMPT` in ai_review.py (references `_apply_branch_filter`, `HardenedBaseModel`), routing logic in `build_route_decision()` (GymBase directory paths), `project-manager.md` (GymBase placeholders), `governance.md` (GymBase file path references).
+**Resolution**: S0-24 delivered three targeted de-coupling changes: (a) `SYSTEM_PROMPT` in `ai_review.py` extracted to a config-loaded template — GymBase-specific patterns moved to `review_context_project.md`; (b) `DOMAIN_REGISTRY` in `wiki_compile.py` moved to config-driven `load_domain_registry()` reading `.agent/config.yaml`; (c) hardcoded GymBase directory paths in `build_route_decision()` moved to config. Generic installs no longer receive irrelevant review instructions or blank wiki pages.
 
-**Impact**: None of these are backlog items — they represent accumulated coupling that has not been flagged as technical debt. A developer installing the framework on a Django or Node.js project sees a gate system prompt that references FastAPI/SQLAlchemy patterns, a wiki that injects blank domain pages, and a PM workflow with undefined variables.
+**Historical note**: The recommendation to open an explicit "de-GymBase-ify" backlog item was followed — S0-24 was created and completed as a pre-sprint prerequisite for S0-23.
 
-**Observation**: The backlog has S0-20 (competitive positioning), S0-23 (README pre-Reddit additions), and T1-M-05 (stack coverage acknowledgment) which together address the *documentation* gap. But the *functional* GymBase coupling in code is not addressed by any current backlog item except T1-H-04 (auto-generated context at install) which is planned for v1.5.0. T1-B-01 (Universal Context file) would help but is also undelivered.
+### F. T1-N Series Timing — Dynamic Workflows Research Preview Warrants Monitoring — ✅ T1-N-02 RESOLVED (v1.3.1)
 
-**Recommendation**: Before any public promotion (S0-23 scope), open an explicit backlog item for "de-GymBase-ify the code" targeting: (a) SYSTEM_PROMPT in ai_review.py as a config-loaded template, (b) DOMAIN_REGISTRY in wiki_compile.py as config-driven rather than hard-coded, (c) build_route_decision() path matching as config-driven. These are orthogonal to any Sprint 0 items and have higher adoption impact than most Sprint 0 documentation items.
+**Resolution**: T1-N-02 delivered as a reliability fix in v1.3.1 (not gated on Dynamic Workflows GA as recommended). `_lock_file` context manager in `harness_utils.py` wired into `.ai-review-log.jsonl` and `harness_events.jsonl` append sites. Concurrent write safety is now in place.
 
-### F. T1-N Series Timing — Dynamic Workflows Research Preview Warrants Monitoring
-
-**Current state**: T1-N-01 through T1-N-06 (multi-agent governance) are all ⬜ undelivered. Anthropic's Dynamic Workflows was a research preview in May 2026.
-
-**Observation**: T1-N-02 (concurrent write safety for `.ai-review-log.jsonl` and `harness_events.jsonl`) is a correctness fix, not a feature, and its value is not gated on Dynamic Workflows reaching general availability. Any scenario where two agents commit simultaneously (even with conventional parallel tool use) can corrupt these files. T1-N-02 should be treated as a reliability fix in v1.3.0 rather than as a multi-agent feature gated on Dynamic Workflows GA.
+**Remaining**: T1-N-01 (multi-agent session hierarchy schema), T1-N-03 (HALT sentinel subagent propagation), T1-N-04 through T1-N-06 remain ⬜ undelivered, correctly gated on Dynamic Workflows reaching general availability. Monitor at v2.0.0 planning.
 
 ### G. `check_spec.py` Inferred Spec Resolution is Fragile
 
@@ -972,13 +1087,11 @@ init_session.py
 
 **Recommendation**: Before T1-L-04 (requirement → commit traceability) is delivered — which would generate even more spec references — harden the spec resolution logic to prefer the spec most recently modified or the one whose ID appears in `active_context.md`.
 
-### H. The 7-Day Wiki Compile Cooldown Creates a Cold-Start Problem
+### H. The 7-Day Wiki Compile Cooldown Creates a Cold-Start Problem — ✅ RESOLVED (BUG-12, pre-sprint 2026-06-02)
 
-**Current state**: `wiki_compile.py` is gated by `maybe_run_wiki_compile()` which requires 7+ days since last run.
+**Resolution**: `wiki_compile_state.json` now records `last_failure_utc` on compilation failure. Failed compilations use a 1-day retry cooldown instead of the 7-day success cooldown. `validate.py` emits WARN if `last_failure_utc` is within 48 hours. A developer without Ollama will see a validation warning on the next session rather than silently waiting a week.
 
-**Impact**: A fresh installation has `last_run_utc = "1970-01-01T00:00:00Z"` (epoch zero), so the first session will always attempt wiki compilation. This is correct. But if wiki compilation fails (e.g., Ollama is not running), the failure is silently absorbed and `wiki_compile_state.json` is still updated with `last_run_utc = now`. The next session will not retry for 7 days. A developer who installs on a machine without Ollama will silently have no wiki for a week.
-
-**Recommendation**: On compilation failure, `wiki_compile_state.json` should either not be updated or should record the failure with a shorter retry cooldown (e.g., 1 day).
+**Historical note**: The recommendation was implemented exactly as described — failure writes `last_failure_utc` (not `last_run_utc`), leaving the success cooldown intact.
 
 ---
 
