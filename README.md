@@ -297,6 +297,26 @@ replicated by installing the framework today.
 ---
 
 ## Documentation
+## 📚 Documentation
+
+**Start here**: [Quick Reference Guide](docs/wiki/Quick-Reference.md)
+
+### Full Wiki (11 Pages)
+All documentation is in [`docs/wiki/`](docs/wiki/) — part of this repository's version control:
+
+| Page | Purpose |
+|------|---------|
+| [Home](docs/wiki/Home.md) | Landing page & overview |
+| [Quick Reference](docs/wiki/Quick-Reference.md) | One-page cheat sheet |
+| [Glossary](docs/wiki/Glossary.md) | 50+ key terms |
+| [Installation & Setup](docs/wiki/Installation-Setup.md) | <10 min setup |
+| [Governance Rules](docs/wiki/Governance-Rules.md) | Prohibitions + escalation |
+| [Customization](docs/wiki/Customization.md) | Extending the framework |
+| [Workflows Overview](docs/wiki/Workflows-Overview.md) | All 18 workflows |
+| [Gate Verdicts Explained](docs/wiki/Gate-Verdicts-Explained.md) | PASS/WARN/FAIL verdicts |
+| [Dream Phase](docs/wiki/Dream-Phase.md) | Self-improvement loop |
+| [Architecture Decisions](docs/wiki/Architecture-Decisions.md) | Design philosophy |
+| [FAQ](docs/wiki/FAQ.md) | Common questions |
 
 - [Getting Started](docs/getting-started.md)
 - [Configuration Reference](docs/configuration.md)
