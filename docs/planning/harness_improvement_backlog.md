@@ -984,9 +984,21 @@ Since `[PROJECT_PACKAGE_MANAGER]` is already a template placeholder, the install
 
 ---
 
+## HIB-046 — validate.py pre-commit PATH check produces false positive on Windows when pre-commit is installed via Poetry virtual environment
+
+**Date**: 2026-06-05
+**Source**: Operational failure on Windows
+**Pillar**: Bootstrap / validation accuracy
+**Status**: 📅 Backlog — quick fix
+
+The hook wiring check (✅ Pre-commit Git Hook Layout) correctly confirms hooks are present and wired. The CLI tool check fires independently and cannot find `pre-commit` in the system PATH even when it's available in the Poetry venv. Fix: check for `pre-commit` using subprocess with the Poetry venv's Python rather than `shutil.which()` against system PATH.
+
+---
+
 ## Bug Items
 
 | ID | Bug | Description | Effort | Status |
+|---|---|---|---|---|
 |----|-----|-------------|--------|--------|
 | BUG-14 | **governance.md missing P-14 and P-15** | Add rationale entries for P-14 (repository identity guard) and P-15 (CI branch commits) to governance.md §3. Consistency gap between AGENTS.md (15 prohibitions) and governance.md (13 documented). P-14 rationale: agents operating across multiple terminal windows or IDE instances may execute git operations against the wrong repository; check_repo.py prevents this. P-15 rationale: direct commits to deployment/devops branches bypass the PR review process and can trigger unintended deployments. Documentation only — no code changes. | Low | ✅ (v1.3.1) |
 | BUG-15 | **check_halt.py missing pre-commit hook** | HALT is currently checked at session startup by convention only. With T1-I-07 wiring now active (ai_review.py increments session token counter after each review call), a realistic path exists where a token budget HALT file is written mid-session and the next commit proceeds without checking it. Add check_halt.py as a pre-commit hook stage in .pre-commit-config.yaml.template so HALT is enforced at every commit boundary, not just at session startup. One hook entry in the template plus a corresponding test in tests/test_validate.py verifying the hook entry is present. | Low | ✅ (v1.3.1) |

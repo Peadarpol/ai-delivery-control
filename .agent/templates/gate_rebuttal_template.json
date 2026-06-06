@@ -1,0 +1,26 @@
+{
+  "_comment_original_fail_session_id": "REQUIRED: The UUID of the session that failed review. Find this in the review failure console output or in .ai-review-log.jsonl.",
+  "original_fail_session_id": "<session-uuid>",
+
+  "_comment_original_fail_timestamp": "REQUIRED: The ISO 8601 timestamp of the failed review run (e.g., '2026-06-05T02:00:23+10:00').",
+  "original_fail_timestamp": "<timestamp>",
+
+  "_comment_normalized_diff_hash": "REQUIRED: The SHA-256 hash of the normalized staged diff, displayed in the failed review console output.",
+  "normalized_diff_hash": "<diff-sha256-hash>",
+
+  "findings": [
+    {
+      "_comment_finding_id": "REQUIRED: The ID of the finding you are contesting (e.g., 'FID-1').",
+      "finding_id": "<finding-id>",
+
+      "_comment_rebuttal_type": "REQUIRED: The category of your rebuttal. Must be one of: 'FALSE_POSITIVE', 'SPEC_REQUIREMENT', 'ARCHITECTURAL_INVARIANT', 'OUT_OF_SCOPE'.",
+      "rebuttal_type": "<rebuttal-type>",
+
+      "_comment_spec_reference": "REQUIRED for 'SPEC_REQUIREMENT' and 'ARCHITECTURAL_INVARIANT' types: Link or path to the specification file (e.g., 'docs/planning/specs/SPEC-123.md#L45-L50') and quote the relevant section verbatim.",
+      "spec_reference": "<spec-file-path-and-line-numbers>",
+
+      "_comment_evidence": "REQUIRED: Verifiable technical evidence. Assertions without verifiable facts will be rejected. You MUST include: (1) The exact, verbatim commit message; (2) The spec ID and its status; (3) Citing specific acceptance criteria the diff implements; (4) A description of the diff's contents (file names, line counts, and exact nature of change).",
+      "evidence": "<technical-evidence-checklist-items>"
+    }
+  ]
+}
