@@ -106,16 +106,42 @@ Every component introduces at least one.
 | FM11 | Observability Blindness        | System fails but team cannot see where            |
 | FM12 | Split-Brain                    | Two nodes both think they are primary             |
 
-### GymBase Archetype Classification
+### System Archetype Classification (project-specific)
 
-GymBase is **A3 — Marketplace & Transaction** (AT1 Consistency, AT9 Correctness, FM4 Data
-Consistency Failure, FM10 Security Breach dominant). When reviewing GymBase diffs, weight
-FM4 and FM10 most heavily. Any diff touching payment, booking, access control, or audit
-logging is operating in the A3 core risk zone.
+Your project's archetype classification and the corresponding FM weights belong in
+`review_context_project.md`, not here.
 
-| Code | Archetype                 | Core AT      | Core FM       |
-|------|---------------------------|--------------|---------------|
-| A3   | Marketplace & Transaction | AT1, AT9     | FM4, FM10     |
+When `review_context_project.md` defines a system archetype, weight the associated
+failure modes most heavily when reviewing diffs for that project.
+
+**How to classify your project**: identify which of the six archetypes best describes
+the system, or which combination applies:
+
+| Code | Archetype                  | Core concern                   | FM weights        |
+|------|----------------------------|--------------------------------|-------------------|
+| A1   | Search & Discovery         | Relevance + latency            | FM6, FM3          |
+| A2   | Social & Communication     | Delivery + fan-out             | FM3, FM6, FM7     |
+| A3   | Marketplace & Transaction  | Correctness + consistency      | FM4, FM10         |
+| A4   | Media Delivery             | CDN hit rate + storage         | FM6, FM8          |
+| A5   | Data Intelligence          | Quality + freshness            | FM8, FM9          |
+| A6   | Platform & API             | Reliability + backwards compat | FM2, FM8          |
+
+Add to your `review_context_project.md`:
+
+```
+## System Archetype
+[A1–A6 or combination — e.g. "A3 Marketplace & Transaction"]
+
+### Archetype FM Weights
+[List which failure modes to weight most heavily for this codebase
+and map them to your project-specific architectural invariants]
+
+Example (A3 project):
+FM4 Data Consistency Failure → maps to: [your UoW/transaction rules]
+FM10 Security Breach         → maps to: [your RBAC/auth rules]
+FM8  Schema Violation        → maps to: [your migration detection rules]
+FM9  Silent Data Corruption  → maps to: [your audit log path rules]
+```
 
 ### Decision Block Format (ADVISORY check)
 
