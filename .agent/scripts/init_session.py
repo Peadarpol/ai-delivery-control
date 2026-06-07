@@ -239,6 +239,10 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             "call_count": call_count,
         }
 
+        # Read harness version dynamically
+        _version_file = Path(__file__).parent.parent.parent / "harness_version.txt"
+        _harness_version = _version_file.read_text(encoding="utf-8").strip() if _version_file.exists() else "unknown"
+
         ledger_entry = {
             "session_id": prev_id,
             "date": date_str,
@@ -248,7 +252,7 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             "outcome": outcome,
             "outcome_source": source,
             "outcome_note": note,
-            "harness_version": "2.0",
+            "harness_version": _harness_version,
             "token_usage": token_usage_stats,
         }
 
@@ -523,7 +527,7 @@ def record_post_commit_heartbeat() -> None:
             "session_id": session_data.get("session_id"),
             "commit_sha": sha,
             "agent": "git_hook",
-            "severity": "info",
+            "severity": "INFO",
             "payload": {"msg": f"Commit detected via post-commit heartbeat: {msg}"},
         }
 

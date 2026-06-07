@@ -266,6 +266,7 @@ def main() -> None:
                 if not line.strip():
                     continue
                 evt = json.loads(line)
+                evt["severity"] = evt.get("severity", "INFO").upper()
                 dt = parse_iso_datetime(evt.get("timestamp_utc", ""))
                 if not dt or dt < cutoff_date:
                     continue
@@ -274,7 +275,7 @@ def main() -> None:
                 matched_skills = []
                 event_type = evt.get("event_type", "")
                 payload_str = json.dumps(evt.get("payload", {})).lower()
-                severity = evt.get("severity", "info")
+                severity = evt.get("severity", "INFO")
                 session_id = evt.get("session_id") or "unknown"
 
                 for skill_name, rules in skill_map.items():
@@ -318,6 +319,7 @@ def main() -> None:
                 if not line.strip():
                     continue
                 log = json.loads(line)
+                log["severity"] = log.get("severity", "WARNING").upper()
                 dt = parse_iso_datetime(log.get("timestamp", ""))
                 if not dt or dt < cutoff_date:
                     continue
@@ -329,7 +331,7 @@ def main() -> None:
                 check_type = log.get("blocking_concern", log.get("check_type", "review_failure"))
                 comments = log.get("comments", "").lower()
                 session_id = log.get("session_id") or "unknown"
-                severity = log.get("severity", "warning")
+                severity = log.get("severity", "WARNING")
 
                 # Try to map to skill
                 matched_skills = []
@@ -380,10 +382,10 @@ def main() -> None:
             unique_sessions.add(sess_id)
             if session_outcomes.get(sess_id) == "escalated":
                 escalated_count += 1
-            if e["severity"] == "critical":
-                max_severity = "critical"
-            elif e["severity"] == "warning" and max_severity != "critical":
-                max_severity = "warning"
+            if e["severity"] == "CRITICAL":
+                max_severity = "CRITICAL"
+            elif e["severity"] == "WARNING" and max_severity != "CRITICAL":
+                max_severity = "WARNING"
 
             delta = now - e["timestamp"]
             days_ago = max(0.0, delta.total_seconds() / 86400.0)
@@ -394,10 +396,10 @@ def main() -> None:
             len(unique_sessions) / total_sessions_30d if total_sessions_30d > 0 else 0.0
         )
 
-        # Flagging thresholds: count >= 3 AND escalation_rate >= 0.40 AND appearance_rate >= 0.20 OR severity == "critical"
+        # Flagging thresholds: count >= 3 AND escalation_rate >= 0.40 AND appearance_rate >= 0.20 OR severity == "CRITICAL"
         is_flagged = (
             count >= 3 and escalation_rate >= 0.40 and appearance_rate >= 0.20
-        ) or max_severity == "critical"
+        ) or max_severity == "CRITICAL"
 
         if not is_flagged:
             continue
