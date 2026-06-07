@@ -160,3 +160,34 @@ A decision that cannot name its AT tradeoff or its exposed FM is an incomplete
 architectural record. Flag as ADVISORY.
 
 *Source: The Computing Series — computingseries.com (CC BY 4.0)*
+
+## Gate Finding Output Format
+
+Every FAIL and qualifying WARN finding in the gate verdict must use the decision
+block format. A finding that cannot be expressed in this format is a suspicion,
+not a finding — return suspicions as questions to the developer, not as blocking
+concerns.
+
+Required format for each FAIL or WARN finding:
+
+```
+Finding:      [one sentence — what the code does, not what it should do]
+Tradeoff:     AT[N] — this code chose [specific pole] which [consequence for this system]
+Exposes:      FM[N] — this creates [specific named risk]; [file:line if determinable]
+Remediation:  [specific change that addresses the FM without reverting the AT intent]
+```
+
+Rules:
+- AT and FM codes must come from the vocabulary tables above. No invented codes.
+- The Tradeoff line names a specific pole, not just the tradeoff category.
+  Incorrect: "AT1 — consistency vs availability"
+  Correct:   "AT1 — this code chose availability; the cache write precedes the database
+              commit, so a crash between the two leaves the cache holding a value the
+              database will never confirm"
+- The Exposes line names a specific risk in this codebase, not the generic FM definition.
+  FM10 and FM4 findings at FAIL severity must include file:line.
+- The Remediation addresses the FM. "Delete this" is not a remediation.
+- PASS_FAST and PASS verdicts do not require the decision block.
+- WARN verdicts require the decision block when the concern touches FM4, FM9, FM10,
+  or FM12. For other WARN concerns it is encouraged but not required.
+

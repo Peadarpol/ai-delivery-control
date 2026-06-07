@@ -1,5 +1,70 @@
 # Changelog
 
+## v1.3.3 — 2026-06-07
+
+### Bug fixes
+- **HIB-FM8-02**: `session_ledger.jsonl` `harness_version` field now reads from
+  `harness_version.txt` at write time rather than hardcoding `"2.0"`. Forensic
+  "which harness version ran this session?" analysis is now reliable.
+- **HIB-FM8-01**: Severity casing normalised to uppercase across all
+  `harness_events.jsonl` writers. `init_session.py` heartbeat previously wrote
+  `"info"` (lowercase); all writers now use `"INFO"`. `distill_dream.py` dream
+  phase bypass trigger updated to case-insensitive comparison, fixing a silent bug
+  where `ai_review.py`-sourced `"CRITICAL"` events were invisible to the bypass.
+- **Onboarding baseline path**: `onboarding.py` now writes baseline reports to
+  `.agent/baseline/` instead of the project root. Directory is created automatically
+  on first run. E2E verification test updated to match. `.agent/baseline/` added to
+  `.gitignore`.
+- **Security**: `rebuttal_pass.json` (one-time gate bypass token) added to
+  `.gitignore` to prevent accidental commit.
+
+### Documentation
+- `docs/state-file-schema.md` (new): authoritative schema reference for
+  `harness_events.jsonl`, `.ai-review-log.jsonl`, `session_ledger.jsonl`, and
+  `session.json`. Documents known FM8 instances, schema evolution protocol, and
+  Event Type Registry.
+- `src/scripts/review_context_universal.md`: new `## Gate Finding Output Format` section
+  requiring decision block format (Finding / Tradeoff / Exposes / Remediation) for
+  all FAIL and qualifying WARN findings. AT/FM codes now function as output
+  constraints, not only vocabulary.
+- `docs/archetypes/` (new directory): A2, A3, and A6 starter domain registry packs
+  for new installations. Each includes a `domain_registry` yaml block and a
+  `review_context_project.md` template section.
+- `docs/architecture/gate-context-design.md` (new): GateContext design specification
+  for v1.4.0. Typed Pydantic model passed through the pre-commit chain; architecture
+  check findings become first-class inputs to the LLM review. Tracked as T1-G-13.
+- `AGENTS.md`: new `### Reading Gate Findings` section explaining decision block
+  format and rebuttal guidance.
+
+### Backlog additions
+- T1-G-13: GateContext shared object (v1.4.0)
+- HIB-FM8-01, HIB-FM8-02: closed by this release
+
+## v1.3.1 — 2026-06-03
+
+### Delivered
+- T1-I-00a/00b: circuit_breaker.py routed to harness_events.jsonl; audit_logger.py
+  wiring verified
+- BUG-15: check_halt.py registered as pre-commit hook with fail_fast: true
+- T1-N-02: file locking on .ai-review-log.jsonl and harness_events.jsonl
+- T1-B-01: UNIVERSAL_CONTEXT.md created; CLAUDE.md/GEMINI.md/.cursorrules as shims
+- T1-A-09: AGENTS.md split into universal + project layers
+- T1-I-04: AST staleness detection in init_session.py
+- T1-N-07: event_type alignment between circuit_breaker.py and skill_ownership.yaml
+- BUG-16: harness_version.txt read dynamically (partially — ledger write still
+  hardcoded; fixed in v1.3.3 as HIB-FM8-02)
+
+## v1.3.0 — 2026-06-03
+
+### Delivered
+- T1-L-03: /project-manager workflow
+- T1-L-04: check_traceability.py commit-msg hook
+- T1-L-05: acceptance_check.py with AcceptanceVerdict model
+- Migration module v1_2_0_1_to_v1_3_0.py
+- T1-L-00: outer loop methodology profile system (mode-awareness retrofit)
+- S0-24: de-GymBase-ify functional code (DOMAIN_REGISTRY to config, SYSTEM_PROMPT
+  to template, build_route_decision() paths to config)
+
 ## [1.2.0.1] — 2026-05-31
 
 ### Framework Gating & Exclusions (BUG-10)
