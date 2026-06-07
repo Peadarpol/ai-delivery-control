@@ -680,7 +680,7 @@ def migrate(config_path: Path) -> None:
     
     # Check that a dated snapshot is produced
     today_str = datetime.date.today().isoformat()
-    baseline_file = TEST_PROJECT / f"onboarding_baseline_{today_str}.md"
+    baseline_file = TEST_PROJECT / ".agent" / "baseline" / f"onboarding_baseline_{today_str}.md"
     
     if baseline_file.exists() and "Onboarding Baseline" in baseline_file.read_text(encoding="utf-8"):
         print_ok(f"T1-B-03 Onboarding successfully produced dated snapshot baseline file: {baseline_file.name}.")

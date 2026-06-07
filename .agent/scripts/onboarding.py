@@ -185,8 +185,10 @@ def main():
     print(f"pre-push hook:   {pre_push_ok}")
 
     # 7. Generate Onboarding Baseline Report
+    baseline_dir = agent_dir / "baseline"
+    baseline_dir.mkdir(parents=True, exist_ok=True)
     baseline_filename = f"onboarding_baseline_{today_str}.md"
-    baseline_path = project_root / baseline_filename
+    baseline_path = baseline_dir / baseline_filename
     
     baseline_content = f"""# Onboarding Baseline — {project_name} — {today_str}
 
@@ -215,7 +217,7 @@ This report establishes the baseline diagnostic capture for the AI Delivery Cont
 
     baseline_path.write_text(baseline_content, encoding="utf-8")
     print("\n==================================================")
-    log_success(f"Generated Onboarding Baseline Report at {baseline_filename}")
+    log_success(f"Generated Onboarding Baseline Report at .agent/baseline/{baseline_filename}")
     print("==================================================\n")
 
 if __name__ == "__main__":
