@@ -1,7 +1,7 @@
 # AI Delivery Control — Agent Capability Briefing
 
-**Framework version**: v1.3.1
-**Last updated**: 2026-06-04
+**Framework version**: v1.3.3
+**Last updated**: 2026-06-07
 **Update trigger**: Update this document when a backlog item moves to ✅ delivered,
 when a capability is materially changed, or when a "not yet built" item ships.
 
@@ -239,6 +239,7 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.3.3 | 2026-06-07 | Dynamic versioning from harness_version.txt (HIB-FM8-02); severity casing normalization to uppercase (HIB-FM8-01); onboarding baseline relocation to `.agent/baseline/`; rebuttal_pass.json gitignore; docs/state-file-schema.md, docs/architecture/gate-context-design.md (T1-G-13) spec, and archetype domain starter packs |
 | v1.3.1 | 2026-06-03 | UNIVERSAL_CONTEXT.md + tool shims (T1-B-01); AGENTS.md split + AGENTS_PROJECT.md (T1-A-09); concurrent write safety via _lock_file (T1-N-02); check_halt.py pre-commit hook (BUG-15); memory_manager.py three-tier foundation (T1-I-01); AST staleness detection in init_session.py (T1-I-04); T1-I-00a/00b audit log consolidation; BUG-14/16/17/18 fixes; 250 tests / 30 E2E scenarios |
 | v1.3.0 | 2026-06-03 | /project-manager workflow + pm_scaffold.py (T1-L-03); requirement-to-commit traceability check_traceability.py (T1-L-04); acceptance gate acceptance_check.py (T1-L-05); pre-sprint: skill_ownership.yaml (T1-D-00), T1-I-07 token wiring, BUG-11/12/13, S0-24 de-GymBase-ify, T1-L-00 outer loop mode |
 | v1.2.0.1 | 2026-05-31 | Bootstrap gitignore enforcement (BUG-10); validate.py HALT/session.json checks |

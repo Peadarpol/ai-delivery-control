@@ -1,7 +1,7 @@
 # AI Delivery Control — Capability Inventory
 
-**Generated**: 2026-06-04
-**Framework Version**: 1.3.1 (current as of inventory date)
+**Generated**: 2026-06-07
+**Framework Version**: 1.3.3 (current as of inventory date)
 **Purpose**: Strategic review inventory. Cards reflect what the code actually does, not what the documentation intends. Discrepancies between documentation and implementation are called out explicitly.
 
 ---
@@ -228,7 +228,7 @@
 - `session_id` — from `session.json`, nullable
 - `commit_sha` — nullable (populated by heartbeat on commit events, null for gate events)
 - `agent` — string (from `AGENT_ID` env var or script-specific default like `"ai_review"`, `"check_halt"`, `"git_hook"`)
-- `severity` — `"INFO"` | `"WARNING"` | `"HIGH"` | `"ERROR"` | `"critical"` (mixed case — inconsistent between writers)
+- `severity` — `"INFO"` | `"WARNING"` | `"HIGH"` | `"ERROR"` | `"CRITICAL"` (all caps — casing normalized in v1.3.3 via HIB-FM8-01)
 - `payload` — arbitrary dict, content varies by event_type
 
 **What writes to it**: `ai_review.py` (high-risk gate events, gate bypass events), `check_halt.py` (halt bypass events), `init_session.py` (commit_made heartbeat), `check_spec.py` (spec_quality_check events)
@@ -239,7 +239,7 @@
 **Current fragmentation state**: ✅ RESOLVED v1.3.1. T1-I-00a consolidation delivered — `circuit_breaker.py` (confirmed as the single caller of `audit_logger.py` via grep 2026-06-03) now routes events to `harness_events.jsonl` via `harness_utils.py` logging helpers. T1-I-00b (audit `audit_logger.py` wiring) also closed — single caller confirmed. T1-N-07 event_type alignment between `circuit_breaker.py` and `skill_ownership.yaml` verified and corrected ✅ v1.3.1.
 
 **Current limitations**:
-- Severity casing is inconsistent across writers: `ai_review.py` uses uppercase (`"HIGH"`, `"WARNING"`, `"INFO"`, `"ERROR"`); `init_session.py` heartbeat uses lowercase `"info"`; the dream phase reads `evt.get("severity") == "critical"` in lowercase, meaning a `"CRITICAL"` uppercase event would not trigger the bypass
+- Severity casing normalized in v1.3.3 (HIB-FM8-01). The dream phase parser maps all severity values to uppercase, ensuring bypass checks for `"CRITICAL"` events trigger reliably.
 - No schema validation on write — any dict can be appended; schema_version is hardcoded `"1.0"` in all writers but never validated on read
 - Concurrent write safety — ✅ resolved (T1-N-02 ✅ v1.3.1 — `_lock_file` context manager wired into append site)
 
@@ -310,7 +310,7 @@
 **How it feeds the dream phase**: `distill_dream.py` reads `session_ledger.jsonl` to build `session_outcomes` (maps session_id → outcome) and `total_sessions_30d`. It uses the outcomes to compute `escalation_rate` (proportion of sessions with `outcome == "escalated"` in the occurrence's contributing sessions). `init_session.py::maybe_run_dream_phase()` reads the ledger to check minimum session count (15) and minimum span (14 days) thresholds before triggering.
 
 **Current limitations**:
-- `harness_version` hardcoded — ✅ resolved (BUG-16 ✅ v1.3.1 — `init_session.py` now reads from `harness_version.txt` at session close time)
+- `harness_version` hardcoded — ✅ resolved (BUG-16 partially v1.3.1; fully resolved in v1.3.3 via HIB-FM8-02 where the dynamic read from `harness_version.txt` is executed at ledger write time)
 - The `date` field uses local time (not UTC), creating inconsistency with `harness_events.jsonl`'s UTC timestamps; cross-referencing sessions in the two logs across timezone-aware environments requires care
 - The previous `.md` format (`session_ledger.md`) may still exist in projects that pre-date the JSONL conversion; `load_hot_tier()` reads only the `.jsonl` file and will miss old entries
 - `token_usage.input_tokens` and `output_tokens` reflect only the calls where `ai_review.py` successfully wrote a `token_usage` field to `.ai-review-log.jsonl` with a `session_id` match; PASS_FAST verdicts report zero tokens (correct), FAIL_OPEN verdicts also report zero tokens (correct), but any FAIL or WARN verdict from a session where `session.json` was absent at write time will not have a session_id and will be excluded from the aggregation
