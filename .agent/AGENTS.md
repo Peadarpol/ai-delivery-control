@@ -193,6 +193,28 @@ When the AI review gate returns a `FAIL` verdict, agents and developers MUST adh
 1. **Fix the actual problem** (First Priority): Always attempt to resolve the underlying code quality, security, or architectural issue directly.
 2. **Structured Rebuttal** (Governed Contest): If a finding is believed to be a false positive or is specifically required, create `.agent/state/gate_rebuttal.json`. 
    - **Agent Mandate**: **Agents MUST NOT self-execute the `--rebuttal` command.** Writing the rebuttal file and presenting the argument to the human operator is the agent's sole action. The human reviews the argument and explicitly runs: `python src/scripts/ai_review.py --rebuttal`.
+   - **Rebuttal Evidence Checklist**: Assertions without verifiable facts will be rejected. Every rebuttal entry must satisfy this checklist:
+     1. **Quote the actual commit message verbatim**.
+     2. **State the spec ID and its current status** (e.g., SPEC-123, status APPROVED).
+     3. **Cite the specific acceptance criteria** the diff implements.
+     4. **Describe what the diff actually contains** — including file names, line count, and the exact nature of the change.
+   - **Worked Example (Weak vs. Strong Evidence)**:
+     ```json
+     // WEAK EVIDENCE (Will be REJECTED)
+     {
+       "finding_id": "FID-123",
+       "rebuttal_type": "FALSE_POSITIVE",
+       "evidence": "This is a false positive. The warning is wrong, this is not domain code, it is safe to bypass."
+     }
+
+     // STRONG EVIDENCE (Verifiable Facts - ACCEPTED)
+     {
+       "finding_id": "FID-123",
+       "rebuttal_type": "FALSE_POSITIVE",
+       "spec_reference": "docs/planning/specs/SPEC-456.md#L20-L25",
+       "evidence": "Commit message verbatim: 'feat: add local seed helper script'. Spec ID: SPEC-456 (Status: APPROVED). Implements Acceptance Criteria 3.1: 'Provide a standalone local CLI helper to seed test user profiles'. Diff details: New file 'src/infrastructure/database/seed_helper.py' (42 lines) containing utility functions only. This code resides entirely in the infrastructure layer, and is not imported by nor affects the domain or business layer core rules (ref: ARCH-02)."
+     }
+     ```
 3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
 
 ### 9 Environment Progression (mandatory gate sequence)
