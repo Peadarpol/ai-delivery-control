@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.2.0.1
-**Target Release**: v1.3.0
-**Last Updated**: 2026-05-31
+**Current Version**: 1.3.3
+**Target Release**: v1.4.0
+**Last Updated**: 2026-06-07
 
 ---
 
@@ -391,6 +391,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-H-03 | Co-change blast radius estimator | 4 | Repo intelligence |
 | T1-H-07 | Knowledge base lint pass | 4 | Quality |
 | T1-G-04 | Policy notes in terminal output | 5 | Gate output |
+| T1-G-11 | Evidence-gathering pre-context for review gate | 5 | Gate |
 
 **Observability**:
 
@@ -546,130 +547,34 @@ This note is preserved as a historical record of the sequencing decision.
 - ✅ 250 tests passing, 30 E2E scenarios passing, checksums frozen at v1.3.1
 
 **v1.3.2 — Outer Loop Completion & Recovery Foundations**
-📋 PLANNED — next sprint
+❌ DEFERRED — scope folded into v1.4.0 sprint planning
 
-Theme: Close the remaining outer loop gaps and establish session recovery
-safety nets that BUG-15 enforcement now requires.
+T1-L-01a, T1-J-01, T1-J-01a, T1-M-03 reprioritised; v1.3.3 advanced to carry bug fixes and documentation backlog from Engineer's Map analysis.
 
 Scope:
-
-1. T1-L-01a — Spec collision detection
-   Jaccard similarity check on acceptance criteria keywords across all
-   active specs. Stdlib only, check_spec.py extension. Prevents two specs
-   describing overlapping behaviour before implementation starts. Natural
-   companion to T1-L-01 (spec quality gate ✅).
-
-2. T1-J-01 + T1-J-01a — Automatic session checkpoint + mid-task convention
-   Automatic git stash push at session start in init_session.py. Delivers
-   the recovery safety net that BUG-15's pre-commit HALT enforcement now
-   requires — HALT can fire mid-session leaving partial work with no recovery
-   path. T1-J-01a adds mid-task checkpointing convention to AGENTS.md.
-   Deliver both in same PR.
-
-3. T1-M-03 — Mid-session observability (session_health.py)
-   Lightweight diagnostic: session duration, tool call count, context load
-   estimate, active warning patterns. Wired into AGENTS.md as a recommended
-   voluntary mid-session check. Slipped Sprint 1 and Sprint 2.
-
-Capacity note: Small sprint — two new scripts (session_health.py,
-check_spec.py extension), one init_session.py addition, one AGENTS.md
-update. All low-to-medium effort. GymBase delivery is the priority;
-this sprint should not block GymBase SPEC-125/SPEC-126 progress.
+1. T1-L-01a — Spec collision detection (deferred to v1.4.0)
+2. T1-J-01 + T1-J-01a — Automatic session checkpoint + mid-task convention (deferred to v1.4.0)
+3. T1-M-03 — Mid-session observability (session_health.py) (deferred to v1.4.0)
 
 ---
 
-**v1.3.3 — Gate Intelligence & Security Hardening**
-📋 PLANNED
+**v1.3.3 — Bug Fixes & Documentation Backlog**
+✅ DELIVERED (2026-06-07)
 
-Theme: Improve the quality of gate verdicts through pre-LLM evidence
-gathering, complete the spec feedback loop, and harden the gate pipeline
-against the prompt injection attack class surfaced by the Claude Code
-GitHub Actions vulnerability (June 2026, patched v1.0.94).
+Theme: Carry critical bug fixes for casing issues and version reading, and publish the documentation backlog (including state file schemas and GateContext design specification).
 
 Scope:
+1. HIB-FM8-02 — Dynamic version reading from harness_version.txt
+2. HIB-FM8-01 — Normalise severity casing to uppercase ("INFO", "CRITICAL") across all events and log files, fixing dream phase bypass trigger
+3. Onboarding baseline path — Move baseline reports from project root to `.agent/baseline/`
+4. Security — Add `rebuttal_pass.json` to `.gitignore`
+5. docs/state-file-schema.md — Authoritative schema reference for all state files (harness_events.jsonl, .ai-review-log.jsonl, session_ledger.jsonl, session.json)
+6. src/scripts/review_context_universal.md — Add gate finding output format (decision block required for FAIL and WARN)
+7. docs/archetypes/ — Create starter domain packs for A2, A3, and A6
+8. docs/architecture/gate-context-design.md — Design specification for the GateContext shared object (T1-G-13)
 
-1. T1-G-11 — Evidence-gathering pre-context for review gate
-   Before the LLM review call, gather three lightweight deterministic
-   signals and inject them into the review context:
-   (a) pytest --collect-only -q filtered to modules touched by the diff —
-       surfaces which tests cover changed code; zero hits on a changed
-       function is injected as a specific finding;
-   (b) import reachability from co_change_check.py (✅ delivered) —
-       injected as a structured blast radius summary;
-   (c) TODO/FIXME delta — count added vs removed in the diff, injected
-       if net positive.
-   All three are stdlib or already-delivered capabilities. No new
-   dependencies. Optional addition (configurable, off by default):
-   pytest -x scoped to affected test modules for definitive pass/fail
-   evidence. Dependency: T1-H-03 ✅.
-
-2. T1-L-12 — Spec grader per-criterion feedback
-   check_spec.py Pass 2 currently returns PASS/ADVISORY/FAIL with blocking
-   concerns. Enhance to return per-criterion breakdown: each acceptance
-   criterion assessed individually (testable? specific? measurable?), each
-   assumption assessed individually (resolved? pending? ambiguous?), each
-   scope boundary assessed individually (clear? overlapping?). The BA agent
-   receives targeted feedback on exactly which criteria need revision.
-   Produces a structured SpecGradeCard written to
-   .agent/state/spec_grade_{SPEC_ID}.md alongside the spec file. The /ba
-   workflow Phase 3 reads the grade card before finalising acceptance
-   criteria. Dependency: T1-L-01 ✅, T1-L-00 ✅.
-
-3. T1-K-05a — Environment variable sanitisation in gate subprocess calls
-   The Claude Code GitHub Actions vulnerability (CVE patched v1.0.94,
-   June 2026) demonstrated that environment variables passed to subprocess
-   calls can expose OIDC tokens and API credentials to prompt injection
-   attacks. Anthropic's fix: scrub environment variables from child
-   processes spawned by Claude Code. Apply the same mitigation to your
-   gate pipeline: when spawning subprocesses in architecture_checks.py,
-   co_change_check.py, and repo_map.py, use the env= parameter to pass
-   only the minimum required variables rather than inheriting the full
-   process environment. Source: cybersecuritynews.com/claude-codes-
-   github-actions-vulnerability, June 2026.
-
-4. T1-K-06 — blocked_commands.md as standalone prohibition artifact
-   Sara Nobrega "What AI Agents Should Never Do on Their Own" (TDS,
-   June 2026) demonstrates a companion blocked_commands.md file listing
-   commands requiring human approval before execution. Your AGENTS.md
-   prohibition table (P-01–P-15) is the equivalent but embedded in
-   AGENTS.md. Create .agent/blocked_commands.md listing exact command
-   patterns (rm -rf, git reset --hard, DROP TABLE, terraform apply, etc.)
-   with AGENTS.md updated to reference it. Optional gate enhancement:
-   deterministic pre-LLM diff scan for blocked command patterns — no
-   model call required. Dependency: T1-G-11 (for the optional gate scan).
-
-5. HIB-047 — Gate findings surfaced at rebuttal time
-   Store original finding text in gate_findings_{session_id}.json at
-   gate-fail time. Display frozen findings when --rebuttal is invoked.
-   Pre-populate rebuttal template with finding text as read-only comment
-   field. Highest-leverage fix — most downstream rebuttal failures dissolve
-   once the developer can see what the gate found. Source: SPEC-124
-   incident 2026-06-06.
-
-6. HIB-048 — Freeze gate findings at first evaluation
-   Gate re-evaluates diff on each rebuttal run producing non-deterministic
-   findings under stable FID labels. Freeze finding text at first evaluation.
-   Rebuttal evaluation assesses evidence against frozen text only.
-   Dependency: HIB-047 (same gate_findings file). Source: SPEC-124
-   incident 2026-06-06.
-
-7. HIB-049 — Add REMEDIATED rebuttal type
-   No vocabulary for "true positive — fixed". Developers fixing real bugs
-   must use FALSE_POSITIVE, polluting dream phase calibration. Add REMEDIATED
-   type — gate re-evaluates current diff against frozen finding to confirm
-   concern is gone. Update template and AGENTS.md §8.6 worked examples.
-   Dependency: HIB-048 (frozen finding reference). Source: SPEC-124
-   incident 2026-06-06.
-
-Capacity note: HIB-047, HIB-048, and HIB-049 are the highest priority items
-in this sprint — they fix systemic failures in the rebuttal protocol
-identified by a real five-attempt governance incident during GymBase SPEC-124
-delivery (2026-06-06). T1-K-05a (env var sanitisation) and T1-G-11
-(evidence-gathering pre-context) are the next priority. T1-L-12, T1-K-06,
-HIB-050, and HIB-051 can slip to v1.4.0 if capacity is tight.
-
-**Active milestone**: v1.3.2 (planned — see above)
-**v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 📋, v1.3.3 📋
+**Active milestone**: v1.3.3 (delivered — see above)
+**v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅
 **Next major milestone**: v1.4.0 (planning begins after v1.3.3)
 
 ---

@@ -217,6 +217,19 @@ When the AI review gate returns a `FAIL` verdict, agents and developers MUST adh
      ```
 3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
 
+### Reading Gate Findings
+
+From v1.3.3, FAIL and qualifying WARN findings use the decision block format:
+
+- **Finding** — what the code does (not a judgment)
+- **Tradeoff** — which AT tradeoff is being violated and in which direction
+- **Exposes** — which FM failure mode this creates, with file:line for FM4/FM10
+- **Remediation** — the specific change that resolves the FM
+
+When contesting a finding via the rebuttal protocol, address the **Exposes** line
+specifically. A rebuttal that does not explain why the named FM does not apply to
+this specific file and context will be rejected.
+
 ### 9 Environment Progression (mandatory gate sequence)
 
 Before raising any PR, the agent must confirm which environment gates apply to this project. The project's environment progression is defined in .agent/config.yaml under environments: or in the governing workflow file.
