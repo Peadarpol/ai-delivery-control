@@ -50,5 +50,29 @@ Harness skills live under `.agent/skills/` and are organized as flat, focused di
 
 ---
 
+## Release Process
+
+Every version bump requires three things to be updated atomically in a single commit. Missing any one of them silently breaks upgrade paths for users.
+
+### Mandatory release checklist
+
+- [ ] **`harness_version.txt`** — bump to the new version string (e.g. `1.3.4`). `upgrade.py` reads this file at runtime to determine the upgrade target; it is the single source of truth.
+- [ ] **`bootstrap/migrations/vX_X_X_to_vY_Y_Y.py`** — create the migration module for the new version. Every version transition must have a corresponding module, even if it is a no-op (docs/scripts-only release). Use the existing modules as a template.
+- [ ] **`bootstrap/checksums.py`** — generate and register checksums for both the old and new version. Run: `python bootstrap/generate_checksums.py --version X.Y.Z`. The pre-flight check silently skips any version whose registry is absent from this file, so a missing entry means corrupted installs can never be caught.
+
+### Why all three must change together
+
+`upgrade.py` reads `harness_version.txt` to know where to upgrade *to*. The migration chain is discovered by scanning `bootstrap/migrations/`. The pre-flight check looks up `checksums.py` to verify the *from* version before writing any files. If any one of these is missing, the upgrade either targets the wrong version, has no migration steps, or skips the integrity check entirely.
+
+### After generating checksums
+
+Run the full test suite to confirm no regressions:
+```bash
+pytest
+python bootstrap/generate_checksums.py --verify
+```
+
+---
+
 ## Reporting Issues
 Please use our [GitHub Issue Templates](.github/ISSUE_TEMPLATE/) to report bugs, request features, or propose new governance integrations.

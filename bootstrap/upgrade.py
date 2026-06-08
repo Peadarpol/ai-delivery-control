@@ -652,6 +652,11 @@ def main():
         action="store_true",
         help="Bypass the pre-flight installation state checksum check (use when files are intentionally customised)",
     )
+    parser.add_argument(
+        "--target-version",
+        default=None,
+        help="Override the target version (default: read from harness_version.txt). Useful for upgrading to an intermediate version or re-applying a specific migration.",
+    )
 
     args = parser.parse_args()
     project_path = Path(args.project_path).resolve()
@@ -660,7 +665,8 @@ def main():
         project_path=project_path,
         dry_run=args.dry_run,
         force=args.force,
-        show_diff=args.diff
+        show_diff=args.diff,
+        target_version=args.target_version,
     )
     manager.run_upgrade(skip_preflight=args.skip_preflight)
 
