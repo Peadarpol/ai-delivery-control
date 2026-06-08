@@ -252,9 +252,9 @@ Each workflow maintains state across sessions:
 
 ## See Also
 
-- **[Governance Rules](Governance-Rules)** — Escalation triggers that stop workflows
-- **[Quick Reference](Quick-Reference)** — Workflow router table
-- **[Customization](Customization)** — Creating custom workflows (not yet supported)
+- **[Governance Rules](Governance-Rules.md)** — Escalation triggers that stop workflows
+- **[Quick Reference](Quick-Reference.md)** — Workflow router table
+- **[Customization](Customization.md)** — Creating custom workflows (not yet supported)
 
 ---
 

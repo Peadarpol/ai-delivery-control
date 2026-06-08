@@ -94,4 +94,4 @@ Full disclosure process, supported version table, and contact details: [`SECURIT
 
 ---
 
-*For the design philosophy behind the gate's independence guarantees, see [Architecture Decisions](Architecture-Decisions).*
+*For the design philosophy behind the gate's independence guarantees, see [Architecture Decisions](Architecture-Decisions.md).*

@@ -49,4 +49,4 @@ These are deliberate design boundaries, not implementation gaps waiting to be fi
 
 ---
 
-*For the full design philosophy behind these choices, see [Architecture Decisions](Architecture-Decisions).*
+*For the full design philosophy behind these choices, see [Architecture Decisions](Architecture-Decisions.md).*

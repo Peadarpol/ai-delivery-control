@@ -97,4 +97,4 @@ Minimal structure:
 
 ---
 
-*See [Customization](Customization) for adding project-specific rules to the AI review gate.*
+*See [Customization](Customization.md) for adding project-specific rules to the AI review gate.*

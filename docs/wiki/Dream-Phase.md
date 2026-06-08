@@ -316,9 +316,9 @@ At session start, check:
 
 ## See Also
 
-- **[Customization](Customization)** — Manual rule updates
-- **[Gate Verdicts Explained](Gate-Verdicts-Explained)** — Understanding FAIL verdicts that feed dream phase
-- **[Governance Rules](Governance-Rules)** — Full rule reference
+- **[Customization](Customization.md)** — Manual rule updates
+- **[Gate Verdicts Explained](Gate-Verdicts-Explained.md)** — Understanding FAIL verdicts that feed dream phase
+- **[Governance Rules](Governance-Rules.md)** — Full rule reference
 
 ---
 

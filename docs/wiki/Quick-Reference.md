@@ -94,4 +94,4 @@ vim .agent/state/last_session_summary.md
 
 ---
 
-*Full reference: [Glossary](Glossary) · [Governance Rules](Governance-Rules)*
+*Full reference: [Glossary](Glossary.md) · [Governance Rules](Governance-Rules.md)*

@@ -120,4 +120,4 @@ High-risk file patterns include anything matching `*/migrations/*`, `*/auth/*`, 
 
 ---
 
-*For what the verdicts mean and what to do about them, see [Gate Verdicts Explained](Gate-Verdicts-Explained).*
+*For what the verdicts mean and what to do about them, see [Gate Verdicts Explained](Gate-Verdicts-Explained.md).*

@@ -59,7 +59,7 @@ Every database query on a multi-tenant table must include a `tenant_id` filter.
 - **WARN if:** scope is conditional rather than always applied
 ```
 
-See [Customization](Customization) for full format.
+See [Customization](Customization.md) for full format.
 
 ## Step 6: Start Your First Session
 
@@ -92,10 +92,10 @@ The pre-commit hook should trigger. You'll see gate output showing a `PASS`, `WA
 
 ## Next Steps
 
-- Read [Governance Rules](Governance-Rules) to understand prohibitions and escalation triggers
-- Explore [Workflows & Tasks](Workflows-Overview) to understand how to structure work
-- Browse [Skills](Skills) to see available tools and guidance
-- Check [Troubleshooting](Troubleshooting) if anything breaks
+- Read [Governance Rules](Governance-Rules.md) to understand prohibitions and escalation triggers
+- Explore [Workflows & Tasks](Workflows-Overview.md) to understand how to structure work
+- Browse [Skills](Skills.md) to see available tools and guidance
+- Check [Troubleshooting](Troubleshooting.md) if anything breaks
 
 ---
 
@@ -118,4 +118,4 @@ python bootstrap/downgrade.py --project-path /path/to/project --target-version 1
 
 ---
 
-*For production deployment, see the framework README and [Security](Security) considerations.*
+*For production deployment, see the framework README and [Security](Security.md) considerations.*

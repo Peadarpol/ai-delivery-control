@@ -72,7 +72,7 @@ Warning: .agent/state/session.json is NOT ignored by git!
 
 ### How to read a FAIL verdict
 
-See [Gate Verdicts Explained](Gate-Verdicts-Explained) for the complete guide to reading `FAIL` output, contesting findings with the rebuttal protocol, and understanding what each capability flag means.
+See [Gate Verdicts Explained](Gate-Verdicts-Explained.md) for the complete guide to reading `FAIL` output, contesting findings with the rebuttal protocol, and understanding what each capability flag means.
 
 ---
 
@@ -158,4 +158,4 @@ Errors (printed as `❌`) block gate operation. Warnings (printed as `⚠️`) i
 - Run `python bootstrap/validate.py --project-path .` for a full installation health report
 - Check `.ai-review-log.jsonl` for recent verdict history — `FAIL_OPEN` entries indicate reviews that did not complete
 - Check `harness_events.jsonl` for bypass and error events from previous sessions
-- See [Architecture Decisions](Architecture-Decisions) for why specific behaviours are designed the way they are
+- See [Architecture Decisions](Architecture-Decisions.md) for why specific behaviours are designed the way they are

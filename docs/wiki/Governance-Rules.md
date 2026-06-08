@@ -207,4 +207,4 @@ The framework uses two enforcement styles:
 
 ---
 
-*For full rationale and examples, see [Architecture Decisions](Architecture-Decisions).*
+*For full rationale and examples, see [Architecture Decisions](Architecture-Decisions.md).*

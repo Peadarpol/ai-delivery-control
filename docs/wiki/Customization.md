@@ -153,4 +153,4 @@ Do not edit these—they're overwritten on upgrade:
 
 ---
 
-*See [Glossary](Glossary) for definitions.*
+*See [Glossary](Glossary.md) for definitions.*

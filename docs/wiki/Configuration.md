@@ -120,4 +120,4 @@ For a complete field-by-field reference with all defaults, types, and examples f
 
 ---
 
-*See [Customization](Customization) for adding project-specific AI review rules outside of `config.yaml`.*
+*See [Customization](Customization.md) for adding project-specific AI review rules outside of `config.yaml`.*

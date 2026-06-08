@@ -347,9 +347,9 @@ SKIP_AI_REVIEW=1 SKIP_REASON="critical-production-hotfix" git commit
 
 ## See Also
 
-- **[Governance Rules](Governance-Rules)** — Full list of violations
-- **[Customization](Customization)** — How to add project-specific review rules
-- **[Quick Reference](Quick-Reference)** — Gate verdict table
+- **[Governance Rules](Governance-Rules.md)** — Full list of violations
+- **[Customization](Customization.md)** — How to add project-specific review rules
+- **[Quick Reference](Quick-Reference.md)** — Gate verdict table
 
 ---
 

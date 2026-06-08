@@ -149,7 +149,7 @@ Absolute prohibitions. Never do these without explicit user instruction:
 - P-03: Disable test assertions
 - ... (15 total)
 
-See [Governance Rules](Governance-Rules) for full list and rationale.
+See [Governance Rules](Governance-Rules.md) for full list and rationale.
 
 ---
 

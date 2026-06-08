@@ -12,7 +12,7 @@ The gate uses a completely separate model instance with no access to the writing
 
 ### Does the gate run on every commit?
 
-Yes. Every `git commit` triggers the full pre-commit chain. The AI review fires at the `commit-msg` stage. Documentation-only commits (`.md`, `.txt`, whitespace) are detected by the pre-flight check and returned as `PASS_FAST` with zero API calls — the cost is proportionate to what you are committing. See [The Pre-Commit Gate](The-Pre-Commit-Gate) for the full hook chain.
+Yes. Every `git commit` triggers the full pre-commit chain. The AI review fires at the `commit-msg` stage. Documentation-only commits (`.md`, `.txt`, whitespace) are detected by the pre-flight check and returned as `PASS_FAST` with zero API calls — the cost is proportionate to what you are committing. See [The Pre-Commit Gate](The-Pre-Commit-Gate.md) for the full hook chain.
 
 ### Does it work with Gemini CLI, Cursor, or Windsurf?
 
@@ -20,7 +20,7 @@ Yes. The gate is wired into `git` via pre-commit hooks, not into any specific ag
 
 ### Is my code sent to a third party?
 
-The staged diff is sent to your configured LLM provider (Anthropic, OpenAI, or a local Ollama instance) during the gate review call. The framework does not phone home, collect telemetry, or transmit data to any other endpoint. See [Security](Security) for the full data access model and how to verify it.
+The staged diff is sent to your configured LLM provider (Anthropic, OpenAI, or a local Ollama instance) during the gate review call. The framework does not phone home, collect telemetry, or transmit data to any other endpoint. See [Security](Security.md) for the full data access model and how to verify it.
 
 ---
 
@@ -46,7 +46,7 @@ Two paths exist:
 
 ### Why did the gate flag something that is not a problem?
 
-The most common cause is a missing or incomplete `review_context_project.md`. The gate has no way to know that a particular pattern is intentional in your project unless you tell it. Add a rule to your project context file explaining the pattern. See [Customization](Customization).
+The most common cause is a missing or incomplete `review_context_project.md`. The gate has no way to know that a particular pattern is intentional in your project unless you tell it. Add a rule to your project context file explaining the pattern. See [Customization](Customization.md).
 
 If you are certain the finding is a false positive, use the rebuttal protocol — this creates a permanent regression guard that prevents the same finding from recurring.
 
@@ -64,7 +64,7 @@ No. `config.yaml` is read at runtime — changes take effect on the next commit 
 
 ### How do I add project-specific review rules?
 
-Edit `src/scripts/review_context_project.md` in your project. This file is never overwritten on upgrade. See [Customization](Customization) for the format and examples.
+Edit `src/scripts/review_context_project.md` in your project. This file is never overwritten on upgrade. See [Customization](Customization.md) for the format and examples.
 
 ### Can I use a local model instead of Anthropic?
 
@@ -80,7 +80,7 @@ A typical feature commit (50–200 changed lines) uses approximately 2,000–4,0
 
 ### What is the outer loop?
 
-The outer loop covers the requirements side of delivery: specification quality checks, requirement traceability, and acceptance checking. It ensures agents implement the right thing, not just that they implement it correctly. See [Workflows Overview](Workflows-Overview) for the named workflows that use the outer loop.
+The outer loop covers the requirements side of delivery: specification quality checks, requirement traceability, and acceptance checking. It ensures agents implement the right thing, not just that they implement it correctly. See [Workflows Overview](Workflows-Overview.md) for the named workflows that use the outer loop.
 
 ### What is a SPEC-NNN reference and why does my commit need one?
 
@@ -88,8 +88,8 @@ When the traceability hook is active, every non-trivial commit must reference an
 
 ### What is the dream phase?
 
-The dream phase is the self-improvement loop. It runs periodically (triggered at session start when enough time and data have accumulated) and reads your session history — gate verdicts, bypass events, escalation patterns — to detect recurring failure modes specific to your project. When a pattern meets the threshold, it generates a structured proposal to add or tighten a project skill rule. Proposals require human review before they take effect. See [Dream Phase](Dream-Phase) for the full explanation.
+The dream phase is the self-improvement loop. It runs periodically (triggered at session start when enough time and data have accumulated) and reads your session history — gate verdicts, bypass events, escalation patterns — to detect recurring failure modes specific to your project. When a pattern meets the threshold, it generates a structured proposal to add or tighten a project skill rule. Proposals require human review before they take effect. See [Dream Phase](Dream-Phase.md) for the full explanation.
 
 ---
 
-*For full governance rules and prohibitions, see [Governance Rules](Governance-Rules).*
+*For full governance rules and prohibitions, see [Governance Rules](Governance-Rules.md).*
