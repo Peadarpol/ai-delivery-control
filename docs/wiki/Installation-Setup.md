@@ -93,7 +93,7 @@ The pre-commit hook should trigger. You'll see gate output showing a `PASS`, `WA
 ## Next Steps
 
 - Read [Governance Rules](Governance-Rules) to understand prohibitions and escalation triggers
-- Explore [Workflows & Tasks](Workflows-&-Tasks) to understand how to structure work
+- Explore [Workflows & Tasks](Workflows-Overview) to understand how to structure work
 - Browse [Skills](Skills) to see available tools and guidance
 - Check [Troubleshooting](Troubleshooting) if anything breaks
 

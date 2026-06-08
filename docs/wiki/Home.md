@@ -4,11 +4,11 @@ Welcome to the AI Delivery Control framework wiki. This is the central hub for e
 
 ## Quick Navigation
 
-**Getting started?** → Start with [Installation & Setup](Installation-&-Setup)
+**Getting started?** → Start with [Installation & Setup](Installation-Setup)
 
 **Need a quick lookup?** → Check the [Glossary](Glossary) or [Quick Reference](Quick-Reference)
 
-**Exploring workflows?** → Browse [Workflows & Tasks](Workflows-&-Tasks)
+**Exploring workflows?** → Browse [Workflows & Tasks](Workflows-Overview)
 
 **Understanding gates?** → Read [The Pre-Commit Gate](The-Pre-Commit-Gate)
 
@@ -86,17 +86,19 @@ Four markdown files carry context across sessions:
 
 ## Wiki Structure
 
-- **[Installation & Setup](Installation-&-Setup)** — Get running in <10 minutes
+- **[Installation & Setup](Installation-Setup)** — Get running in <10 minutes
 - **[Glossary](Glossary)** — Define key terms
 - **[Quick Reference](Quick-Reference)** — One-page cheat sheet
 - **[Configuration](Configuration)** — `.agent/config.yaml` reference
-- **[Workflows & Tasks](Workflows-&-Tasks)** — Detailed guides for each named workflow
+- **[Workflows & Tasks](Workflows-Overview)** — Detailed guides for each named workflow
 - **[Skills](Skills)** — The 22 universal skills, plus how to create custom skills
 - **[Governance Rules](Governance-Rules)** — Prohibitions (P-01–P-15) and escalation triggers
 - **[Customization](Customization)** — How to add project-specific rules without modifying framework files
 - **[Troubleshooting](Troubleshooting)** — Common issues and solutions
 - **[Gate Verdicts Explained](Gate-Verdicts-Explained)** — What `PASS`, `WARN`, `FAIL` mean and how to contest them
+- **[Dream Phase](Dream-Phase)** — How the self-improvement loop works and how to review its proposals
 - **[Architecture Decisions](Architecture-Decisions)** — Why the framework is designed this way
+- **[Scope and Boundaries](Scope-and-Boundaries)** — What the framework guarantees — and what it does not
 - **[FAQ](FAQ)** — Common questions
 
 ---
@@ -119,8 +121,8 @@ Four markdown files carry context across sessions:
 
 **I want to...** | **See**
 ---|---
-...get the framework running | [Installation & Setup](Installation-&-Setup)
-...understand what a workflow is | [Workflows & Tasks](Workflows-&-Tasks)
+...get the framework running | [Installation & Setup](Installation-Setup)
+...understand what a workflow is | [Workflows & Tasks](Workflows-Overview)
 ...add a custom review rule | [Customization](Customization)
 ...create a project-specific skill | [Skills](Skills)
 ...understand why I got a `FAIL` verdict | [Gate Verdicts Explained](Gate-Verdicts-Explained)
@@ -145,12 +147,12 @@ Four markdown files carry context across sessions:
 ## For Developers
 
 If you're installing this framework into your project, start here:
-1. Read [Installation & Setup](Installation-&-Setup)
+1. Read [Installation & Setup](Installation-Setup)
 2. Understand [Governance Rules](Governance-Rules)
 3. Explore the [Quick Reference](Quick-Reference)
 4. Run your first session and check the [Troubleshooting](Troubleshooting) guide if needed
 
-For questions on specific tasks, navigate to [Workflows & Tasks](Workflows-&-Tasks) or [Skills](Skills).
+For questions on specific tasks, navigate to [Workflows & Tasks](Workflows-Overview) or [Skills](Skills).
 
 ---
 

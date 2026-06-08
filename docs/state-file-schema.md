@@ -17,9 +17,9 @@ parse only known fields, log a warning. Do NOT silently discard unknown-version 
 
 | File | Current version | Known issues |
 |------|----------------|--------------|
-| `harness_events.jsonl` | `1.0` | Severity casing inconsistent — see FM8-01 |
+| `harness_events.jsonl` | `1.0` | FM8-01 ✅ Fixed v1.3.3 — see FM8-04 (local timestamp, open) |
 | `.ai-review-log.jsonl` | `1.1` | Timestamp uses local time, not UTC — see FM8-04 |
-| `session_ledger.jsonl` | `1.0` | `harness_version` hardcoded `"2.0"` — see FM8-02; date uses local time — see FM8-03 |
+| `session_ledger.jsonl` | `1.0` | FM8-02 ✅ Fixed v1.3.3; date uses local time — see FM8-03 |
 | `session.json` | `1.0` | — |
 
 ---
@@ -41,11 +41,7 @@ Required fields (all records):
 
 Optional: `commit_sha` (string or `null`)
 
-**Known issue FM8-01**: `init_session.py` heartbeat writes `"info"` (lowercase).
-`distill_dream.py` reads `evt.get("severity") == "critical"` — uppercase `"CRITICAL"`
-events from `ai_review.py` are invisible to the dream phase bypass trigger.
-Tracked as HIB-FM8-01. Until fixed, the dream phase bypass on critical events
-does not fire for `ai_review.py`-sourced events.
+~~**Known issue FM8-01**~~ **✅ Fixed v1.3.3**: `init_session.py` heartbeat previously wrote `"info"` (lowercase); all writers now emit uppercase severity. `distill_dream.py` normalises casing at read time via `.upper()` (lines 269, 322). Dream phase bypass trigger now correctly fires on `"CRITICAL"` events from all writers.
 
 ### Event Type Registry
 
@@ -113,10 +109,7 @@ Required fields:
 - `harness_version`: string (see FM8-02)
 - `token_usage`: object
 
-**Known issue FM8-02**: `harness_version` is hardcoded `"2.0"` at
-`init_session.py:251` regardless of the actual installed version. Version forensics unreliable.
-Fix: read from `harness_version.txt` at write time (T1-B-02, undelivered).
-Tracked as HIB-FM8-02.
+~~**Known issue FM8-02**~~ **✅ Fixed v1.3.3**: `harness_version` is now read dynamically from `harness_version.txt` at write time. Version forensics reliable from v1.3.3 onward. Prior session ledger entries still carry `"2.0"` — treat as `"pre-1.3.3"` when cross-referencing.
 
 **Known issue FM8-03**: `date` uses local time. `harness_events.jsonl` uses UTC.
 Same cross-reference problem as FM8-04.

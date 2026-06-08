@@ -401,6 +401,10 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-D-01 | SQLite state index — single machine | State persistence |
 | T1-D-02 | Cross-project harness health | Multi-project |
 
+**Sprint planning notes (pre-v1.4.0)**:
+
+- **Gemini CLI HALT coverage gap** (2026-06-08): T1-C-01 `--stop-hook` provides post-session governance for Claude Code only. No equivalent mechanism exists for Gemini CLI, making a completed Gemini session structurally indistinguishable from mid-task abandonment without manual spot-checks. Sprint planning should either scope a Gemini CLI stop-hook equivalent or establish a lightweight external verification protocol for all Gemini-executed delivery tasks. See decisions_log.md entry 2026-06-08 for full context.
+
 ---
 
 ### v1.5.0 — Skill Quality & Developer Experience 📋 PLANNED (Q2 2027)
@@ -552,9 +556,9 @@ This note is preserved as a historical record of the sequencing decision.
 T1-L-01a, T1-J-01, T1-J-01a, T1-M-03 reprioritised; v1.3.3 advanced to carry bug fixes and documentation backlog from Engineer's Map analysis.
 
 Scope:
-1. T1-L-01a — Spec collision detection (deferred to v1.4.0)
-2. T1-J-01 + T1-J-01a — Automatic session checkpoint + mid-task convention (deferred to v1.4.0)
-3. T1-M-03 — Mid-session observability (session_health.py) (deferred to v1.4.0)
+1. T1-L-01a — Spec collision detection (deferred to v1.3.4)
+2. T1-J-01 + T1-J-01a — Automatic session checkpoint + mid-task convention (deferred to v1.3.4)
+3. T1-M-03 — Mid-session observability (session_health.py) (deferred to v1.3.4)
 
 ---
 
@@ -573,9 +577,24 @@ Scope:
 7. docs/archetypes/ — Create starter domain packs for A2, A3, and A6
 8. docs/architecture/gate-context-design.md — Design specification for the GateContext shared object (T1-G-13)
 
-**Active milestone**: v1.3.3 (delivered — see above)
-**v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅
-**Next major milestone**: v1.4.0 (planning begins after v1.3.3)
+---
+
+**v1.3.4 — Health, Observability & Recovery Safety Net** 📋 PLANNED
+
+Theme: Close out v1.3.2 deferred debt and deliver the health check code backing the v1.3.3 config stubs.
+
+Scope:
+1. HIB-HEALTH-01 — Dream proposal staleness check (`harness_health.py --dream-proposals`)
+2. HIB-HEALTH-02 — State file size checks (`harness_health.py`, priority: `repo_graph_cache.json`)
+3. T1-L-01a — Spec collision detection (`check_spec.py` Jaccard similarity extension)
+4. T1-J-01 + T1-J-01a — Automatic session checkpoint + mid-task convention (`init_session.py` + `AGENTS.md`)
+5. T1-M-03 — Mid-session observability (`session_health.py`)
+6. HIB-GEMINI-01 — Gemini CLI post-session verification protocol (convention + `init_session.py` read)
+7. T1-K-06 — `blocked_commands.md` creation + `AGENTS.md` update
+
+**Active milestone**: v1.3.4
+**v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ⬜
+**Next major milestone**: v1.4.0 (planning begins after v1.3.4)
 
 ---
 

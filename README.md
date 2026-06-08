@@ -277,6 +277,7 @@ Full security model and responsible disclosure: [`SECURITY.md`](SECURITY.md)
 - Not production monitoring or alerting
 - Not infrastructure provisioning
 - Not an autonomous delivery agent — you are still making the decisions
+- Not a runtime guard — the gate governs what enters the repository; it does not intercept tool calls, API calls, or file operations an agent makes during a session before any commit is made
 - Not compliance-mapped to regulatory standards (planned for v3.0.0)
 
 ---
