@@ -61,8 +61,16 @@ def colorize_line(line: str) -> str:
         return f"\033[36m{line}\033[0m"
     return line
 
+def _read_harness_version() -> str:
+    """Read the canonical target version from harness_version.txt next to the bootstrap package."""
+    version_file = Path(__file__).resolve().parent.parent / "harness_version.txt"
+    if version_file.exists():
+        return version_file.read_text(encoding="utf-8").strip()
+    return "1.3.3"
+
+
 class UpgradeManager:
-    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False, target_version: str = "1.3.0"):
+    def __init__(self, project_path: Path, dry_run: bool = False, force: bool = False, show_diff: bool = False, target_version: str | None = None):
         self.project_path = project_path.resolve()
         self.framework_path = Path(__file__).resolve().parent.parent
         self.dry_run = dry_run
@@ -71,7 +79,7 @@ class UpgradeManager:
         self.backup_path = self.project_path / ".agent_backup_upgrade"
         self.state_file_path = self.project_path / ".agent" / ".framework_migration_state"
         self.config_path = self.project_path / ".agent" / "config.yaml"
-        self.target_version = target_version
+        self.target_version = target_version if target_version is not None else _read_harness_version()
 
     def validate_project(self):
         """Ensure the project directory carries an active .agent folder."""
