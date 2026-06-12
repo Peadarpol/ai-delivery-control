@@ -29,6 +29,12 @@ The gate governs what enters the repository. It does not intercept tool calls, A
 
 Closing this gap requires sandboxing or runtime monitoring — a different architectural component that operates during execution, not at the commit boundary.
 
+The practitioner complement to this boundary is sandboxing: running the agent in a
+Docker container or git worktree with filesystem and network isolation constrains
+what it can touch before any commit is made. The framework does not require or
+configure sandboxing — it is a separate architectural decision — but it is the
+correct answer to the runtime enforcement gap for high-stakes delivery work.
+
 ### Accumulated drift across many passing commits
 
 The gate checks each commit against your rules. It does not detect when a sequence of individually-passing commits has collectively drifted from the original architectural intent.

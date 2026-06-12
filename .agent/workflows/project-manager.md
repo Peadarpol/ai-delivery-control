@@ -51,6 +51,25 @@ stateDiagram-v2
    ```
 2. If `docs/planning/tasks/SPEC-XXX-tasks.md` already exists, a backup file `{output_path}.bak` is created. If completed checkboxes (`[x]`) are detected, request human confirmation before overwriting.
 
+### Vertical slice check (before approving task breakdown)
+
+Before approving the task breakdown, verify that the first deliverable task produces
+observable, testable behaviour across all layers — not just database schema or service
+code in isolation. A task that only touches one layer (schema only, service only,
+front end only) is a horizontal slice. Horizontal slices defer integration feedback
+to a later task.
+
+A good first task: schema change + service method + minimal UI or API endpoint that
+confirms end-to-end flow works.
+A horizontal first task: schema and migration only, with service and UI deferred.
+
+If the first task is horizontal, ask pm_scaffold.py to regroup: "Regroup these tasks
+so the first deliverable crosses all layers with a thin vertical slice."
+
+Source: Tracer bullet / vertical slice principle (Pragmatic Programmer). AI agents
+code horizontally by default — they complete layer by layer. Vertical slicing forces
+integration feedback at the end of each task rather than at the end of the feature.
+
 ### Phase 4: Human Review & Handoff
 1. Display the scaffolded task backlog at `docs/planning/tasks/SPEC-XXX-tasks.md`.
 2. Allow the developer to review and adjust estimates or add custom tasks/dependencies.

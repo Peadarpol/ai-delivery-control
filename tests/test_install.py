@@ -136,6 +136,76 @@ class TestRepoNameSeeding:
         assert installer.detected_repo_name == "my-cool-project"
 
 
+# ── Claude Code hook installation ────────────────────────────────────────────
+
+
+class TestClaudeHookInstallation:
+    def test_settings_json_written_with_session_start_hook(self, install_mod, tmp_path):
+        """install_claude_hooks writes .claude/settings.json with SessionStart entry."""
+        import json
+
+        installer = install_mod.Installer(str(tmp_path))
+        installer.install_claude_hooks()
+
+        settings_file = tmp_path / ".claude" / "settings.json"
+        assert settings_file.exists(), ".claude/settings.json must be created"
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        hooks = data.get("hooks", {})
+        assert "SessionStart" in hooks, "SessionStart key must be present"
+
+        commands = [
+            h.get("command", "")
+            for matcher in hooks["SessionStart"]
+            for h in matcher.get("hooks", [])
+        ]
+        assert any("init_session.py" in cmd for cmd in commands), (
+            "init_session.py must be in a SessionStart hook command"
+        )
+
+    def test_settings_json_written_with_precompact_hook(self, install_mod, tmp_path):
+        """install_claude_hooks writes .claude/settings.json with PreCompact entry."""
+        import json
+
+        installer = install_mod.Installer(str(tmp_path))
+        installer.install_claude_hooks()
+
+        settings_file = tmp_path / ".claude" / "settings.json"
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        hooks = data.get("hooks", {})
+        assert "PreCompact" in hooks, "PreCompact key must be present"
+
+        commands = [
+            h.get("command", "")
+            for matcher in hooks["PreCompact"]
+            for h in matcher.get("hooks", [])
+        ]
+        assert any("check_state_freshness.py" in cmd for cmd in commands), (
+            "check_state_freshness.py must be in a PreCompact hook command"
+        )
+
+    def test_install_claude_hooks_idempotent(self, install_mod, tmp_path):
+        """Re-running install_claude_hooks does not duplicate hook entries."""
+        import json
+
+        installer = install_mod.Installer(str(tmp_path))
+        installer.install_claude_hooks()
+        installer.install_claude_hooks()  # second run
+
+        settings_file = tmp_path / ".claude" / "settings.json"
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+
+        session_start_count = sum(
+            1
+            for matcher in data.get("hooks", {}).get("SessionStart", [])
+            for h in matcher.get("hooks", [])
+            if "init_session.py" in h.get("command", "")
+        )
+        assert session_start_count == 1, (
+            "SessionStart hook must not be duplicated on re-run"
+        )
+
+
 # ── Gitignore provisioning ───────────────────────────────────────────────────
 
 

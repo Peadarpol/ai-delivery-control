@@ -1,5 +1,72 @@
 # Changelog
 
+## v1.3.4 — 2026-06-08
+
+### Dream phase fixes (was silently non-functional — now fixed)
+- **HIB-DREAM-01**: `distill_dream.py` now reads `summary` and `concerns` fields
+  from `.ai-review-log.jsonl` for keyword matching and evidence text. Previously
+  read non-existent `comments` field — all 17 GymBase FAILs routed to the default
+  skill with empty evidence, producing zero proposals.
+- **HIB-DREAM-02**: `INTENT_MISMATCH` added to `proposed_rules_catalog` and routed
+  to `verification-before-completion` skill in `skill_ownership.yaml`. Previously
+  absent entirely — the most common outer loop failure mode generated only generic
+  fallback proposals.
+- **HIB-DREAM-03**: Threshold redesign — `appearance_rate >= 0.20` now qualifies
+  patterns independently of `escalation_rate`. Projects without escalated sessions
+  (the common case for well-functioning projects) can now generate proposals based
+  on FAIL frequency alone.
+
+### Health checks
+- **HIB-HEALTH-01**: `harness_health.py --dream-proposals` flag — staleness check
+  for open dream proposals against configured warn/critical day thresholds.
+- **HIB-HEALTH-02**: `harness_health.py --file-sizes` flag — size monitoring for
+  state files. `repo_graph_cache.json` prioritised (synchronous pre-commit path).
+
+### Observability and recovery
+- **T1-M-03**: `session_health.py` — mid-session diagnostic reporting duration,
+  event count, and warning patterns from the current session.
+- **T1-J-01 + T1-J-01a**: Automatic git stash checkpoint at session start.
+  `/rollback` command and mid-task convention added to AGENTS.md §7.
+- **HIB-GEMINI-01**: Gemini CLI post-session verification protocol — structured
+  close checklist consumed by next session's inference step.
+
+### Governance
+- **T1-K-06**: `.agent/blocked_commands.md` created as standalone prohibition
+  artifact. AGENTS.md references it. `install.py` copies to target projects.
+- **T1-L-01a**: Spec collision detection — Jaccard similarity check on acceptance
+  criteria keywords across active specs. ADVISORY on overlap ≥ 0.4 threshold.
+
+### Documentation & Workflow
+- **project-manager.md**: Vertical slice check added to Phase 3 — before approving
+  the task breakdown, verify the first deliverable task crosses all layers (schema +
+  service + UI/API endpoint). Horizontal-slice first tasks must be regrouped.
+  Source: tracer bullet / vertical slice principle (Pragmatic Programmer).
+- **feature-implementation.md**: Explicit TDD requirement for new logic added to
+  Phase 4 — red/green/refactor steps mandated before first commit. Gate verdicts on
+  untested code verify structure only, not behaviour. Refactor and UI-only exceptions
+  documented.
+- **AGENTS.md**: Session state design principle added above §6 close steps —
+  frames the goal of the close protocol (next session reconstructs from state files
+  alone), identifies compaction as a fallback rather than a default, and establishes
+  "close cleanly, start fresh" as the preferred path over compacted continuations.
+- **docs/wiki/Scope-and-Boundaries.md**: Sandboxing paragraph added to the "What
+  happens before the commit" section — names Docker containers and git worktrees as
+  the practitioner answer to the runtime enforcement gap.
+- **docs/planning/FRAMEWORK_BACKLOG.md**: T1-M-01 (agent operations guide) updated
+  with interface design principle — design the interface yourself, delegate the
+  implementation; maps to Ousterhout deep modules.
+- **docs/planning/FRAMEWORK_BACKLOG.md**: T1-H-09 added — codebase fitness for AI
+  delivery: shallow module clusters, test coverage gaps on high-PageRank files, and
+  ADR annotation density. Output to `.agent/state/codebase_fitness.md`; wired into
+  `harness_health.py` as DEGRADING signal. Targeted v1.5.0.
+
+### Documentation prerequisites
+- `docs/harness-health.md` (new): health check reference for HIB-HEALTH-01/02.
+- `docs/architecture/capability-calibration-design.md` (new): design spec for
+  T1-G-14 per-capability AT9 calibration weights (v1.4.0 prerequisite, DOC-02).
+
+---
+
 ## v1.3.3 — 2026-06-07
 
 ### Bug fixes

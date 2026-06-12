@@ -360,8 +360,8 @@ T1-E-01 is sequenced here for two reasons: (1) T1-D-03 (dream phase distillation
 
 **Self-governance note**: `ai_review.py` has 32 imports accumulated across six development phases (review gate, diff classifier, budget enforcer, rebuttal handler, PageRank router, roster checker). A CI ratchet test (`tests/test_ai_review.py::TestAiReviewImportCount`) enforces the current count as a ceiling — it must not grow further. The T1-E-01 refactoring should bring it to ≤25 by extracting skill responsibilities into separate modules. Lower the ratchet ceiling from 32 to 25 when that work is complete.
 
-**Future epic — Workflow Engine** *(needs further analysis before implementation)*:
-A data-driven workflow orchestrator replacing prose-driven agent interpretation with machine-readable phase definitions, FSM-backed state transitions, and per-phase completion contracts. Design document: [`workflow-engine-design.md`](file:///c:/projects/ai-delivery-control/docs/design/workflow-engine-design.md). Four components: workflow schema, workflow defaults YAML, `workflow_runner.py` (FSM via `transitions` library), and `ContractEvaluator`. Scope and backlog items to be defined after the Chain B items in this milestone are delivered.
+**Workflow Engine epic — scoped and backlogged for v1.6.0**:
+A data-driven workflow orchestrator replacing prose-driven agent interpretation with machine-readable phase definitions, FSM-backed state transitions, and per-phase completion contracts. Design document: [`workflow-engine-design.md`](../design/workflow-engine-design.md). Five backlog items (T1-W-01 through T1-W-05): workflow schema, workflow defaults YAML, `workflow_runner.py` (FSM via `transitions` library), `ContractEvaluator`, and bootloader integration. Chain B prerequisites now delivered — scope defined in v1.6.0 milestone and backlog section T1-W.
 
 ---
 
@@ -427,6 +427,28 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-J-04 | agentskills.io open standard compatibility | Ecosystem |
 | T1-K-01 | Malicious package detection gate (guarddog) | Security |
 | T1-M-04 | Minimal team usage guide | Documentation |
+
+---
+
+### v1.6.0 — Workflow Engine 📋 FUTURE
+
+**Goal**: Replace prose-driven agent interpretation of workflow phases with a data-driven FSM-backed orchestrator. Agents stop inferring phase context from convention and start reading machine-readable state written and enforced by the framework.
+
+**The strategic context**: Every workflow in the harness is currently a prose `.md` file that agents follow by reading and interpretation. There is no enforcement that an agent correctly identifies the current phase, satisfies phase exit conditions, or transitions in the correct order. The Workflow Engine makes phase enforcement as rigorous as commit-level enforcement — the gate checks commits; the runner checks phases. Design document: [`workflow-engine-design.md`](../design/workflow-engine-design.md).
+
+**Prerequisites**: T1-E-01 (skills as Tool ABC subclasses, delivered v1.3.0) required before T1-W-03. T1-D-01 (SQLite state index, v1.4.0) is a soft dependency — flat-file state is the authoritative source of truth; SQLite adds queryability.
+
+**Planned items**:
+
+| ID | Item | Category |
+|----|------|----------|
+| T1-W-01 | workflow.schema.yaml — universal workflow contract | Schema |
+| T1-W-02 | workflow.defaults.yaml — machine-readable feature/bug/hotfix phase sequences | Workflow definitions |
+| T1-W-03 | workflow_runner.py — FSM-backed phase transition engine (`transitions` library) | Core engine |
+| T1-W-04 | ContractEvaluator — per-phase completion gate | Gate enforcement |
+| T1-W-05 | Bootloader integration — workflow state injection at session start | Agent context |
+
+Full item descriptions in backlog section T1-W.
 
 ---
 
@@ -581,7 +603,7 @@ Scope:
 
 **v1.3.4 — Health, Observability & Recovery Safety Net** 📋 PLANNED
 
-Theme: Close out v1.3.2 deferred debt and deliver the health check code backing the v1.3.3 config stubs.
+Theme: Close out v1.3.2 deferred debt, deliver the health check code backing the v1.3.3 config stubs, and fix the dream phase field name and threshold bugs discovered during GymBase live operation.
 
 Scope:
 1. HIB-HEALTH-01 — Dream proposal staleness check (`harness_health.py --dream-proposals`)
@@ -591,6 +613,11 @@ Scope:
 5. T1-M-03 — Mid-session observability (`session_health.py`)
 6. HIB-GEMINI-01 — Gemini CLI post-session verification protocol (convention + `init_session.py` read)
 7. T1-K-06 — `blocked_commands.md` creation + `AGENTS.md` update
+8. HIB-DREAM-01 — `distill_dream.py` wrong field name for review log keyword matching (`comments` → `summary` + `concerns`)
+9. HIB-DREAM-02 — `INTENT_MISMATCH` pattern missing from `proposed_rules_catalog` and `skill_ownership.yaml`
+10. HIB-DREAM-03 — `escalation_rate` threshold redesign: compound threshold fix (`AND` → `OR`) and `partial`/`abandoned` outcome weighting
+
+**Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
 **Active milestone**: v1.3.4
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ⬜
