@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.3.3
+**Current Version**: 1.3.4
 **Target Release**: v1.4.0
-**Last Updated**: 2026-06-07
+**Last Updated**: 2026-06-12
 
 ---
 
@@ -601,7 +601,7 @@ Scope:
 
 ---
 
-**v1.3.4 — Health, Observability & Recovery Safety Net** 📋 PLANNED
+**v1.3.4 — Health, Observability & Recovery Safety Net** ✅ SHIPPED (2026-06-12)
 
 Theme: Close out v1.3.2 deferred debt, deliver the health check code backing the v1.3.3 config stubs, and fix the dream phase field name and threshold bugs discovered during GymBase live operation.
 
@@ -619,9 +619,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.3.4
-**v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ⬜
-**Next major milestone**: v1.4.0 (planning begins after v1.3.4)
+**Active milestone**: v1.4.0
+**v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
+**Next major milestone**: v1.4.0 (planning begins)
 
 ---
 

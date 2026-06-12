@@ -1,7 +1,7 @@
 # AI Delivery Control — Capability Inventory
 
-**Generated**: 2026-06-07
-**Framework Version**: 1.3.3 (current as of inventory date)
+**Generated**: 2026-06-12
+**Framework Version**: 1.3.4 (current as of inventory date)
 **Purpose**: Strategic review inventory. Cards reflect what the code actually does, not what the documentation intends. Discrepancies between documentation and implementation are called out explicitly.
 
 ---
@@ -105,7 +105,7 @@
 
 **Backlog dependencies**:
 - T1-N-01 would add `parent_session_id` to session schema, but doesn't address the identity guard's convention gap
-- T1-J-01 (automatic session-start checkpoint) would create a git stash automatically at startup, which would implicitly confirm the active repo is git-accessible
+- T1-J-01 (automatic session-start checkpoint) creates a git stash automatically at startup, which implicitly confirms the active repo is git-accessible
 
 ---
 
@@ -113,7 +113,7 @@
 
 ---
 ## Session Initialisation (`init_session.py`)
-**Delivered**: v1.0.0 (2026-05-21); T1-C-01 and T1-I-03 capabilities added in v1.1.5
+**Delivered**: v1.0.0 (2026-05-21); T1-C-01 and T1-I-03 added in v1.1.5; automatic checkpoint added in v1.3.4 (T1-J-01)
 **Primary files**:
 - `.agent/scripts/init_session.py` — single script, all session lifecycle logic
 - `src/scripts/harness_utils.py` — provides `_lock_session()`, `log_harness_event()`, `_setup_sys_path()`
@@ -146,7 +146,7 @@
 - T1-I-02 token budget tracking — ✅ delivered (token_usage initialised)
 - T1-I-04 AST staleness detection — ✅ v1.3.1
 - T1-I-07 session token budget WARN/HALT — ✅ delivered (via check_halt.py); wiring to session.json completed pre-sprint 2026-06-02
-- T1-J-01 automatic checkpoint — ⬜ undelivered (no git stash at startup)
+- T1-J-01 automatic checkpoint — ✅ delivered (v1.3.4) (creates a git stash automatically at startup in `init_session.py`)
 - T1-N-01 multi-agent session hierarchy schema — ⬜ undelivered (parent_session_id not in session.json)
 
 ---
@@ -449,7 +449,7 @@
 
 ---
 ## Spec Quality Gate (`check_spec.py`)
-**Delivered**: v1.2.0 (2026-05-30) as T1-L-01
+**Delivered**: v1.2.0 (2026-05-30) as T1-L-01; spec collision detection added in v1.3.4 (T1-L-01a)
 **Primary files**:
 - `.agent/scripts/check_spec.py` — two-tier quality gate
 - `docs/planning/specs/` — spec file directory (convention)
@@ -468,11 +468,11 @@
 - `--skip-spec-gate` requires `SKIP_REASON` of at least 10 characters but does not require structured JSON (unlike the T1-G-07 structured SKIP_REASON enforcement for the review gate); free text is accepted
 - Pass 2 is skipped in CI for local providers, meaning CI only validates structure (Pass 1) and never the quality judgment; spec quality regressions only surface locally
 - Spec ID resolution has a 4-way fallback (SPEC_ID env var → git branch name matching `SPEC-\d+` → `active_context.md` scan → single-file scan of the specs directory); the multiple-specs edge case is now less likely to fail but remains possible if neither branch name nor active_context.md reference a spec
-- T1-L-01a (spec collision detection via Jaccard similarity) is not delivered
+- T1-L-01a (spec collision detection via Jaccard similarity) is delivered in v1.3.4 (Jaccard similarity check on acceptance criteria keywords across active specs in check_spec.py)
 
 **Backlog dependencies**:
 - T1-L-00: Outer loop methodology profile system — ✅ delivered (pre-sprint 2026-06-02)
-- T1-L-01a: Spec collision detection — ⬜ undelivered
+- T1-L-01a: Spec collision detection — ✅ delivered (v1.3.4)
 
 ---
 ## Business Analyst Workflow (`business-analyst.md`)
@@ -550,7 +550,7 @@
 
 **Backlog dependencies**:
 - T1-L-04 → ✅ (v1.3.0)
-- T1-L-01a: Spec collision detection — ⬜ undelivered
+- T1-L-01a: Spec collision detection — ✅ delivered (v1.3.4)
 
 ---
 ## Acceptance Gate (`acceptance_check.py`)

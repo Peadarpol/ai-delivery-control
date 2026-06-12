@@ -1,7 +1,7 @@
 # AI Delivery Control — Agent Capability Briefing
 
-**Framework version**: v1.3.3
-**Last updated**: 2026-06-07
+**Framework version**: v1.3.4
+**Last updated**: 2026-06-12
 **Update trigger**: Update this document when a backlog item moves to ✅ delivered,
 when a capability is materially changed, or when a "not yet built" item ships.
 
@@ -22,7 +22,7 @@ any LLM-based agent (Claude Code, Gemini CLI, Cursor, Windsurf) through
 
 ---
 
-## Currently Delivered Capabilities (v1.0.0–v1.3.1)
+## Currently Delivered Capabilities (v1.0.0–v1.3.4)
 
 ### Session lifecycle management
 
@@ -38,6 +38,15 @@ At session start, `init_session.py` also runs AST-based staleness detection
 (T1-I-04, v1.3.1) — verifies that code patterns referenced in
 `review_context_universal.md` and `review_context_project.md` still exist in
 `src/`, outputting a warning card for any stale rules.
+
+**Automatic session checkpoint (T1-J-01, v1.3.4)**: At session start, `init_session.py`
+automatically creates a git stash checkpoint to prevent loss of original session-start state.
+**Mid-task checkpoints (T1-J-01a, v1.3.4)** are established as a convention in `AGENTS.md`
+for subprocess operations exceeding 60 seconds.
+
+**Gemini CLI close protocol (HIB-GEMINI-01, v1.3.4)**: Establishes a structured close
+protocol for Gemini CLI sessions using `.agent/state/gemini_session_close.json` to record
+outcomes, which is consumed at the next session start.
 
 ### Retrospective session outcome inference
 
@@ -67,6 +76,10 @@ and calls a configured LLM provider. It produces a typed verdict — `PASS`,
 whitespace) without an API call. The gate is provider-agnostic: Anthropic,
 OpenAI-compatible, or local Ollama via `LLMProvider ABC`. Concurrent write
 safety added via `_lock_file` (T1-N-02, v1.3.1).
+
+**Blocked commands configuration (T1-K-06, v1.3.4)**: `.agent/blocked_commands.md`
+is created as a standalone reference listing prohibited patterns (force push, drop table, etc.)
+requiring human review, and `AGENTS.md` is updated to point to it as the canonical list.
 
 ### Structured rebuttal protocol
 
@@ -130,6 +143,9 @@ Gherkin BDD scenarios → spec drafting → human approval. Agent drafts; human 
 task backlog via budget-tier LLM. Supports `--offline` fallback. Output:
 `docs/planning/tasks/SPEC-XXX-tasks.md`.
 
+**Spec collision detection (T1-L-01a, v1.3.4)**: computes keyword overlap (Jaccard similarity)
+on acceptance criteria across active specs to warn of overlaps before implementation starts.
+
 ### Dream phase self-improvement loop
 
 `distill_dream.py` reads 30 days of `harness_events.jsonl` and `.ai-review-log.jsonl`
@@ -138,6 +154,11 @@ patterns and generates structured improvement proposals in
 `.agent/state/dream_proposals/`. Routes proposals to specific skill files via
 `skill_ownership.yaml`. Contradiction detection runs before writing each proposal.
 Proposals require human review before application.
+
+**Dream phase fixes and threshold redesign (v1.3.4)**: Fixed `distill_dream.py` field matching schema bug
+(reading summary and concerns instead of comments), added routing/catalog templates for `INTENT_MISMATCH`
+(HIB-DREAM-02), and updated the compound threshold to use `OR` so high-frequency patterns qualify
+on appearance rate alone without requiring escalated sessions (HIB-DREAM-03).
 
 ### Compiled wiki layer
 
@@ -168,6 +189,17 @@ cold). Moves session summaries older than 90 days to cold archive automatically
 `_lock_file` context manager in `harness_utils.py` is wired into `.ai-review-log.jsonl`
 and `harness_events.jsonl` append sites. Safe for concurrent agent writes
 (T1-N-02, v1.3.1).
+
+### Mid-session observability
+
+**Lightweight session health CLI (T1-M-03, v1.3.4)**: `session_health.py` reports session duration,
+tool calls, context load, and warning patterns (e.g. repetitive reads or remediation loops)
+to help developers diagnose agent confusion.
+
+### Harness health monitoring
+
+**Harness health checks (v1.3.4)**: `harness_health.py` monitors dream proposal staleness
+(HIB-HEALTH-01) and state file size thresholds (HIB-HEALTH-02) to maintain harness integrity and performance.
 
 ### 22 universal skills + 2 stack-packs
 
@@ -225,9 +257,6 @@ exist when working in this project:
 - SQLite cross-project state index (T2-A-01 — deferred v2.0.0)
 - HITL structured approval queue (`T1-C-02`)
 - Skill deprecation mechanism (`T1-B-04`)
-- Spec collision detection (`T1-L-01a` — Jaccard similarity on acceptance criteria)
-- Automatic git stash checkpoint (`T1-J-01`) — planned v1.3.2
-- Mid-session observability tool (`T1-M-03`) — planned v1.3.2
 - Governance file diff highlighting on upgrade (`T1-K-03`)
 - All Tier 3 enterprise infrastructure (PostgreSQL, SSO, RBAC, compliance mappings)
 
@@ -239,6 +268,7 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.3.4 | 2026-06-12 | Automatic session-start stash checkpoint (T1-J-01) and mid-task checkpointing (T1-J-01a); spec collision detection (T1-L-01a); mid-session observability tool / session health CLI (T1-M-03); blocked_commands.md configuration (T1-K-06); Gemini CLI close protocol checklist (HIB-GEMINI-01); harness health checks for dream proposal staleness (HIB-HEALTH-01) and state file sizes (HIB-HEALTH-02); distill_dream.py wrong field name fix (HIB-DREAM-01), INTENT_MISMATCH routing (HIB-DREAM-02), and escalation_rate threshold redesign (HIB-DREAM-03) |
 | v1.3.3 | 2026-06-07 | Dynamic versioning from harness_version.txt (HIB-FM8-02); severity casing normalization to uppercase (HIB-FM8-01); onboarding baseline relocation to `.agent/baseline/`; rebuttal_pass.json gitignore; docs/state-file-schema.md, docs/architecture/gate-context-design.md (T1-G-13) spec, and archetype domain starter packs |
 | v1.3.1 | 2026-06-03 | UNIVERSAL_CONTEXT.md + tool shims (T1-B-01); AGENTS.md split + AGENTS_PROJECT.md (T1-A-09); concurrent write safety via _lock_file (T1-N-02); check_halt.py pre-commit hook (BUG-15); memory_manager.py three-tier foundation (T1-I-01); AST staleness detection in init_session.py (T1-I-04); T1-I-00a/00b audit log consolidation; BUG-14/16/17/18 fixes; 250 tests / 30 E2E scenarios |
 | v1.3.0 | 2026-06-03 | /project-manager workflow + pm_scaffold.py (T1-L-03); requirement-to-commit traceability check_traceability.py (T1-L-04); acceptance gate acceptance_check.py (T1-L-05); pre-sprint: skill_ownership.yaml (T1-D-00), T1-I-07 token wiring, BUG-11/12/13, S0-24 de-GymBase-ify, T1-L-00 outer loop mode |
@@ -247,3 +277,4 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 | v1.1.5 | 2026-05-29 | bootstrap/upgrade.py (HIB-006); retrospective outcome inference + post-commit heartbeat (T1-C-01); outcome-aware session startup (T1-I-03); dream phase distill_dream.py (T1-D-03); token budget tracking (T1-I-02); structured rebuttal protocol (T1-G-06); context compaction template (T1-M-06); session_ledger converted to JSONL |
 | v1.1.0 | 2026-05-23 | LLMProvider ABC (Anthropic/OpenAI/Ollama), high-risk commit classification, 65-test self-test suite, gate calibration fix, PASS/PASS_FAST verdict logging, ADR domain→capability mapping |
 | v1.0.0 | 2026-05-21 | Initial delivery: session lifecycle, pre-commit gate, diff-aware routing, architecture checks, PageRank repo map, ADR annotations, compiled wiki, 22 skills, 17 workflows |
+
