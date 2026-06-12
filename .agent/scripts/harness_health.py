@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+import argparse
 import collections
 import datetime
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -411,8 +413,87 @@ def report_rebuttals():
         print("\033[93m  ⚠️  [ALERT] Human Rebuttal Rate exceeds 15% (calibration signal)! Recommendation: Relax specific skills.\033[0m")
 
 
+def report_dream_proposal_staleness():
+    section_header("DREAM PROPOSAL STALENESS")
+    proposals_dir = Path(".agent/state/dream_proposals")
+    if not proposals_dir.exists():
+        print("  Status         : NO PROPOSALS DIR")
+        return
+
+    warn_days = 30      # config: dream_proposals.staleness_warn_days
+    critical_days = 90  # config: dream_proposals.staleness_critical_days
+    max_open = 10       # config: dream_proposals.max_open_proposals
+
+    open_proposals = sorted(proposals_dir.glob("*__open.md"))
+    if not open_proposals:
+        print("  Status         : \033[92mCLEAN (no open proposals)\033[0m")
+        return
+
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    stale_warn, stale_critical = [], []
+
+    for p in open_proposals:
+        try:
+            content = p.read_text(encoding="utf-8")
+            match = re.search(r"Generated:\s*(\d{4}-\d{2}-\d{2})", content)
+            if not match:
+                continue
+            generated = datetime.datetime.strptime(match.group(1), "%Y-%m-%d")
+            age_days = (now - generated).days
+            if age_days >= critical_days:
+                stale_critical.append((p.name, age_days))
+            elif age_days >= warn_days:
+                stale_warn.append((p.name, age_days))
+        except Exception:
+            continue
+
+    print(f"  Open proposals : {len(open_proposals)}")
+    if len(open_proposals) > max_open:
+        print(f"  \033[93m⚠ WARN: {len(open_proposals)} proposals exceeds max ({max_open})\033[0m")
+    for name, age in stale_critical:
+        print(f"  \033[91mCRITICAL: {name} — {age}d old (>{critical_days}d threshold)\033[0m")
+    for name, age in stale_warn:
+        print(f"  \033[93mWARN: {name} — {age}d old (>{warn_days}d threshold)\033[0m")
+    if not stale_warn and not stale_critical:
+        print(f"  Status         : \033[92mHEALTHY (all within {warn_days}d)\033[0m")
+
+
+# Monitored files: (path, warn_mb, critical_mb)
+_SIZE_CHECKS = [
+    (".agent/state/repo_graph_cache.json", 2, 10),    # highest priority — pre-commit hot path
+    (".agent/state/harness_events.jsonl", 5, 20),
+    (".ai-review-log.jsonl", 5, 20),
+    (".agent/state/session_ledger.jsonl", 1, 5),
+]
+
+def report_state_file_sizes():
+    section_header("STATE FILE SIZES")
+    any_issue = False
+    for filepath, warn_mb, critical_mb in _SIZE_CHECKS:
+        p = Path(filepath)
+        if not p.exists():
+            continue
+        size_mb = p.stat().st_size / (1024 * 1024)
+        if size_mb >= critical_mb:
+            print(f"  \033[91mCRITICAL: {filepath} — {size_mb:.1f}MB (threshold: {critical_mb}MB)\033[0m")
+            any_issue = True
+        elif size_mb >= warn_mb:
+            print(f"  \033[93mWARN: {filepath} — {size_mb:.1f}MB (threshold: {warn_mb}MB)\033[0m")
+            any_issue = True
+    if not any_issue:
+        print("  Status         : \033[92mHEALTHY\033[0m")
+
+
 def main():
-    show_all = "--all" in sys.argv
+    parser = argparse.ArgumentParser(description="Harness health report")
+    parser.add_argument("--all", action="store_true", help="Show all backlog items")
+    parser.add_argument("--dream-proposals", action="store_true",
+                        help="Run dream proposal staleness check")
+    parser.add_argument("--file-sizes", action="store_true",
+                        help="Run state file size checks")
+    args = parser.parse_args()
+    show_all = args.all
+
     print("\033[1m" + "=" * 60)
     print("  GYM APP RESILIENCE HARNESS HEALTH REPORT")
     print("=" * 60 + "\033[0m")
@@ -425,6 +506,13 @@ def main():
     report_schema_hardening()
     report_dream_phase()
     report_token_trends()
+
+    if args.dream_proposals or True:  # run in default report
+        report_dream_proposal_staleness()
+
+    if args.file_sizes or True:  # run in default report
+        report_state_file_sizes()
+
     report_backlog(show_all=show_all)
     check_harness_alerts()
  

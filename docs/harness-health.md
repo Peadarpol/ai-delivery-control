@@ -23,8 +23,7 @@ For each proposal matching `*__open.md` in `.agent/state/dream_proposals/`:
 4. Emit a critical/degrading status if age is greater than or equal to `staleness_critical_days`.
 5. Emit a warning if total open proposal count exceeds `max_open_proposals`.
 
-> [!NOTE]
-> *code not yet delivered — stub until HIB-HEALTH-01 ships in this release*
+
 
 ---
 
@@ -43,8 +42,7 @@ Configured under the `health_checks.state_file_size` namespace:
 | `.ai-review-log.jsonl` | `ai_review_log_warn_mb` | `ai_review_log_critical_mb` | 5 | 20 | Medium (Review log) |
 | `.agent/state/session_ledger.jsonl` | `session_ledger_warn_mb` | `session_ledger_critical_mb` | 1 | 5 | Low (Session history) |
 
-> [!NOTE]
-> *code not yet delivered — stub until HIB-HEALTH-02 ships in this release*
+
 
 ---
 
