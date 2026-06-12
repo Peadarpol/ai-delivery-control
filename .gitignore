@@ -23,6 +23,7 @@ env/
 .agent/baseline/
 .skip-ai-reason.json
 rebuttal_pass.json
+.agent/state/gemini_session_close.json
 
 # Mock testing scratch directory
 scratch/

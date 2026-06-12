@@ -234,3 +234,55 @@ class TestGitignoreProvisioning:
         content = gitignore_file.read_text(encoding="utf-8")
         assert content == "some-rule\n.agent/state/session.json\nother-rule"  # Unchanged
 
+
+class TestInstallBlockedCommands:
+    def test_blocked_commands_copied(self, install_mod, tmp_path):
+        """Verify blocked_commands.md is copied to installed projects if source exists."""
+        source_dir = tmp_path / "source_framework"
+        source_agent = source_dir / ".agent"
+        source_agent.mkdir(parents=True)
+        
+        # Create dummy source blocked_commands.md
+        bc_src = source_agent / "blocked_commands.md"
+        bc_src.write_text("blocked commands list", encoding="utf-8")
+        
+        # Create destination target directory
+        dest_dir = tmp_path / "target_project"
+        dest_agent = dest_dir / ".agent"
+        dest_agent.mkdir(parents=True)
+        
+        installer = install_mod.Installer(str(dest_dir))
+        # Override framework_path to redirect source file lookups
+        installer.framework_path = source_dir
+        
+        with patch.object(installer, "log_verbose"):
+            installer.copy_framework_files()
+            
+        # Verify copied destination file
+        bc_dest = dest_agent / "blocked_commands.md"
+        assert bc_dest.exists()
+        assert bc_dest.read_text(encoding="utf-8") == "blocked commands list"
+
+    def test_blocked_commands_idempotent(self, install_mod, tmp_path):
+        """Verify blocked_commands.md is NOT overwritten if already exists in destination."""
+        source_dir = tmp_path / "source_framework"
+        source_agent = source_dir / ".agent"
+        source_agent.mkdir(parents=True)
+        bc_src = source_agent / "blocked_commands.md"
+        bc_src.write_text("source version", encoding="utf-8")
+        
+        dest_dir = tmp_path / "target_project"
+        dest_agent = dest_dir / ".agent"
+        dest_agent.mkdir(parents=True)
+        bc_dest = dest_agent / "blocked_commands.md"
+        bc_dest.write_text("customized version", encoding="utf-8")
+        
+        installer = install_mod.Installer(str(dest_dir))
+        installer.framework_path = source_dir
+        
+        with patch.object(installer, "log_verbose"):
+            installer.copy_framework_files()
+            
+        assert bc_dest.read_text(encoding="utf-8") == "customized version"
+
+

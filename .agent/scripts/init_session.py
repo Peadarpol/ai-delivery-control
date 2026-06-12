@@ -229,6 +229,25 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         except Exception:
             date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
+        # HIB-GEMINI-01: check for gemini_session_close.json
+        close_file = STATE_DIR / "gemini_session_close.json"
+        if close_file.exists():
+            try:
+                close_data = json.loads(close_file.read_text(encoding="utf-8"))
+                if close_data.get("session_id") == prev_id:
+                    outcome = close_data.get("outcome", outcome)
+                    note = close_data.get("outcome_note", note)
+                    source = "gemini_close"
+                    try:
+                        close_file.unlink()
+                        print(f"[SESSION] Gemini close file consumed — outcome: {outcome}")
+                    except Exception:
+                        pass
+                else:
+                    print(f"[WARNING] Gemini close session_id mismatch: {close_data.get('session_id')} vs previous session {prev_id}")
+            except Exception as e:
+                print(f"[WARNING] Error reading gemini close file: {e}")
+
         # Log to session_ledger.jsonl
         token_usage_stats = {
             "input_tokens": input_tokens,
@@ -408,7 +427,7 @@ def _should_skip_background_tasks() -> bool:
             pass
     return False
 
-def initialize_session(agent_name: str = "Harness") -> None:
+def initialize_session(agent_name: str = "Harness") -> str:
     """Initializes or updates the current session state."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -474,6 +493,7 @@ def initialize_session(agent_name: str = "Harness") -> None:
             print("   Please review architectural context before execution:")
             print(f"   {PROJECT_ROOT}/.agent/state/decisions_log.md")
             print("=" * 80 + "\n")
+        return session_id
 
 
 def record_post_commit_heartbeat() -> None:
@@ -807,7 +827,8 @@ def main() -> None:
 
         # Determine agent name and initialize new session
         agent_name = args.agent or os.environ.get("AGENT_ID") or "Harness"
-        initialize_session(agent_name=agent_name)
+        session_id = initialize_session(agent_name=agent_name)
+        _create_session_checkpoint(session_id)
 
         # Maybe run dream phase distillation
         maybe_run_dream_phase(prev_outcome)
@@ -817,6 +838,20 @@ def main() -> None:
 
         # Maybe run wiki lint
         maybe_run_wiki_lint()
+
+
+def _create_session_checkpoint(session_id: str) -> None:
+    """Create a recoverable git stash at session start. Non-fatal if stash fails."""
+    try:
+        result = subprocess.run(
+            ["git", "stash", "push", "--include-untracked",
+             "-m", f"AUTO: session-start checkpoint [{session_id[:12]}]"],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0 and "No local changes" not in result.stdout:
+            print(f"[SESSION] Checkpoint created: git stash (session {session_id[:12]})")
+    except Exception:
+        pass  # Non-fatal — checkpoint is a safety net, not a requirement
 
 
 if __name__ == "__main__":

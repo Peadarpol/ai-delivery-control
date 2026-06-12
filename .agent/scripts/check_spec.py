@@ -571,6 +571,44 @@ def handle_pass2_outcome(verdict: SpecQualityVerdict, spec_id: str, input_tokens
         return 1, verdict
 
 
+def _check_spec_collision(spec_id, spec_path, specs_dir, threshold=0.4):
+    def extract_criteria_keywords(path):
+        content = path.read_text(encoding="utf-8")
+        match = re.search(
+            r"##\s+Acceptance Criteria\s*\n(.*?)(?=\n##|\Z)",
+            content, re.DOTALL | re.IGNORECASE
+        )
+        if not match:
+            return set()
+        text = match.group(1).lower()
+        words = re.findall(r"\b[a-z]{4,}\b", text)
+        stopwords = {"must", "shall", "should", "will", "that", "with", "this",
+                     "when", "then", "given", "and", "the", "for", "are", "not"}
+        return {w for w in words if w not in stopwords}
+
+    target_kw = extract_criteria_keywords(spec_path)
+    if not target_kw:
+        return []
+
+    collisions = []
+    for other in specs_dir.glob("SPEC-*.md"):
+        if other == spec_path:
+            continue
+        other_content = other.read_text(encoding="utf-8")
+        status = re.search(r"status:\s*(\w+)", other_content, re.IGNORECASE)
+        if not status or status.group(1).upper() not in ("APPROVED", "DRAFT"):
+            continue
+        other_kw = extract_criteria_keywords(other)
+        if not other_kw:
+            continue
+        intersection = len(target_kw & other_kw)
+        union = len(target_kw | other_kw)
+        if union > 0 and intersection / union >= threshold:
+            collisions.append((other.stem, intersection / union))
+
+    return sorted(collisions, key=lambda x: x[1], reverse=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Specification Quality Gate")
     parser.add_argument("--skip-spec-gate", action="store_true",
@@ -653,6 +691,15 @@ def main() -> int:
         return 1
 
     print(f"✅ [REVIEW-GATE] Pass 1 Structural Checks PASSED for '{spec_id}'.")
+
+    # Run Spec Collision Check (T1-L-01a)
+    specs_dir = spec_path.parent
+    collisions = _check_spec_collision(spec_id, spec_path, specs_dir)
+    if collisions:
+        print("[ADVISORY] Spec collision detected:")
+        for other_id, score in collisions:
+            print(f"  {spec_id} shares {score:.2f} keyword overlap with {other_id}")
+        print("  Review both specs to confirm distinct scope before proceeding.")
 
     print(f"🔍 [REVIEW-GATE] Running Pass 2: Quality Review for '{spec_id}'...")
     exit_code, _ = run_pass2(content, spec_id, high_risk_dba, config)

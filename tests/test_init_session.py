@@ -104,3 +104,98 @@ class TestInitSessionSpecAwareness:
             outcome, note = init_session.infer_and_close_previous_session()
             assert outcome == "success"
             assert note == "Explicit override test."
+
+
+class TestInitSessionGitStash:
+    @patch("subprocess.run")
+    def test_stash_created(self, mock_run, capsys):
+        """Verify that subprocess.run is called and stash message is printed on changes."""
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "Saved working directory and index state WIP on main"
+        mock_run.return_value = mock_res
+
+        init_session._create_session_checkpoint("session-1234567890123")
+        captured = capsys.readouterr()
+        
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert "git" in args
+        assert "stash" in args
+        assert "push" in args
+        assert "session-1234" in captured.out
+
+    @patch("subprocess.run")
+    def test_silent_on_clean(self, mock_run, capsys):
+        """Verify that when git stash push returns 'No local changes', we print nothing."""
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "No local changes to save"
+        mock_run.return_value = mock_res
+
+        init_session._create_session_checkpoint("session-123")
+        captured = capsys.readouterr()
+        assert "Checkpoint created" not in captured.out
+
+    @patch("subprocess.run")
+    def test_silent_on_missing_session_id(self, mock_run):
+        """Verify that we handle empty session_id without exception."""
+        # Non-fatal execution test
+        init_session._create_session_checkpoint("")
+
+
+class TestInitSessionGeminiClose:
+    def test_gemini_close_consumed(self, clean_state, capsys):
+        """Verify that a matching gemini_session_close.json is consumed and merged."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        # Write matching gemini close file
+        close_file = session_file.parent / "gemini_session_close.json"
+        close_data = {
+            "session_id": "test-session-123",
+            "outcome": "partial",
+            "outcome_note": "Closed via gemini close protocol test"
+        }
+        close_file.write_text(json.dumps(close_data), encoding="utf-8")
+
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            captured = capsys.readouterr()
+            
+            assert outcome == "partial"
+            assert note == "Closed via gemini close protocol test"
+            assert "Gemini close file consumed" in captured.out
+            assert not close_file.exists()
+
+    def test_gemini_close_mismatch(self, clean_state, capsys):
+        """Verify that a non-matching session close file is not consumed and issues warning."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        # Write non-matching gemini close file
+        close_file = session_file.parent / "gemini_session_close.json"
+        close_data = {
+            "session_id": "different-session-id",
+            "outcome": "success",
+            "outcome_note": "Should not be merged"
+        }
+        close_file.write_text(json.dumps(close_data), encoding="utf-8")
+
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            captured = capsys.readouterr()
+            
+            # Outcome should fall back to inferred "abandoned" because ID mismatched
+            assert outcome == "abandoned"
+            assert "Gemini close session_id mismatch" in captured.out
+            assert close_file.exists()
+

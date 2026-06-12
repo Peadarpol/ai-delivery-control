@@ -103,6 +103,15 @@ When the AI review gate returns a `FAIL` verdict, agents and developers MUST adh
      ```
 3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
 
+### Commit Permission Matrix
+
+| Commit type | Autonomy level | Notes |
+|-------------|---------------|-------|
+| Docs, tests, config | High | No approval required |
+| Implementation (non-security) | Standard | Gate verdict required |
+| Auth, RBAC, migration | Elevated | High-risk classification applies |
+| Infrastructure, production | Human review | Blocked commands list applies |
+
 ---
 
 ## 4. Handling Uncertainty

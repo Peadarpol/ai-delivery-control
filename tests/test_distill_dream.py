@@ -194,3 +194,271 @@ def test_singular_and_plural_keys_supported(temp_dream_env):
     # Check if a proposal was generated for api-design
     expected_proposal = env["proposals_dir"] / "api-design__API_CHECK__open.md"
     assert expected_proposal.exists(), "Proposal for api-design (singular form) was not generated"
+
+
+def test_hib_dream_01_fields_matching(temp_dream_env):
+    """Verify that summary and concerns fields are read for comments matching instead of comments."""
+    env = temp_dream_env
+    ownership_yaml = {
+        "code-review": {
+            "check_types": ["CODE_QUALITY"],
+            "event_types": [],
+            "keywords": ["custom_keyword"]
+        }
+    }
+    env["skill_ownership_path"].write_text(yaml.dump(ownership_yaml), encoding="utf-8")
+
+    # Use custom_keyword in summary and concerns, but comments is empty
+    log_entry = {
+        "timestamp": "2026-06-02T10:00:00Z",
+        "verdict": "FAIL",
+        "blocking_concern": "CODE_QUALITY",
+        "summary": "This is a custom_keyword violation",
+        "concerns": ["other concern"],
+        "comments": "this comments field should be ignored",
+        "session_id": "session-123",
+        "severity": "critical"
+    }
+    env["review_log_file"].write_text(json.dumps(log_entry) + "\n", encoding="utf-8")
+
+    ledger_content = ""
+    for i in range(15):
+        day = 15 - i
+        ledger_content += json.dumps({
+            "session_id": f"session-{i}",
+            "date": f"2026-05-{day:02d} 12:00",
+            "outcome": "success",
+            "action": "mock commit"
+        }) + "\n"
+    env["ledger_file"].write_text(ledger_content, encoding="utf-8")
+    env["events_file"].write_text("", encoding="utf-8")
+
+    (env["skills_dir"] / "code-review").mkdir(parents=True, exist_ok=True)
+    (env["skills_dir"] / "code-review" / "SKILL.md").write_text("# Code Review\n", encoding="utf-8")
+
+    with patch("distill_dream.SKILL_OWNERSHIP_PATH", env["skill_ownership_path"]), \
+         patch("distill_dream.LEDGER_FILE", env["ledger_file"]), \
+         patch("distill_dream.EVENTS_FILE", env["events_file"]), \
+         patch("distill_dream.REVIEW_LOG_FILE", env["review_log_file"]), \
+         patch("distill_dream.PROPOSALS_DIR", env["proposals_dir"]), \
+         patch("distill_dream.SKILLS_DIR", env["skills_dir"]):
+        with patch("sys.argv", ["distill_dream.py"]):
+            distill_dream.main()
+
+    expected_proposal = env["proposals_dir"] / "code-review__CODE_QUALITY__open.md"
+    assert expected_proposal.exists()
+    content = expected_proposal.read_text(encoding="utf-8")
+    assert "This is a custom_keyword violation" in content
+    assert "this comments field should be ignored" not in content
+
+
+def test_hib_dream_02_intent_mismatch_routing(temp_dream_env):
+    """Verify that INTENT_MISMATCH routes to verification-before-completion and gets correct catalog rule."""
+    env = temp_dream_env
+    ownership_yaml = {
+        "verification-before-completion": {
+            "check_types": ["INTENT_MISMATCH"],
+            "event_types": [],
+            "keywords": []
+        }
+    }
+    env["skill_ownership_path"].write_text(yaml.dump(ownership_yaml), encoding="utf-8")
+
+    log_entry = {
+        "timestamp": "2026-06-02T10:00:00Z",
+        "verdict": "FAIL",
+        "blocking_concern": "INTENT_MISMATCH",
+        "summary": "spec mismatches",
+        "session_id": "session-123",
+        "severity": "critical"
+    }
+    env["review_log_file"].write_text(json.dumps(log_entry) + "\n", encoding="utf-8")
+
+    ledger_content = ""
+    for i in range(15):
+        day = 15 - i
+        ledger_content += json.dumps({
+            "session_id": f"session-{i}",
+            "date": f"2026-05-{day:02d} 12:00",
+            "outcome": "success",
+            "action": "mock commit"
+        }) + "\n"
+    env["ledger_file"].write_text(ledger_content, encoding="utf-8")
+    env["events_file"].write_text("", encoding="utf-8")
+
+    (env["skills_dir"] / "verification-before-completion").mkdir(parents=True, exist_ok=True)
+    (env["skills_dir"] / "verification-before-completion" / "SKILL.md").write_text("# Verification\n", encoding="utf-8")
+
+    with patch("distill_dream.SKILL_OWNERSHIP_PATH", env["skill_ownership_path"]), \
+         patch("distill_dream.LEDGER_FILE", env["ledger_file"]), \
+         patch("distill_dream.EVENTS_FILE", env["events_file"]), \
+         patch("distill_dream.REVIEW_LOG_FILE", env["review_log_file"]), \
+         patch("distill_dream.PROPOSALS_DIR", env["proposals_dir"]), \
+         patch("distill_dream.SKILLS_DIR", env["skills_dir"]):
+        with patch("sys.argv", ["distill_dream.py"]):
+            distill_dream.main()
+
+    expected_proposal = env["proposals_dir"] / "verification-before-completion__INTENT_MISMATCH__open.md"
+    assert expected_proposal.exists()
+    content = expected_proposal.read_text(encoding="utf-8")
+    assert "verify the diff satisfies every" in content
+
+
+def test_hib_dream_03_threshold_redesign_appearance(temp_dream_env):
+    """Verify that appearance_rate >= 0.20 flags proposals even if escalation_rate is 0.0."""
+    env = temp_dream_env
+    ownership_yaml = {
+        "code-review": {
+            "check_types": ["CODE_QUALITY"],
+            "event_types": [],
+            "keywords": []
+        }
+    }
+    env["skill_ownership_path"].write_text(yaml.dump(ownership_yaml), encoding="utf-8")
+
+    # 3 fails in 3 different sessions (so count=3, escalation=0, unique_sess=3)
+    # total_sessions_30d = 10 -> appearance_rate = 3/10 = 0.30 >= 0.20
+    log_content = ""
+    for i in range(3):
+        log_content += json.dumps({
+            "timestamp": "2026-06-02T10:00:00Z",
+            "verdict": "FAIL",
+            "blocking_concern": "CODE_QUALITY",
+            "summary": "style check failed",
+            "session_id": f"session-{i}",
+            "severity": "WARNING"
+        }) + "\n"
+    env["review_log_file"].write_text(log_content, encoding="utf-8")
+
+    ledger_content = ""
+    for i in range(10):
+        day = 15 - i
+        ledger_content += json.dumps({
+            "session_id": f"session-{i}",
+            "date": f"2026-05-{day:02d} 12:00",
+            "outcome": "success", # 0 escalated
+            "action": "mock commit"
+        }) + "\n"
+    env["ledger_file"].write_text(ledger_content, encoding="utf-8")
+    env["events_file"].write_text("", encoding="utf-8")
+
+    (env["skills_dir"] / "code-review").mkdir(parents=True, exist_ok=True)
+    (env["skills_dir"] / "code-review" / "SKILL.md").write_text("# Code Review\n", encoding="utf-8")
+
+    with patch("distill_dream.SKILL_OWNERSHIP_PATH", env["skill_ownership_path"]), \
+         patch("distill_dream.LEDGER_FILE", env["ledger_file"]), \
+         patch("distill_dream.EVENTS_FILE", env["events_file"]), \
+         patch("distill_dream.REVIEW_LOG_FILE", env["review_log_file"]), \
+         patch("distill_dream.PROPOSALS_DIR", env["proposals_dir"]), \
+         patch("distill_dream.SKILLS_DIR", env["skills_dir"]):
+        with patch("sys.argv", ["distill_dream.py"]):
+            distill_dream.main()
+
+    expected_proposal = env["proposals_dir"] / "code-review__CODE_QUALITY__open.md"
+    assert expected_proposal.exists()
+
+
+def test_hib_dream_03_critical_bypass_unchanged(temp_dream_env):
+    """Verify that a single CRITICAL severity flags the proposal immediately without checking rate thresholds."""
+    env = temp_dream_env
+    ownership_yaml = {
+        "code-review": {
+            "check_types": ["CODE_QUALITY"],
+            "event_types": [],
+            "keywords": []
+        }
+    }
+    env["skill_ownership_path"].write_text(yaml.dump(ownership_yaml), encoding="utf-8")
+
+    # 1 fail with CRITICAL severity
+    log_entry = {
+        "timestamp": "2026-06-02T10:00:00Z",
+        "verdict": "FAIL",
+        "blocking_concern": "CODE_QUALITY",
+        "summary": "critical error",
+        "session_id": "session-1",
+        "severity": "CRITICAL"
+    }
+    env["review_log_file"].write_text(json.dumps(log_entry) + "\n", encoding="utf-8")
+
+    # 10 total sessions, 0 escalated
+    ledger_content = ""
+    for i in range(10):
+        day = 15 - i
+        ledger_content += json.dumps({
+            "session_id": f"session-{i}",
+            "date": f"2026-05-{day:02d} 12:00",
+            "outcome": "success",
+            "action": "mock commit"
+        }) + "\n"
+    env["ledger_file"].write_text(ledger_content, encoding="utf-8")
+    env["events_file"].write_text("", encoding="utf-8")
+
+    (env["skills_dir"] / "code-review").mkdir(parents=True, exist_ok=True)
+    (env["skills_dir"] / "code-review" / "SKILL.md").write_text("# Code Review\n", encoding="utf-8")
+
+    with patch("distill_dream.SKILL_OWNERSHIP_PATH", env["skill_ownership_path"]), \
+         patch("distill_dream.LEDGER_FILE", env["ledger_file"]), \
+         patch("distill_dream.EVENTS_FILE", env["events_file"]), \
+         patch("distill_dream.REVIEW_LOG_FILE", env["review_log_file"]), \
+         patch("distill_dream.PROPOSALS_DIR", env["proposals_dir"]), \
+         patch("distill_dream.SKILLS_DIR", env["skills_dir"]):
+        with patch("sys.argv", ["distill_dream.py"]):
+            distill_dream.main()
+
+    expected_proposal = env["proposals_dir"] / "code-review__CODE_QUALITY__open.md"
+    assert expected_proposal.exists()
+
+
+def test_hib_dream_03_count_less_than_three_ignored(temp_dream_env):
+    """Verify that if count < 3 and severity is not CRITICAL, it is ignored even if appearance_rate >= 0.20."""
+    env = temp_dream_env
+    ownership_yaml = {
+        "code-review": {
+            "check_types": ["CODE_QUALITY"],
+            "event_types": [],
+            "keywords": []
+        }
+    }
+    env["skill_ownership_path"].write_text(yaml.dump(ownership_yaml), encoding="utf-8")
+
+    # 2 fails in 2 different sessions (so count=2, unique_sess=2)
+    # total_sessions_30d = 5 -> appearance_rate = 2/5 = 0.40 >= 0.20
+    log_content = ""
+    for i in range(2):
+        log_content += json.dumps({
+            "timestamp": "2026-06-02T10:00:00Z",
+            "verdict": "FAIL",
+            "blocking_concern": "CODE_QUALITY",
+            "summary": "style check failed",
+            "session_id": f"session-{i}",
+            "severity": "WARNING"
+        }) + "\n"
+    env["review_log_file"].write_text(log_content, encoding="utf-8")
+
+    ledger_content = ""
+    for i in range(5):
+        day = 5 - i
+        ledger_content += json.dumps({
+            "session_id": f"session-{i}",
+            "date": f"2026-05-{day:02d} 12:00",
+            "outcome": "success",
+            "action": "mock commit"
+        }) + "\n"
+    env["ledger_file"].write_text(ledger_content, encoding="utf-8")
+    env["events_file"].write_text("", encoding="utf-8")
+
+    (env["skills_dir"] / "code-review").mkdir(parents=True, exist_ok=True)
+    (env["skills_dir"] / "code-review" / "SKILL.md").write_text("# Code Review\n", encoding="utf-8")
+
+    with patch("distill_dream.SKILL_OWNERSHIP_PATH", env["skill_ownership_path"]), \
+         patch("distill_dream.LEDGER_FILE", env["ledger_file"]), \
+         patch("distill_dream.EVENTS_FILE", env["events_file"]), \
+         patch("distill_dream.REVIEW_LOG_FILE", env["review_log_file"]), \
+         patch("distill_dream.PROPOSALS_DIR", env["proposals_dir"]), \
+         patch("distill_dream.SKILLS_DIR", env["skills_dir"]):
+        with patch("sys.argv", ["distill_dream.py"]):
+            distill_dream.main()
+
+    expected_proposal = env["proposals_dir"] / "code-review__CODE_QUALITY__open.md"
+    assert not expected_proposal.exists()

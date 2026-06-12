@@ -282,6 +282,16 @@ class Installer:
                 self.log_verbose(f"Copying file: {src_file} -> {dest_file}")
                 shutil.copy2(src_file, dest_file)
 
+        # Idempotent copy for blocked_commands.md (preserve customizations)
+        bc_src = self.framework_path / ".agent" / "blocked_commands.md"
+        bc_dest = target_agent / "blocked_commands.md"
+        if bc_src.exists() and bc_src.is_file():
+            if bc_dest.exists():
+                self.log_verbose("blocked_commands.md already exists — skipping (preserve customizations)")
+            else:
+                self.log_verbose(f"Copying file (idempotent): {bc_src} -> {bc_dest}")
+                shutil.copy2(bc_src, bc_dest)
+
         # Seed correct repo name in check_repo.py
         check_repo_path = target_agent / "scripts" / "check_repo.py"
         if check_repo_path.exists():
@@ -504,6 +514,7 @@ class Installer:
             ".agent/state/*.lock",
             ".agent/config.yaml.migration_backup",
             ".agent/wiki/",
+            ".agent/state/gemini_session_close.json",
         ]
 
         if gitignore_path.exists():

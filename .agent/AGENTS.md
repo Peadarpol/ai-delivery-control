@@ -104,6 +104,8 @@ Before any task involving code changes across more than one file or layer:
 
 Full rationale in `.agent/governance.md` §3.
 
+See `.agent/blocked_commands.md` for the machine-readable canonical prohibition list. This file is the standalone companion to the prohibition table above.
+
 ---
 
 ## 5. Escalation — Stop and Ask the Human
@@ -152,9 +154,29 @@ When in doubt: close cleanly, write good state files, start fresh.
 6. **MUST update `.agent/state/last_session_summary.md`** — what was done, what's incomplete, decisions deferred.
 7. **MUST append a row to `.agent/state/session_ledger.jsonl` and `.agent/state/session_ledger.md`** — session ID, date, action summary.
 
+Run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
+
 ---
 
-## 7. Skills to Create Before Starting These Work Streams
+## 7. Defensive Git Checkpoint Protocol
+
+### Session Checkpoint Recovery (T1-J-01)
+At session start, `init_session.py` automatically creates a git stash checkpoint before any other action:
+  `git stash push -m "AUTO: session-start checkpoint [session_id]"`
+
+To recover to the session-start state:
+  `git stash pop`   — restore the checkpoint (discards changes made this session)
+  `git stash list`  — see all checkpoints
+
+If a token budget HALT fires mid-session and partial changes cannot be committed, use `git stash pop` to recover the session-start state before the next session begins.
+
+### Mid-task Checkpoints for Long Subprocess Runs (T1-J-01a)
+For any task invoking a subprocess expected to run >60 seconds (wiki compilation, dream phase distillation, large spec quality check with Pass 2 LLM call), create a named stash before invoking:
+  `git stash push -m "pre-subprocess: [task description]"`
+
+---
+
+## 8. Skills to Create Before Starting These Work Streams
 
 The following planned work streams do not yet have covering skills.
 **Before the first coding task in each stream, pause and create the required skills.**
@@ -167,16 +189,16 @@ Full gap analysis and rationale: `.agent/state/harness_improvement_backlog.md`.
 
 ---
 
-## 8. Git Discipline
+## 9. Git Discipline
 
-### 8.1 Staging rules
+### 9.1 Staging rules
 
 - **Always stage named files only.** `git add .` and `git add -A` are prohibited (P-12).
 - **Never stage files outside the repository root.**
 - **Never stage agent-generated files** (P-13): `AGENTS.md`, brain files, session logs, `active_context.md`, `decisions_log.md`, `last_session_summary.md`, `session_ledger.md`.
 - **Documentation commits with code.** All documentation updates (walkthrough, task files, harness logs) must be committed in the same commit as the code they describe — never a follow-up commit. Prepare everything locally first, then commit once.
 
-### 8.2 Verification before commit
+### 9.2 Verification before commit
 
 > [!IMPORTANT]
 > **Verification is mandatory before every commit and push. It is never optional and never skipped to save time.**
@@ -184,11 +206,11 @@ Full gap analysis and rationale: `.agent/state/harness_improvement_backlog.md`.
 > - If you cannot run the verification suite (environment broken, tests hanging, tool unavailable), **stop and report**. Do not commit. Do not push. Do not defer to CI.
 > - CI failure is not a substitute for local verification. A commit or push made without completing local verification is a governance breach.
 
-### 8.3 Push timing
+### 9.3 Push timing
 
 Before any `git push` to the devops/main branch, check if the deployment pipeline is already in progress from another push. Stage your changes locally and coordinate to prevent conflicts.
 
-### 8.4 Branch Strategy for CI Fixes
+### 9.4 Branch Strategy for CI Fixes
 
 When a CI/CD pipeline fails after a push:
 
@@ -200,12 +222,12 @@ When a CI/CD pipeline fails after a push:
 
 **Exception**: Trivial one-line typo fixes may be made directly with a warning acknowledged in the commit message: `[direct-devops: trivial]`
 
-### 8.5 Branching Conventions
+### 9.5 Branching Conventions
 
 All framework work must develop on dedicated feature branches before merging via Pull Request:
   `feat/framework-{item-id}-{short-description} → PR → main`
 
-### 8.6 Gate Governance Escalation Hierarchy
+### 9.6 Gate Governance Escalation Hierarchy
 
 When the AI review gate returns a `FAIL` verdict, agents and developers MUST adhere to the following escalation hierarchy:
 

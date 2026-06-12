@@ -432,3 +432,78 @@ class TestSpecIdResolution:
         assert "Multiple spec files found" in captured
         assert "SPEC-001.md" in captured
         assert "SPEC-002.md" in captured
+
+
+class TestSpecCollisionCheck:
+    def test_collision_detected(self, tmp_path):
+        """Verify collision is detected if keyword overlap >= threshold."""
+        specs_dir = tmp_path / "docs" / "planning" / "specs"
+        specs_dir.mkdir(parents=True)
+        
+        # Spec A (Target)
+        spec_a = specs_dir / "SPEC-001.md"
+        spec_a.write_text("""# Spec 001
+status: APPROVED
+## Acceptance Criteria
+Scenario: user login
+  Given they enter username and password credentials
+  Then dashboard is displayed
+""", encoding="utf-8")
+        
+        # Spec B (Collision)
+        spec_b = specs_dir / "SPEC-002.md"
+        spec_b.write_text("""# Spec 002
+status: APPROVED
+## Acceptance Criteria
+Scenario: admin login
+  Given they enter admin username and password credentials
+  Then dashboard is displayed
+""", encoding="utf-8")
+        
+        collisions = check_spec._check_spec_collision("SPEC-001", spec_a, specs_dir, threshold=0.4)
+        assert len(collisions) == 1
+        assert collisions[0][0] == "SPEC-002"
+        # Overlap score should be >= 0.4
+        assert collisions[0][1] >= 0.4
+
+    def test_no_collision_detected(self, tmp_path):
+        """Verify no collision if overlap < threshold."""
+        specs_dir = tmp_path / "docs" / "planning" / "specs"
+        specs_dir.mkdir(parents=True)
+        
+        spec_a = specs_dir / "SPEC-001.md"
+        spec_a.write_text("""# Spec 001
+status: APPROVED
+## Acceptance Criteria
+Scenario: user login
+  Given they enter username and password credentials
+""", encoding="utf-8")
+        
+        spec_b = specs_dir / "SPEC-002.md"
+        spec_b.write_text("""# Spec 002
+status: APPROVED
+## Acceptance Criteria
+Scenario: billing invoice payment
+  Given billing invoice is generated for customer service account
+  Then payment status is paid
+""", encoding="utf-8")
+        
+        collisions = check_spec._check_spec_collision("SPEC-001", spec_a, specs_dir, threshold=0.4)
+        assert len(collisions) == 0
+
+    def test_single_spec_no_other_specs(self, tmp_path):
+        """Verify no collision if no other APPROVED/DRAFT specs exist."""
+        specs_dir = tmp_path / "docs" / "planning" / "specs"
+        specs_dir.mkdir(parents=True)
+        
+        spec_a = specs_dir / "SPEC-001.md"
+        spec_a.write_text("""# Spec 001
+status: APPROVED
+## Acceptance Criteria
+Scenario: user login
+  Given they enter username and password credentials
+""", encoding="utf-8")
+        
+        collisions = check_spec._check_spec_collision("SPEC-001", spec_a, specs_dir, threshold=0.4)
+        assert len(collisions) == 0
+
