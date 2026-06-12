@@ -7,10 +7,7 @@
   from `.ai-review-log.jsonl` for keyword matching and evidence text. Previously
   read non-existent `comments` field — all 17 GymBase FAILs routed to the default
   skill with empty evidence, producing zero proposals.
-- **HIB-DREAM-02**: `INTENT_MISMATCH` added to `proposed_rules_catalog` and routed
-  to `verification-before-completion` skill in `skill_ownership.yaml`. Previously
-  absent entirely — the most common outer loop failure mode generated only generic
-  fallback proposals.
+- **HIB-DREAM-02**: `INTENT_MISMATCH` added to `proposed_rules_catalog` and routed to `verification-before-completion` skill in `skill_ownership.yaml`. Previously absent entirely — the most common outer loop failure mode generated only generic fallback proposals. Note: Verified via simulation that routing and catalog matching work correctly end-to-end; however, on GymBase's current dataset, `INTENT_MISMATCH` occurrences cluster across only 2 sessions (5% appearance rate) due to historical `unknown` session IDs and do not yet meet the default 20% proposal threshold. This fix positions the framework correctly for when the pattern recurs across more sessions.
 - **HIB-DREAM-03**: Threshold redesign — `appearance_rate >= 0.20` now qualifies
   patterns independently of `escalation_rate`. Projects without escalated sessions
   (the common case for well-functioning projects) can now generate proposals based
