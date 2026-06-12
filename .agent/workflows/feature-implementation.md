@@ -286,6 +286,26 @@ Based on the Audit results above, the Agent **MUST** update the GitHub Issue Bod
 > **Defensive Checkpoint**: Before starting implementation across 3+ files,
 > create a git checkpoint per governance §7.
 
+### TDD requirement for new logic
+
+For any task that introduces new behaviour (new function, new service method, new
+API endpoint, new UI interaction):
+
+1. Write a failing test that describes the expected behaviour (red)
+2. Confirm the test fails for the right reason before writing implementation
+3. Write the minimum implementation to make the test pass (green)
+4. Commit only when tests pass
+
+This is not optional for new logic. A gate verdict on code with no covering tests
+is a verdict on structure only — it cannot verify behaviour. The quality of your
+test suite is the ceiling for what the gate can reliably catch.
+
+For pure refactors (behaviour unchanged, structure improved): existing tests
+passing is sufficient. TDD is not required.
+
+Exception: UI-only changes where no unit test boundary is appropriate. In this
+case, document the manual verification steps in the commit message.
+
 8. **AI Implements (Test-First Auto-Debug Loop)**:
 
    **Step A: Create Tests FIRST** (Mandatory):
