@@ -29,6 +29,10 @@ Run `python .agent/scripts/check_repo.py` before reading any files
 or taking any actions. If the check fails, stop the session immediately
 and switch to the correct project in your IDE.
 
+**Note**: If running in Claude Code, `init_session.py` is invoked automatically via
+a SessionStart hook (`.claude/settings.json`). For other agents (Gemini CLI, Cursor,
+etc.), Step 0 below remains a manual convention.
+
 0. Run: `python .agent/scripts/check_halt.py`. If exit code 2: STOP. Do not proceed. Read the `.agent/state/HALT` file contents and report to the user.
    Run: `python .agent/scripts/init_session.py` to establish session traceability.
 1. Run `git log --oneline -5` and `git branch` — establish ground truth on branch and recent work.
@@ -124,6 +128,21 @@ Full trigger list in `.agent/governance.md` §2.
 ---
 
 ## 6. Session Close (MANDATORY — do this before ending any session with code changes)
+
+### Session state design principle
+
+The goal of the session close protocol is that the next session can reconstruct its
+starting position entirely from structured state files — without needing conversation
+history. `active_context.md`, `decisions_log.md`, `last_session_summary.md`, and
+`session.json` are the full context a fresh session needs.
+
+Compaction is a fallback for when a session cannot be closed cleanly. A clean close
+followed by a fresh session start is always preferable to a compacted continuation,
+because a fresh session operates in the smart zone from the first token. A compacted
+continuation carries sediment — prior reasoning, explored paths, discarded options —
+that consumes context budget without contributing governance value.
+
+When in doubt: close cleanly, write good state files, start fresh.
 
 1. **MUST review the task magnitude auto-classification** in `session.json`. You **NEVER downgrade** a session from `major` to `micro` without explicit, documented justification in `session.json` (`task_magnitude_override_reason`).
 2. **MUST run context compaction** (`python .agent/skills/meta/validate.py`) whenever the rolling spent has passed 80% of its budget ceiling.

@@ -595,6 +595,70 @@ class Installer:
                 f"Please manually install with: 'pre-commit install --install-hooks'",
             )
 
+    def install_claude_hooks(self):
+        """Write (or merge into) .claude/settings.json in the target project.
+
+        Installs SessionStart and PreCompact hooks from the template. Idempotent —
+        skips entries where the command string already appears in the existing config.
+        """
+        import json
+
+        self.log(SYMBOL_STEP, "Installing Claude Code hook configuration (.claude/settings.json)...")
+
+        template_path = self.framework_path / "bootstrap" / "templates" / "claude_settings_hooks.json"
+        if not template_path.exists():
+            self.log(SYMBOL_WARN, "claude_settings_hooks.json template not found — skipping Claude hook installation.")
+            return
+
+        try:
+            hook_template = json.loads(template_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            self.log(SYMBOL_WARN, f"Failed to read hook template: {e}")
+            return
+
+        claude_dir = self.project_path / ".claude"
+        claude_dir.mkdir(exist_ok=True)
+        settings_path = claude_dir / "settings.json"
+
+        if settings_path.exists():
+            try:
+                existing = json.loads(settings_path.read_text(encoding="utf-8"))
+            except Exception:
+                existing = {}
+        else:
+            existing = {}
+
+        existing.setdefault("hooks", {})
+        added = []
+
+        for event_name, new_matchers in hook_template.get("hooks", {}).items():
+            existing["hooks"].setdefault(event_name, [])
+            for matcher in new_matchers:
+                for hook_entry in matcher.get("hooks", []):
+                    cmd = hook_entry.get("command", "")
+                    already_present = any(
+                        h.get("command", "") == cmd
+                        for m in existing["hooks"][event_name]
+                        for h in m.get("hooks", [])
+                    )
+                    if already_present:
+                        self.log_verbose(f"Hook already present for {event_name}: {cmd}")
+                    else:
+                        existing["hooks"][event_name].append(matcher)
+                        added.append(f"{event_name}: {cmd}")
+                        break  # one matcher per event entry
+
+        try:
+            settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        except Exception as e:
+            self.log(SYMBOL_WARN, f"Failed to write .claude/settings.json: {e}")
+            return
+
+        if added:
+            self.log(SYMBOL_SUCCESS, f"Claude Code hooks installed: {', '.join(added)}")
+        else:
+            self.log(SYMBOL_SUCCESS, ".claude/settings.json already contains required hooks (idempotent skip).")
+
     def run_validation(self):
         """Phase 6: Run bootstrap/validate.py to verify setup sanity."""
         self.log(SYMBOL_STEP, "Running post-install sanity validation...")
@@ -630,6 +694,7 @@ class Installer:
         self.copy_framework_files()
         self.scaffold_configurations()
         self.update_gitignore()
+        self.install_claude_hooks()
         self.wire_git_hooks()
         self.run_validation()
         
