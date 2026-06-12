@@ -54,8 +54,8 @@ class TestCheckStateFreshness:
         stale_file = tmp_path / "active_context.md"
         stale_file.write_text("old content", encoding="utf-8")
 
-        # Backdate mtime to 2 hours ago
-        old_mtime = time.time() - 7200
+        # Backdate mtime to 3 hours ago — well above the 2-hour threshold
+        old_mtime = time.time() - 10800
         os.utime(str(stale_file), (old_mtime, old_mtime))
 
         patched_files = [str(stale_file)]

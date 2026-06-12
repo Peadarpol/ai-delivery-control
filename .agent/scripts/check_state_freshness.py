@@ -14,7 +14,7 @@ STATE_FILES = [
     ".agent/state/decisions_log.md",
 ]
 
-STALE_THRESHOLD_SECONDS = 3600  # 1 hour
+STALE_THRESHOLD_SECONDS = 7200  # 2 hours — allows for ~90 min inter-session gaps before warning
 
 
 def main():
