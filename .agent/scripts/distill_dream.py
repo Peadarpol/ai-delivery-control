@@ -406,9 +406,9 @@ def main() -> None:
             len(unique_sessions) / total_sessions_30d if total_sessions_30d > 0 else 0.0
         )
 
-        # Flagging thresholds: count >= 3 AND escalation_rate >= 0.40 AND appearance_rate >= 0.20 OR severity == "CRITICAL"
         is_flagged = (
-            count >= 3 and escalation_rate >= 0.40 and appearance_rate >= 0.20
+            count >= 3
+            and (appearance_rate >= 0.20 or escalation_rate >= 0.40)
         ) or max_severity == "CRITICAL"
 
         if not is_flagged:
