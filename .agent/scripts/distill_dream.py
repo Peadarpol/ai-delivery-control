@@ -236,6 +236,14 @@ def main() -> None:
             "rule": "Always prepare and stage files individually using exact names. Never use wildcard git add . or commit agent-internal state files.",
             "type": "always",
         },
+        "INTENT_MISMATCH": {
+            "rule": (
+                "Before marking implementation complete, verify the diff satisfies every "
+                "acceptance criterion in the active spec. If the spec is ambiguous, surface "
+                "the ambiguity for human clarification rather than resolving it unilaterally."
+            ),
+            "type": "must",
+        },
     }
 
     # 3. Read and aggregate logs
@@ -329,7 +337,9 @@ def main() -> None:
                     continue
 
                 check_type = log.get("blocking_concern", log.get("check_type", "review_failure"))
-                comments = log.get("comments", "").lower()
+                comments = (
+                    log.get("summary", "") + " " + str(log.get("concerns", []))
+                ).lower()
                 session_id = log.get("session_id") or "unknown"
                 severity = log.get("severity", "WARNING")
 
@@ -357,7 +367,7 @@ def main() -> None:
                         dt,
                         session_id,
                         severity,
-                        log.get("comments", "Failed code review check."),
+                        log.get("summary", "No summary available."),
                     )
         except Exception as e:
             print(f"[DREAM] Error parsing AI review logs: {e}")

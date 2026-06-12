@@ -59,10 +59,22 @@ agent-framework:
     - session
     - workflow
 
+verification-before-completion:
+  check_types:
+    - INTENT_MISMATCH
+    - INTENT_ALIGNMENT
+  event_types: []
+  keywords:
+    - intent
+    - mismatch
+    - spec
+    - acceptance
+    - criterion
+    - diverged
+
 code-review:
   check_types:
     - CODE_QUALITY
-    - INTENT_ALIGNMENT
   event_types: []
   keywords:
     - quality
