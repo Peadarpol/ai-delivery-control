@@ -367,43 +367,72 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ### v1.4.0 — Intelligent Gate 📋 PLANNED (Q1 2027)
 
-**Goal**: The gate becomes context-aware. PageRank identifies structurally important files. ADR annotations inject domain knowledge. Diff-aware routing activates only relevant review dimensions. The gate checks what matters, skips what doesn't, and explains its decisions.
+**Goal**: The gate gains deterministic pre-context (evidence gathering, shared `GateContext`, per-capability calibration) and a confidence model for structural signals. Most of the original "Chain A — Gate Intelligence" scope (PageRank repo map, ADR injection, diff-aware routing, wiki layer, model tiering, policy notes) shipped earlier than planned — see Capability Inventory note below. v1.4.0 narrows to the remaining gate-context and calibration work plus state persistence.
 
-**The strategic context**: The gate currently reviews every commit with the same intensity and the same dimensions. A documentation fix gets the same review as a migration touching branch isolation. This milestone gives the gate proportional intelligence — it focuses on what the diff actually affects and explains what it checked and what it skipped.
+**The strategic context**: The gate already routes by PageRank centrality, injects ADR domain context, and explains policy notes (all ✅ as of v1.3.4). What remains is making the gate's pre-LLM evidence gathering richer (T1-G-11), giving components a shared typed context object instead of ad-hoc files (T1-G-13), calibrating capability sensitivity from rebuttal history (T1-G-14), and upgrading confidence labels on structural signals from HIGH/MEDIUM to EXTRACTED/INFERRED/AMBIGUOUS (T1-H-10).
 
 **Success criteria**:
-- Gate routing adjusts review intensity based on PageRank centrality of changed files
-- ADR annotations propagate domain context through the import graph
-- Policy notes explain what was checked and what was skipped on every verdict
-- Token budget per session is tracked and reported
+- `GateContext` shared object is live; architecture violations, PageRank scores, co-change warnings, and ADR domains flow through it with graceful degradation
+- Evidence-gathering pre-context (pytest collect, co-change, TODO delta) is injected before the LLM call
+- Per-capability calibration weights are derived from rebuttal rate and surfaced in `harness_health.py`
+- Co-change and repo map confidence signals use the three-tier EXTRACTED/INFERRED/AMBIGUOUS model
+- Token budget and cross-project health are queryable via SQLite
 
-**Chain A — Gate Intelligence** (follows backlog implementation phases):
+> **Capability Inventory note**: A prior version of this table listed T1-G-01/02/03/04, T1-H-01/02/03/06/07, and T1-D-05 as v1.4.0 Chain A phases. Per `FRAMEWORK_BACKLOG.md`, all of these are now ✅ delivered (most shipped in v1.0.0–v1.3.4, ahead of this milestone's original schedule). They are retained here only as historical record of the original Chain A sequencing — no remaining work against them is in scope for v1.4.0.
 
-| ID | Item | Phase | Category |
-|----|------|-------|----------|
-| T1-G-02 | Pre-flight shortcut (documentation/whitespace fast path) | 1 | Gate |
-| T1-G-03 | ReviewVerdict Pydantic model | 1 | Gate structure |
-| T1-H-06 | Compiled harness wiki layer (Gemma4 local, zero cost) | 2 | Wiki foundation |
-| T1-D-05 | Model tiering configuration (Gemma4/Sonnet split) | 2 | Architecture |
-| T1-H-01 | PageRank repo map generator | 3 | Repo intelligence |
-| T1-H-02 | ADR annotation convention and wiki injection | 3 | Repo intelligence |
-| T1-G-01 | Diff-aware capability routing with RouteDecision | 4 | Gate routing |
-| T1-H-03 | Co-change blast radius estimator | 4 | Repo intelligence |
-| T1-H-07 | Knowledge base lint pass | 4 | Quality |
-| T1-G-04 | Policy notes in terminal output | 5 | Gate output |
-| T1-G-11 | Evidence-gathering pre-context for review gate | 5 | Gate |
+**Gate context & calibration**:
+
+| ID | Item | Effort | Category |
+|----|------|--------|----------|
+| T1-G-13 | GateContext shared object for pre-commit chain | Medium | Gate architecture |
+| T1-G-14 | Per-capability AT9 calibration weights | Medium | Gate calibration |
+| T1-G-11 | Evidence-gathering pre-context for review gate (pytest collect, co-change, TODO delta; absorbs HIB-052 session-counting fix — see note below) | Medium | Gate |
+| T1-H-10 | Three-tier confidence tagging (EXTRACTED/INFERRED/AMBIGUOUS) for co-change and repo map signals | Medium-High | Repo intelligence |
+| T1-L-05a | Stop hook for acceptance_check.py on feature branch close | Low-Medium | Outer loop |
 
 **Observability**:
 
 | ID | Item | Category |
 |----|------|----------|
-| T1-I-02 | Token budget tracking per session | Cost management |
+| T1-I-02 | Token budget tracking per session | Cost management *(✅ delivered v1.1.5 — retained for cross-reference)* |
 | T1-D-01 | SQLite state index — single machine | State persistence |
 | T1-D-02 | Cross-project harness health | Multi-project |
+
+**HIB-052 — session_id "unknown" clustering**: Found during v1.3.4's dream phase validation. Touches the same session-counting code that T1-G-11 (evidence gathering, which reads session/event data for pre-context) and T1-H-10 (confidence tagging on repo/co-change signals) work near. Scoped into **T1-G-11**: when implementing the evidence-gathering pre-context, first audit and fix the session_id "unknown" clustering in the underlying session-counting code, since T1-G-11's pre-context signals depend on that data being correctly attributed. T1-H-10 has no direct dependency on session_id attribution and should not absorb this fix.
+
+**Deferred to v1.4.1** (split out to keep v1.4.0 scoped — see decisions_log.md for rationale):
+
+| ID | Item | Effort | Category |
+|----|------|--------|----------|
+| T1-L-12 | Spec grader per-criterion feedback | Medium | Outer loop |
+| T1-L-13 | Decision block format for ADR annotations | Low | Outer loop |
+| T1-L-14 | System archetype classification in spec template | Low | Outer loop |
+| T1-K-02 | Formal security review: context-injection attack surface | Medium | Security |
+| T1-K-02a | Quarantine pattern as architectural context-injection mitigation | Low | Security |
+| T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security |
 
 **Sprint planning notes (pre-v1.4.0)**:
 
 - **Gemini CLI HALT coverage gap** (2026-06-08): T1-C-01 `--stop-hook` provides post-session governance for Claude Code only. No equivalent mechanism exists for Gemini CLI, making a completed Gemini session structurally indistinguishable from mid-task abandonment without manual spot-checks. Sprint planning should either scope a Gemini CLI stop-hook equivalent or establish a lightweight external verification protocol for all Gemini-executed delivery tasks. See decisions_log.md entry 2026-06-08 for full context.
+
+---
+
+### v1.4.1 — Outer Loop Quality & Security Review 📋 PLANNED (Q1/Q2 2027)
+
+**Goal**: Complete the outer loop grading/classification trio (spec grader, decision blocks, archetype classification) and deliver the formal context-injection security review before broader distribution. Split from v1.4.0 to keep that milestone's Medium/Medium-High gate-architecture work from compounding with this Medium-effort outer-loop and security batch.
+
+**Planned items**:
+
+| ID | Item | Effort | Category |
+|----|------|--------|----------|
+| T1-L-12 | Spec grader per-criterion feedback | Medium | Outer loop |
+| T1-L-13 | Decision block format for ADR annotations | Low | Outer loop |
+| T1-L-14 | System archetype classification in spec template | Low | Outer loop |
+| T1-K-02 | Formal security review: context-injection attack surface (`docs/security/attack-surface-review.md`) | Medium | Security |
+| T1-K-02a | Quarantine pattern as architectural context-injection mitigation (delivered in same doc as T1-K-02) | Low | Security |
+| T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security |
+
+**Dependency note**: T1-L-13 depends on T1-G-12 ✅ (AT/FM vocabulary, delivered v1.3.3) — no blocker. T1-L-14 depends on T1-G-12 ✅ and benefits from T1-L-12 landing first (natural delivery companion per backlog). T1-K-02a delivers inside the T1-K-02 document — sequence as one PR.
 
 ---
 
