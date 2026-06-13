@@ -317,7 +317,7 @@ replicated by installing the framework today.
 
 **Start here**: [Quick Reference Guide](docs/wiki/Quick-Reference.md)
 
-### Full Wiki (11 Pages)
+### Full Wiki (17 Pages)
 All documentation is in [`docs/wiki/`](docs/wiki/) — part of this repository's version control:
 
 | Page | Purpose |
@@ -326,12 +326,18 @@ All documentation is in [`docs/wiki/`](docs/wiki/) — part of this repository's
 | [Quick Reference](docs/wiki/Quick-Reference.md) | One-page cheat sheet |
 | [Glossary](docs/wiki/Glossary.md) | 50+ key terms |
 | [Installation & Setup](docs/wiki/Installation-Setup.md) | <10 min setup |
-| [Governance Rules](docs/wiki/Governance-Rules.md) | Prohibitions + escalation |
-| [Customization](docs/wiki/Customization.md) | Extending the framework |
-| [Workflows Overview](docs/wiki/Workflows-Overview.md) | All 18 workflows |
+| [The Pre-Commit Gate](docs/wiki/The-Pre-Commit-Gate.md) | How the gate works end-to-end |
 | [Gate Verdicts Explained](docs/wiki/Gate-Verdicts-Explained.md) | PASS/WARN/FAIL verdicts |
+| [Governance Rules](docs/wiki/Governance-Rules.md) | Prohibitions + escalation |
+| [Workflows Overview](docs/wiki/Workflows-Overview.md) | All 18 workflows |
+| [Skills](docs/wiki/Skills.md) | Universal skills + custom skill authoring |
+| [Configuration](docs/wiki/Configuration.md) | `.agent/config.yaml` reference |
+| [Customization](docs/wiki/Customization.md) | Extending the framework |
 | [Dream Phase](docs/wiki/Dream-Phase.md) | Self-improvement loop |
 | [Architecture Decisions](docs/wiki/Architecture-Decisions.md) | Design philosophy |
+| [Scope and Boundaries](docs/wiki/Scope-and-Boundaries.md) | What the framework guarantees |
+| [Troubleshooting](docs/wiki/Troubleshooting.md) | Common issues and fixes |
+| [Security](docs/wiki/Security.md) | Security model + responsible disclosure |
 | [FAQ](docs/wiki/FAQ.md) | Common questions |
 
 - [Getting Started](docs/getting-started.md)

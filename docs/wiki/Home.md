@@ -168,4 +168,4 @@ See [Architecture Decisions](Architecture-Decisions.md) for the design philosoph
 
 ---
 
-*Last updated: 2026-06-04*
+*Last updated: 2026-06-13*

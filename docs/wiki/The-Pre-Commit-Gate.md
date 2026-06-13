@@ -90,7 +90,8 @@ Before the LLM call, the gate assembles a context bundle (total budget ≤2,000 
 | `review_context_project.md` | included above | Your project-specific rules |
 | Repo map | ≤600 tokens | PageRank-weighted structural summary of the codebase |
 | ADR wiki pages | ≤400 tokens | Compiled domain summaries for activated capabilities |
-| Co-change warnings | ≤200 tokens | Files that historically change together with the changed files |
+| Co-change warnings | ≤200 tokens | Files that co-change historically with the changed files, classified by confidence tier: `EXTRACTED` (git history + import link) and `INFERRED` (history only) are injected here; `AMBIGUOUS` (import only) appears in routing policy notes instead |
+| Evidence signals | — | `pytest` collection status and TODO count delta, gathered before the LLM call and included as additional context signals |
 
 ### The LLM call
 
@@ -106,6 +107,16 @@ If the configured AI provider is unavailable:
 - **High-risk commits** (migrations, auth, RBAC, multi-tenant isolation files): gate fails closed — the commit is blocked even without an LLM call
 
 High-risk file patterns include anything matching `*/migrations/*`, `*/auth/*`, `*/rbac/*`, `*/permissions/*`, or files annotated `# ADR: branch_isolation`. Override requires `SKIP_AI_REVIEW=1 SKIP_REASON="..."`.
+
+---
+
+## Capability Calibration
+
+The gate tracks false-positive history per review capability (e.g. `BRANCH_ISOLATION`, `CLEAN_ARCH`). Each accepted rebuttal nudges that capability's weight down slightly; rejected rebuttals and uncontested findings nudge it up.
+
+Over time, a capability that repeatedly generates accepted rebuttals will have its HIGH-severity findings automatically softened — reducing the chance of a blocking `FAIL` on a known-noisy check without disabling the check entirely. The weight is clamped: it can dampen a capability but never silence it. You can also lock a capability's weight manually in `.agent/config.yaml` under `capability_calibration.overrides`.
+
+The practical effect: the gate gets less confrontational about things your project genuinely doesn't care about, and stays firm on everything else.
 
 ---
 

@@ -1,7 +1,7 @@
 # AI Delivery Control — Capability Inventory
 
-**Generated**: 2026-06-12
-**Framework Version**: 1.3.4 (current as of inventory date)
+**Generated**: 2026-06-13
+**Framework Version**: 1.4.0 (current as of inventory date)
 **Purpose**: Strategic review inventory. Cards reflect what the code actually does, not what the documentation intends. Discrepancies between documentation and implementation are called out explicitly.
 
 ---
@@ -29,9 +29,9 @@
 
 **How it integrates**:
 - Called by: `.pre-commit-config.yaml` as the final hook at `commit-msg` stage
-- Calls: `providers.py::get_provider()`, `repo_map.py::generate_repo_map()` / `get_pagerank_scores()`, `wiki_compile.py::DOMAIN_REGISTRY`, `architecture_checks.py::extract_adr_annotations()`, `co_change_check.py::run_co_change_estimator()`
-- Reads: `review_context_universal.md`, `review_context_project.md`, `.agent/config.yaml` (ADR mappings, high-risk patterns, large diff threshold), `.agent/wiki/` domain pages, `.agent/state/session.json` (for session_id in audit records)
-- Writes: `.ai-review-log.jsonl` (typed verdict log), `.agent/state/harness_events.jsonl` (high-risk gate events), `.agent/state/gate_rebuttal.json` (rebuttal input, when `--rebuttal` mode used), `rebuttal_pass.json` (one-time bypass token on accepted rebuttal)
+- Calls: `providers.py::get_provider()`, `repo_map.py::generate_repo_map()` / `get_pagerank_scores()`, `wiki_compile.py::DOMAIN_REGISTRY`, `architecture_checks.py::extract_adr_annotations()`, `co_change_check.py::run_co_change_estimator()`, `gate_context.py::load_gate_context()` / `write_gate_context()` (T1-G-13), `capability_calibration.py::get_calibrated_weight()` / `update_calibration_rebuttal()` (T1-G-14)
+- Reads: `review_context_universal.md`, `review_context_project.md`, `.agent/config.yaml` (ADR mappings, high-risk patterns, large diff threshold), `.agent/wiki/` domain pages, `.agent/state/session.json` (for session_id in audit records), `.agent/state/gate_context_current.json` (if present — T1-G-13), `.agent/state/capability_calibration.json` (T1-G-14)
+- Writes: `.ai-review-log.jsonl` (typed verdict log), `.agent/state/harness_events.jsonl` (high-risk gate events), `.agent/state/gate_rebuttal.json` (rebuttal input, when `--rebuttal` mode used), `rebuttal_pass.json` (one-time bypass token on accepted rebuttal), `.agent/state/gate_context_current.json` (updated with verdict and evidence — T1-G-13), `.agent/state/capability_calibration.json` (rebuttal counter updates — T1-G-14), `~/.aisdlc/harness.db` (review event row, best-effort — T1-D-01)
 
 **Current limitations**:
 - `RouteDecision` class has a docstring "Stub for T1-G-01 capability routing — forward-compatibility only" despite `build_route_decision()` being fully implemented — misleading comment surviving from an earlier draft
@@ -46,9 +46,70 @@
 - T1-G-07: Structured SKIP_REASON enforcement — ✅ delivered
 - T1-G-08: Diff size review strategy — ✅ delivered
 - T1-G-09: User-facing rigor profile system — ⬜ undelivered
+- T1-G-11: Evidence gathering (pytest_collect_status, todo_delta injected into LLM context) — ✅ v1.4.0
+- T1-G-13: GateContext shared typed object wiring arch findings into LLM call — ✅ v1.4.0
+- T1-G-14: Capability calibration (AT9, per-capability TP/FP weight adjustment) — ✅ v1.4.0
+- T1-H-10: EXTRACTED/INFERRED/AMBIGUOUS confidence tiers for co-change warnings — ✅ v1.4.0
 - T1-I-07: Token counter wiring — ✅ completed pre-sprint 2026-06-02; `ai_review.py` now increments `session.json` token counters after each LLM call
 - T1-N-02: Gate concurrent write safety — ✅ v1.3.1
 - T1-N-06: `pause_turn` stop reason handling — ⬜ undelivered
+
+---
+## Gate Context (`gate_context.py`)
+**Delivered**: v1.4.0 (2026-06-13) — T1-G-13
+**Primary files**:
+- `src/scripts/gate_context.py` — `GateContext` Pydantic schema and atomic read/write utilities
+- `.agent/state/gate_context_current.json` — runtime state file (gitignored)
+
+**What it does**: Defines `GateContext`, a Pydantic typed object that acts as a shared data bus across the pre-commit hook chain. `architecture_checks.py` populates `arch_violations` and `adr_domains`; `co_change_check.py` (via `ai_review.py`) populates `co_change_warnings` with EXTRACTED/INFERRED/AMBIGUOUS tiers (T1-H-10); `ai_review.py` populates `pytest_collect_status` (T1-G-11 evidence), `todo_delta` (T1-G-11 evidence), `review_intensity`, `pagerank_scores`, `route_decision`, and `verdict`. Before the LLM call, `ai_review.py` calls `build_deterministic_findings_section(gate_context)` to prepend a verified findings block to the prompt — architecture violations and high-confidence co-change warnings that the LLM sees unconditionally regardless of diff heuristics. Writes are atomic (`.tmp` + `os.replace()`). Schema version `"1.0"` is checked on load; mismatches degrade gracefully.
+
+**Degradation contract**: If `gate_context_current.json` is absent, malformed, has a schema version mismatch, or has a diff-hash mismatch with the current commit, `ai_review.py` falls back to standalone behaviour (constructs an empty `GateContext` from the diff in memory) and logs a harness event.
+
+**What it prevents**:
+- Architecture violations escaping into LLM review silently: `arch_violations` become a deterministic "pre-LLM, verified" section the model sees unconditionally
+- Stale context bleed: diff-hash comparison (`gate_context.diff_hash != current_diff_hash`) rejects a context written for a previous commit
+- Two independent failure reports with no shared trace: architecture checks and AI review now share a single `gate_context_current.json` record
+
+**How it integrates**:
+- Written by: `architecture_checks.py` (arch_violations, adr_domains — written as early hook stage), `ai_review.py` (all remaining fields — updated at commit-msg stage)
+- Read by: `ai_review.py` (loaded at startup; `build_deterministic_findings_section()` consumes arch_violations, co_change_warnings, pytest_collect_status, todo_delta, review_intensity)
+- File: `.agent/state/gate_context_current.json` (gitignored)
+
+**Current limitations**:
+- `architecture_checks.py` must write `gate_context_current.json` as a pre-commit hook stage file that persists until the commit-msg stage in the same git operation — works on local machines but not in ephemeral CI containers where hook stages run in separate disposable environments
+- Not session-scoped: overwritten on every commit. A parallel `git commit` from a second terminal would corrupt the context for both operations
+- `review_intensity` field in the context is populated by `ai_review.py` after `build_route_decision()` runs; earlier hook stages (architecture checks, repo map) always see `review_intensity: "standard"` on whatever partial context was written before the commit-msg stage
+
+**Backlog dependencies**:
+- T1-G-11: Evidence gathering — ✅ v1.4.0
+- T1-G-13: GateContext shared typed object — ✅ v1.4.0
+
+---
+## Capability Calibration (`capability_calibration.py`)
+**Delivered**: v1.4.0 (2026-06-13) — T1-G-14
+**Primary files**:
+- `src/scripts/capability_calibration.py` — calibration data access layer
+- `.agent/state/capability_calibration.json` — per-capability TP/FP counters and weights (gitignored)
+
+**What it does**: Maintains a per-capability (concern label) calibration state that adjusts issue severity based on the project's historical false-positive rate. Each capability entry tracks `tp` (true positive count), `fp` (false positive count), and `weight` (float, clamped to [0.5, 1.5]). Weight starts at 1.0 and decays 10% per accepted rebuttal (REBUTTAL_ACCEPTED — false positive confirmed) or grows 5% per rejected rebuttal or uncontested finding. `ai_review.py` reads calibrated weights at review time and downgrades HIGH-severity issues when a capability's weight falls below a threshold; low-weight capabilities are flagged in `route_decision.policy_notes`. `update_calibration_rebuttal()` is called at the end of each rebuttal session. `get_calibrated_weight()` respects `capability_calibration.enabled` and `capability_calibration.overrides` from `.agent/config.yaml`, allowing manual weight locks. File writes are atomic (`.tmp` + `os.rename()`). `load_calibration()` and `save_calibration()` degrade gracefully on any file error.
+
+**What it prevents**:
+- Capability-level alert fatigue: a capability repeatedly generating accepted rebuttals automatically softens to MEDIUM, preventing blocking FAILs on known-noisy checks
+- Permanent silencing: weight is clamped at 0.5, so a capability can be dampened but not fully disabled by calibration alone (requires explicit `overrides` in config)
+- Manual override loss: `overrides` in `config.yaml` take precedence over the learned weight, allowing permanent weight pins regardless of history
+
+**How it integrates**:
+- Called by: `ai_review.py` (reads `get_calibrated_weight()` per-capability at review time; calls `update_calibration_rebuttal()` after each rebuttal session verdict)
+- Reads/writes: `.agent/state/capability_calibration.json`
+- Config: `capability_calibration:` block in `.agent/config.yaml` (`enabled`, `overrides` dict)
+
+**Current limitations**:
+- Calibration state is per-project, not global: the same noisy capability in every project accumulates independent weights; no cross-project convergence
+- No minimum-count guard: a single accepted rebuttal on a brand-new capability immediately reduces its weight to 0.9, which may be premature on day one
+- Dream phase (`distill_dream.py`) is unaware of calibration weights — a proposal for a capability with weight 0.5 generates the same proposal text as one with weight 1.5
+
+**Backlog dependencies**:
+- T1-G-14: Capability calibration (AT9) — ✅ v1.4.0
 
 ---
 ## Architecture Boundary Checks (`architecture_checks.py`)
@@ -130,9 +191,9 @@
 
 **How it integrates**:
 - Called by: AGENTS.md session startup protocol (Step 0), business-analyst.md Phase 0, and feature-implementation.md Phase 0 by convention; `--post-commit` mode called by the post-commit hook in `.pre-commit-config.yaml`
-- Calls: `distill_dream.py` (subprocess), `wiki_compile.py` (subprocess), `wiki_lint.py` (subprocess)
+- Calls: `distill_dream.py` (subprocess), `wiki_compile.py` (subprocess), `wiki_lint.py` (subprocess), `state_persistence.sync_session_to_db()` (best-effort optional import — T1-D-01)
 - Reads: `session.json`, `session_ledger.jsonl`, `.ai-review-log.jsonl`, `harness_events.jsonl`, `active_context.md`, `.agent/state/dream_phase_state.json`, `.agent/state/wiki_compile_state.json`, `.agent/state/wiki_lint_state.json`, `.agent/config.yaml` (for specs_path)
-- Writes: `session.json` (new session or COMPLETED update), `session_ledger.jsonl` (one entry per closed session)
+- Writes: `session.json` (new session or COMPLETED update), `session_ledger.jsonl` (one entry per closed session), `~/.aisdlc/harness.db` (session row, best-effort — T1-D-01)
 
 **Current limitations**:
 - `_should_skip_background_tasks()` reads `task_magnitude == "micro"` from the previous session's `session.json` — it reads the stale previous session data, not the newly initialized one, which creates a one-session lag in the skip logic
@@ -321,6 +382,36 @@
 - BUG-16: harness_version.txt read dynamically — ✅ v1.3.1
 
 ---
+## SQLite State Persistence (`state_persistence.py`)
+**Delivered**: v1.4.0 (2026-06-13) — T1-D-01 / T1-D-02
+**Primary files**:
+- `src/scripts/state_persistence.py` — SQLite mirroring layer (stdlib `sqlite3` only, no new pip dependencies)
+- `~/.aisdlc/harness.db` — global cross-project SQLite index (outside project root, not committed)
+- `.agent/state/harness.db` — project-local fallback (used when `~/.aisdlc/` is not writable)
+
+**What it does**: Mirrors harness flat-file state to a SQLite index for cross-project querying and analytics. **Flat files in `.agent/state/` remain the canonical source of truth**; SQLite is a derived, rebuildable index. Three sync functions: `sync_session_to_db()` (called by `init_session.py` at session creation — upserts a `sessions` row), `sync_review_event_to_db()` (called by `ai_review.py::_persist_verdict()` after every verdict — inserts a `review_events` row), `sync_spec_acceptance_to_db()` (called by `acceptance_hook.py` — upserts a `spec_acceptance` row). `rebuild_from_flat_files()` replays `session_ledger.jsonl` into the sessions table for initial population and disaster recovery. `cleanup_project_rows()` is called by `uninstall.py` for selective row-level cleanup. WAL journal mode and 10-second busy timeout prevent concurrent write failures. All public functions return `bool` and never raise; errors degrade gracefully with a warning log.
+
+**Schema**:
+- `sessions` — session_id (PK), project_root, agent, start_time, end_time, outcome, outcome_source, outcome_note, task_magnitude, harness_version
+- `review_events` — id (PK autoincrement), session_id, project_root, timestamp_utc, verdict, diff_hash, input_tokens, output_tokens, call_count
+- `spec_acceptance` — spec_id + project_root (composite PK), status, recorded_at
+
+**What it enables**:
+- Cross-project observability: a single SQLite query shows verdict distribution, session outcomes, and token usage across all harness-managed projects on the machine
+- Disaster recovery: `rebuild_from_flat_files()` can reconstruct the index from the authoritative flat files at any time
+- Row-level cleanup on uninstall: `cleanup_project_rows()` removes only the uninstalled project's rows, leaving other projects' data intact
+
+**Current limitations**:
+- `harness_health.py` does NOT yet query SQLite — it still reads `.ai-review-log.jsonl` line-by-line. The SQLite integration is write-side only; query-side integration is a future step
+- `~/.aisdlc/harness.db` is shared across all projects on the machine; `project_root` isolates rows, but if `_get_project_root()` returns different strings for the same project (symlink vs real path), rows may appear duplicated
+- Not suitable for ephemeral CI containers without a persistent `$HOME`; the fallback `.agent/state/harness.db` is used but is ephemeral and not shared across runs
+- Schema version is stored in the `schema_version` table but there is no migration path for schema upgrades — a schema change requires deleting and rebuilding the DB
+
+**Backlog dependencies**:
+- T1-D-01: SQLite persistence write layer — ✅ v1.4.0
+- T1-D-02: Cross-project analytics schema — ✅ v1.4.0
+
+---
 
 ## Intelligence Layer
 
@@ -350,6 +441,7 @@
 - T1-H-01: PageRank repo map — ✅ delivered
 - T1-H-03: Co-change blast radius estimator — ✅ delivered (in `co_change_check.py`)
 - T1-H-04: Auto-generated context at install time — ⬜ undelivered
+- T1-H-10: EXTRACTED/INFERRED/AMBIGUOUS confidence tiers for co-change warnings — ✅ v1.4.0 (EXTRACTED = history + AST import link; INFERRED = history only; AMBIGUOUS = AST import only, no history — routed to policy notes rather than LLM context)
 
 ---
 ## ADR Annotation and Wiki Injection
@@ -578,6 +670,35 @@
 
 **Backlog dependencies**:
 - T1-L-05 → ✅ (v1.3.0)
+- T1-L-05a: Stop hook acceptance gate (`acceptance_hook.py`) — ✅ v1.4.0
+
+---
+## Acceptance Hook (`acceptance_hook.py`)
+**Delivered**: v1.4.0 (2026-06-13) — T1-L-05a
+**Primary files**:
+- `src/scripts/acceptance_hook.py` — Claude Code Stop hook script
+- `bootstrap/templates/claude_settings_hooks.json` — hook registration template (wired to `.claude/settings.json` by `install.py`)
+
+**What it does**: Fires as a Claude Code Stop hook when a session ends on a feature branch (`feat/`, `feature/`, `release/` prefixes). Reads all `SPEC-*.md` files from the specs directory, extracts `status:` fields. Scans `git log main..HEAD` for `SPEC-\d+` references in commit messages. For each referenced spec, prints its status and calls `state_persistence.sync_spec_acceptance_to_db()` (best-effort). Exits 1 if any referenced spec is not `ACCEPTED`. Exits 2 (skip) if not on a feature branch. Exits 0 if all referenced specs are ACCEPTED or no spec references are found in the branch commit log. Exit code 1 causes Claude Code to block the session close and display the diagnostic.
+
+**What it prevents**:
+- A feature branch being closed out in Claude Code without the developer confirming spec acceptance status — the Stop hook fires before Claude Code ends the session
+- Silent non-acceptance: prints a diagnostic card naming each non-accepted spec and instructs the developer to set `status: ACCEPTED` or move acceptance to CI
+
+**Important constraint — Claude Code only**: Gemini CLI has no equivalent Stop hook. Gemini-driven sessions rely on the `outcome_override` convention in `session.json` (documented in AGENTS.md §6 / GEMINI.md) for close-out fidelity. This is documented in the script's module docstring and is not a defect — the architectural asymmetry is intentional and documented.
+
+**How it integrates**:
+- Wired by: `bootstrap/install.py` via `bootstrap/templates/claude_settings_hooks.json` → `.claude/settings.json`
+- Reads: `docs/planning/specs/SPEC-*.md` (status field), `.agent/config.yaml` (specs_path override), `git log main..HEAD`
+- Calls: `state_persistence.sync_spec_acceptance_to_db()` (best-effort; never raises)
+
+**Current limitations**:
+- `_FEATURE_BRANCH_PATTERNS` is hardcoded to `feat/`, `feature/`, `release/` prefixes — not config-driven; projects with different feature branch naming conventions silently skip acceptance checking (exit 2)
+- Spec `status:` field is matched anywhere in the file body using a case-insensitive regex; a spec with `status:` in an example code block or table would match falsely (low practical risk)
+- No enforcement that the ACCEPTED status was set after the last commit — a spec set to ACCEPTED before the branch started satisfies the hook even if implementation diverges
+
+**Backlog dependencies**:
+- T1-L-05a → ✅ v1.4.0
 
 ---
 
@@ -753,12 +874,16 @@
 - `tests/test_validate.py` — validate script tests
 - `tests/test_prompt.py` — system prompt tests
 - `tests/unit/test_upgrade_units.py` — upgrade unit tests
+- `tests/unit/test_gate_context.py` — GateContext schema, load/write, degradation contract (T1-G-13)
+- `tests/unit/test_capability_calibration.py` — calibration weight update, config overrides, clamp bounds (T1-G-14)
+- `tests/unit/test_state_persistence.py` — SQLite schema, upsert, rebuild, cleanup, graceful degradation (T1-D-01/T1-D-02)
+- `tests/unit/test_acceptance_hook.py` — branch pattern matching, spec status extraction, exit codes (T1-L-05a)
 - `tests/e2e/run_e2e_verification.py` — E2E scenario runner
 - `tests/e2e/test_project/` — representative installed project for E2E testing
 
-**Test count**: 250 unit/integration tests (as verified by `pytest --collect-only`). All 250 pass.
+**Test count**: 343 unit/integration tests (as verified by `pytest --collect-only`). All 343 pass.
 
-**Coverage by module**: `test_ai_review.py` — gate routing, pre-flight shortcut, verdict parsing, rebuttal protocol, high-risk classification; `test_check_spec.py` — two-tier gate, Pass 1 structural checks, Pass 2 mock-verdict modes; `test_init_session.py` — outcome inference logic, session lifecycle; `test_upgrade.py` and `test_downgrade.py` — migration chain; `test_install.py` — stack detection, template rendering, hook wiring; `test_validate.py` — all validation checks and ERROR/WARN classification; `test_phase3_enforcement.py` — architecture boundary check engine; `test_check_traceability.py` — commit traceability gate; `test_acceptance_check.py` — acceptance gate verdicts and AcceptanceVerdict parsing; `test_pm_scaffold.py` — Gherkin parsing, offline mode, backup mechanics; `test_distill_dream.py` — dream phase routing and YAML loading; `test_wiki_compile.py` — config-driven domain registry.
+**Coverage by module**: `test_ai_review.py` — gate routing, pre-flight shortcut, verdict parsing, rebuttal protocol, high-risk classification; `test_check_spec.py` — two-tier gate, Pass 1 structural checks, Pass 2 mock-verdict modes; `test_init_session.py` — outcome inference logic, session lifecycle; `test_upgrade.py` and `test_downgrade.py` — migration chain; `test_install.py` — stack detection, template rendering, hook wiring; `test_validate.py` — all validation checks and ERROR/WARN classification; `test_phase3_enforcement.py` — architecture boundary check engine; `test_check_traceability.py` — commit traceability gate; `test_acceptance_check.py` — acceptance gate verdicts and AcceptanceVerdict parsing; `test_pm_scaffold.py` — Gherkin parsing, offline mode, backup mechanics; `test_distill_dream.py` — dream phase routing and YAML loading; `test_wiki_compile.py` — config-driven domain registry; `test_gate_context.py` — GateContext schema, atomic write, degradation contract; `test_capability_calibration.py` — TP/FP weight update, config overrides, clamping; `test_state_persistence.py` — SQLite upsert, rebuild, cleanup, graceful error paths; `test_acceptance_hook.py` — branch filtering, spec status extraction, exit codes.
 
 **E2E scenario count**: 30 E2E scenarios as of v1.3.1 (per CHANGELOG). These are implemented in `tests/e2e/run_e2e_verification.py` and test the gate against the `test_project/` simulated installation.
 
@@ -924,27 +1049,36 @@ git commit
     │       └── architecture_checks.py
     │               ├── reads: .agent/config.yaml (layer rules, patterns)
     │               ├── scans: src/**/*.py (AST import graph)
+    │               ├── writes: .agent/state/gate_context_current.json (arch_violations, adr_domains)
     │               └── exits 1 on violation
     │
-    └─ [commit-msg stage]
-            └── ai_review.py
-                    ├── calls: check_preflight_shortcut()
-                    │       └── exits 0 PASS_FAST if docs/whitespace only
-                    ├── calls: providers.get_provider()
-                    │       └── reads: .agent/config.yaml (model_routing)
-                    ├── calls: repo_map.generate_repo_map() + get_pagerank_scores()
-                    │       ├── reads: src/**/*.py (AST import graph)
-                    │       └── reads/writes: .agent/state/repo_graph_cache.json
-                    ├── calls: architecture_checks.extract_adr_annotations()
-                    │       └── scans: src/**/*.py for # ADR: comments
-                    ├── calls: get_adr_context() → reads .agent/wiki/{domain}.md
-                    ├── calls: build_route_decision() → RouteDecision
-                    ├── calls: co_change_check.run_co_change_estimator()
-                    ├── calls: LLM provider (ReviewVerdict)
-                    ├── writes: .ai-review-log.jsonl (verdict)
-                    └── writes: .agent/state/harness_events.jsonl (gate events)
-
-    [post-commit stage]
+    ├─ [commit-msg stage]
+    │       └── ai_review.py
+    │               ├── calls: check_preflight_shortcut()
+    │               │       └── exits 0 PASS_FAST if docs/whitespace only
+    │               ├── calls: gate_context.load_gate_context()   ← T1-G-13
+    │               │       └── reads: .agent/state/gate_context_current.json
+    │               ├── calls: providers.get_provider()
+    │               │       └── reads: .agent/config.yaml (model_routing)
+    │               ├── calls: repo_map.generate_repo_map() + get_pagerank_scores()
+    │               │       ├── reads: src/**/*.py (AST import graph)
+    │               │       └── reads/writes: .agent/state/repo_graph_cache.json
+    │               ├── calls: architecture_checks.extract_adr_annotations()
+    │               │       └── scans: src/**/*.py for # ADR: comments
+    │               ├── calls: get_adr_context() → reads .agent/wiki/{domain}.md
+    │               ├── calls: build_route_decision() → RouteDecision
+    │               ├── calls: co_change_check.run_co_change_estimator()
+    │               │       └── returns EXTRACTED/INFERRED/AMBIGUOUS warnings  ← T1-H-10
+    │               ├── calls: build_deterministic_findings_section(gate_context)  ← T1-G-13
+    │               ├── calls: capability_calibration.get_calibrated_weight()   ← T1-G-14
+    │               ├── calls: LLM provider (ReviewVerdict)
+    │               ├── calls: capability_calibration (issue severity adjustment)  ← T1-G-14
+    │               ├── writes: .ai-review-log.jsonl (verdict)
+    │               ├── writes: .agent/state/harness_events.jsonl (gate events)
+    │               ├── writes: .agent/state/gate_context_current.json (verdict + evidence)
+    │               └── writes: ~/.aisdlc/harness.db review_events row (best-effort)  ← T1-D-01
+    │
+    └─ [post-commit stage]
             └── init_session.py --post-commit
                     ├── reads: .agent/state/session.json
                     └── writes: .agent/state/harness_events.jsonl (commit_made)
@@ -960,7 +1094,9 @@ init_session.py
     │       └── writes: session_ledger.jsonl, session.json (COMPLETED)
     ├── orient_agent() → prints outcome alert
     ├── initialize_session()
-    │       └── writes: session.json (new ACTIVE session)
+    │       ├── writes: session.json (new ACTIVE session)
+    │       └── calls: state_persistence.sync_session_to_db() (best-effort)  ← T1-D-01
+    │               └── writes: ~/.aisdlc/harness.db sessions row
     ├── maybe_run_dream_phase()  [if cooldowns + thresholds pass]
     │       └── subprocess: distill_dream.py
     │               ├── reads: harness_events.jsonl, .ai-review-log.jsonl
@@ -974,6 +1110,22 @@ init_session.py
     └── maybe_run_wiki_lint()  [if 14+ days since last run]
             └── subprocess: wiki_lint.py
 ```
+
+### Session Close — Claude Code Stop Hook (fires when Claude Code ends a session)
+
+```
+acceptance_hook.py                                 ← T1-L-05a
+    ├── reads: git log main..HEAD (SPEC-* refs in commit messages)
+    ├── reads: docs/planning/specs/SPEC-*.md (status fields)
+    ├── calls: state_persistence.sync_spec_acceptance_to_db() (best-effort)
+    │       └── writes: ~/.aisdlc/harness.db spec_acceptance row
+    ├── exit 2 → not a feature branch (skip)
+    ├── exit 1 → one or more specs not ACCEPTED (Claude Code blocks session close)
+    └── exit 0 → all specs ACCEPTED or no spec refs found
+```
+
+Note: Gemini CLI has no Stop hook. Gemini sessions close via the `outcome_override` convention
+in session.json rather than through this hook.
 
 ### Outer Loop (fired manually by agent following /ba or /pm workflows)
 
@@ -993,7 +1145,7 @@ init_session.py
 - **Wiki → Gate**: `wiki_compile.py` compiles `.agent/wiki/` pages at session start; `ai_review.py` reads them at commit time. If wiki compilation fails or runs on a stale schedule, the gate injects outdated or empty context. No version tracking links the wiki page that was injected to the compilation run that produced it.
 - **Session → Gate**: `ai_review.py` reads `session.json` only for session_id correlation in audit records. The gate does not read `task_magnitude` from session.json — it does not adjust behaviour based on whether the session was classified as "major". This is a missed integration opportunity.
 - **Dream Phase → Skills**: `distill_dream.py` proposes diffs to `SKILL.md` files. There is no automated application — proposals require human review and manual edits. The "routing to skill_ownership.yaml" link is broken (T1-D-00 undelivered).
-- **Architecture checks → Gate**: `architecture_checks.py` runs separately as a pre-commit hook before `ai_review.py`. The gate does not receive or integrate architecture check results — a diff that fails architecture checks AND fails the AI review generates two separate failures with no shared context.
+- **Architecture checks → Gate**: ✅ Resolved v1.4.0 (T1-G-13). `architecture_checks.py` now writes `arch_violations` and `adr_domains` to `gate_context_current.json` before the commit-msg stage. `ai_review.py` loads the `GateContext` and injects a "Deterministic findings (pre-LLM, verified)" section into the LLM prompt. Architecture violations and AI review failures now share a single context record with a common diff hash.
 - **Session ledger → Health**: `harness_health.py` reads `.ai-review-log.jsonl` but it is unclear whether it also reads `session_ledger.jsonl` for token trend analysis; the integration between the token budget tracking in the ledger and the health reporting layer is not verified in the code read.
 
 ---
@@ -1095,4 +1247,4 @@ init_session.py
 
 ---
 
-*End of Capability Inventory. 25 component cards + 3 analysis sections. Generated by reading implementation code directly; discrepancies with backlog documentation are noted inline.*
+*End of Capability Inventory. 29 component cards + 3 analysis sections. Updated to v1.4.0 by reading implementation code directly; discrepancies with backlog documentation are noted inline.*
