@@ -1,4 +1,5 @@
 {
+  "_comment": "Template installed into target projects by bootstrap/install.py. NOT the framework dev settings. Stop hook is Claude Code-only — Gemini sessions use outcome_override in session.json instead (see AGENTS.md §6).",
   "hooks": {
     "SessionStart": [
       {
@@ -16,6 +17,16 @@
           {
             "type": "command",
             "command": "python .agent/scripts/check_state_freshness.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python src/scripts/acceptance_hook.py"
           }
         ]
       }
