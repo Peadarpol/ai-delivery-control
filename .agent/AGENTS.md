@@ -154,6 +154,39 @@ When in doubt: close cleanly, write good state files, start fresh.
 6. **MUST update `.agent/state/last_session_summary.md`** — what was done, what's incomplete, decisions deferred.
 7. **MUST append a row to `.agent/state/session_ledger.jsonl` and `.agent/state/session_ledger.md`** — session ID, date, action summary.
 
+### Gemini CLI — explicit outcome write (HIB-GEMINI-01 external verification protocol)
+
+Claude Code can rely on a native Stop hook to record session outcome automatically
+(`outcome_source: "hook"`). Gemini CLI has no equivalent — without this step, a
+completed Gemini session is structurally indistinguishable from mid-task
+abandonment until the next session's retrospective inference runs against git state,
+which is a weaker signal.
+
+**Before ending any Gemini CLI session**, in addition to steps 1–7 above, write the
+following fields to `.agent/state/session.json`:
+
+```json
+{
+  "outcome_override": "success | partial | abandoned | escalated",
+  "outcome_override_source": "agent_override",
+  "outcome_override_note": "One-sentence summary of what was completed and what, if anything, remains open."
+}
+```
+
+Guidance for selecting `outcome_override`:
+- `success` — all planned work for this session committed, tests passing, no open
+  blockers.
+- `partial` — some work committed, but planned scope not fully delivered; `active_context.md`
+  must list the remaining items.
+- `abandoned` — session is ending without committing planned work (e.g. blocked,
+  ran out of context). `active_context.md` must explain why.
+- `escalated` — a HALT condition or escalation trigger was hit during this session.
+
+`init_session.py`'s `infer_and_close_previous_session()` reads `outcome_override` first
+and uses it verbatim (`outcome_source: "agent_override"`) before falling back to git-state
+inference. Writing this field is the only way a Gemini session gets the same close-out
+fidelity as a Claude Code session with the Stop hook.
+
 Run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
 
 ---
