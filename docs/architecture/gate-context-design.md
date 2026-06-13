@@ -27,6 +27,8 @@ Each component reads the context, adds its findings, writes it back.
 Conceptual schema:
 ```python
 class GateContext(BaseModel):
+    schema_version: str = "1.0"
+    generated_at: Optional[str] = None  # ISO timestamp, for staleness checks independent of schema version
     diff_text: str
     diff_hash: str                          # for rebuttal matching
     changed_files: List[str]
@@ -48,6 +50,63 @@ class GateContext(BaseModel):
     route_decision: Optional[RouteDecision] = None
     verdict: Optional[ReviewVerdict] = None
 ```
+
+## Write safety and staleness handling
+
+Each pre-commit hook runs as a separate process. Hooks may run in any order,
+may be skipped (e.g. `--no-verify`, hook not configured), or may crash
+mid-write. The following three rules are mandatory for any component that
+writes to `gate_context_current.json`:
+
+### 1. Atomic writes via temp-file + rename
+
+Never write directly to `gate_context_current.json`. Write to a temp file in
+the same directory, then atomically replace:
+
+```python
+import json
+import os
+
+def write_gate_context(context: GateContext, path: str) -> None:
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(context.model_dump(), f, indent=2)
+    os.replace(tmp_path, path)  # atomic on POSIX and Windows
+```
+
+This guarantees no reader ever sees a partially-written file, even if two
+hooks write concurrently or a process is killed mid-write.
+
+### 2. Schema version field
+
+`GateContext` includes a `schema_version: str` field (e.g. `"1.0"`). When
+`ai_review.py` reads the file, it checks this field against the version it
+expects. If the versions don't match (e.g. the file was written by a hook
+from a previous harness version that hasn't been upgraded yet), `ai_review.py`
+logs an ADVISORY and proceeds as if the file were absent — it does NOT raise
+a validation error and does NOT block the commit. Stale or incompatible
+context degrades to "no deterministic findings available," not a hard failure.
+
+### 3. Absence and partial-data as defaults, not errors
+
+Every field in `GateContext` that is populated by an optional component
+(co-change estimator, PageRank repo map, ADR domain detector) must have a
+sensible default (empty list, `None`, or zero) — not a required field. Three
+cases must all degrade gracefully:
+
+- **File absent entirely** (fresh clone, no hooks have run yet): `ai_review.py`
+  proceeds with an empty `GateContext`, no deterministic findings section
+  injected.
+- **File present but a section is missing** (one hook ran, another didn't,
+  e.g. repo_graph_cache.json doesn't exist yet so PageRank scores are absent):
+  `ai_review.py` injects only the sections that are present.
+- **File present but schema version mismatch**: treat as case 1 (absent).
+
+In all three cases, this is a degraded-but-functional state, not a halt
+condition. Each component's hook should also independently handle "my
+upstream dependency hasn't run" — e.g. the co-change estimator should not
+crash if the PageRank cache doesn't exist; it simply omits PageRank-weighted
+co-change signals.
 
 ## Gate system prompt integration
 
