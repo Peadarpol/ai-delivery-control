@@ -425,6 +425,8 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 | ID | Item | Effort | Category |
 |----|------|--------|----------|
+| HIB-053 | `outcome_override` write-before-commit flaw — cross-check commits exist before accepting success override in `infer_and_close_previous_session()` | Low | Bug fix |
+| HIB-054 | `false_positive_to_eval.py` Windows UnicodeEncodeError on emoji print; audit `incident_to_eval.py` for same pattern | Low | Bug fix |
 | T1-L-12 | Spec grader per-criterion feedback | Medium | Outer loop |
 | T1-L-13 | Decision block format for ADR annotations | Low | Outer loop |
 | T1-L-14 | System archetype classification in spec template | Low | Outer loop |
