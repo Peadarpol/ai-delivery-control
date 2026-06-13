@@ -42,7 +42,7 @@ io = __import__("io")
 random = __import__("random")
 
 # Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
-if sys.platform == "win32":
+if sys.platform == "win32" and "pytest" not in sys.modules:
     try:
         if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -50,6 +50,12 @@ if sys.platform == "win32":
             sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
     except Exception:
         pass
+
+# Optional: SQLite state persistence (T1-D-01). Non-fatal if unavailable.
+try:
+    from state_persistence import sync_review_event_to_db as _sync_review_event_to_db
+except ImportError:
+    _sync_review_event_to_db = None  # type: ignore[assignment]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -189,6 +195,95 @@ def _get_active_session_id() -> str | None:
         except Exception:
             pass
     return None
+
+
+def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
+    """Gather pytest collect evidence.
+    For each changed python file, look for a corresponding test file and collect its tests.
+    """
+    evidence = {}
+    for f in changed_files:
+        if not f.endswith(".py") or f.startswith("tests/"):
+            continue
+        path = Path(f)
+        basename = path.name
+        test_name = f"test_{basename}"
+        found_tests = list(PROJECT_ROOT.glob(f"**/tests/**/{test_name}")) + list(PROJECT_ROOT.glob(f"**/tests/{test_name}"))
+        if found_tests:
+            test_file = found_tests[0]
+            try:
+                res = subprocess.run(
+                    ["pytest", "--collect-only", "-q", str(test_file)],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    cwd=str(PROJECT_ROOT)
+                )
+                if res.returncode == 0:
+                    tests = [line.strip() for line in res.stdout.splitlines() if line.strip() and "::" in line]
+                    evidence[f] = {
+                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+                        "collected_tests": tests
+                    }
+                else:
+                    evidence[f] = {
+                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+                        "error": f"pytest returned {res.returncode}"
+                    }
+            except Exception as e:
+                evidence[f] = {
+                    "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+                    "error": str(e)
+                }
+        else:
+            evidence[f] = {
+                "test_file": None,
+                "collected_tests": []
+            }
+    return evidence
+
+
+def calculate_todo_delta(diff: str) -> int:
+    added_todos = 0
+    removed_todos = 0
+    for line in diff.splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            if "TODO" in line.upper() or "FIXME" in line.upper():
+                added_todos += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            if "TODO" in line.upper() or "FIXME" in line.upper():
+                removed_todos += 1
+    return added_todos - removed_todos
+
+
+def build_deterministic_findings_section(gate_context: Any) -> str:
+    parts = ["## Deterministic findings (pre-LLM, verified)"]
+    
+    parts.append("Architecture violations:")
+    if gate_context.arch_violations:
+        for v in gate_context.arch_violations:
+            parts.append(f"  {v.file}:{v.line} — {v.rule} — {v.severity}")
+    else:
+        parts.append("  (none)")
+        
+    parts.append("\nCo-change warnings (HIGH confidence):")
+    high_warnings = [w for w in gate_context.co_change_warnings if w.confidence == "EXTRACTED"]
+    if high_warnings:
+        for w in high_warnings:
+            parts.append(f"  {w.file} — {w.reason}")
+    else:
+        parts.append("  (none)")
+        
+    if gate_context.pytest_collect_status:
+        parts.append("\nPytest collect status:")
+        for line in gate_context.pytest_collect_status.splitlines():
+            parts.append(f"  {line.strip()}")
+            
+    if gate_context.todo_delta is not None and gate_context.todo_delta > 0:
+        parts.append(f"\nTODO/FIXME delta: +{gate_context.todo_delta} (net new TODOs/FIXMEs added)")
+        
+    parts.append(f"\nReview intensity: {gate_context.review_intensity}")
+    return "\n".join(parts)
 
 
 def _load_token_ratios() -> Dict[str, float]:
@@ -1843,6 +1938,7 @@ def _build_user_message(
     repo_map: str = "",
     adr_context: str = "",
     co_change_context: str = "",
+    deterministic_findings: str = "",
 ) -> str:
     """Assemble the user message from diff, commit message, and context layers.
 
@@ -1861,6 +1957,8 @@ def _build_user_message(
         parts.append(f"## Active ADR Contexts\n{adr_context}")
     if co_change_context:
         parts.append(f"## Co-change Blast Radius Alerts\n{co_change_context}")
+    if deterministic_findings:
+        parts.append(deterministic_findings)
     parts.append(f"## Staged Diff\n```diff\n{diff}\n```")
     return "\n\n".join(parts)
 
@@ -1988,6 +2086,10 @@ def _persist_verdict(
 
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+
+        # Non-blocking SQLite mirror — fire-and-forget; errors caught inside the function
+        if _sync_review_event_to_db is not None:
+            _sync_review_event_to_db(record)
     except Exception:
         pass  # Never block a commit due to logging failure
 
@@ -2261,6 +2363,29 @@ def _run_rebuttal(args) -> int:
             f.write(json.dumps(record) + "\n")
     except Exception:
         pass
+
+    # Update capability calibration counts on rebuttal outcomes (T1-G-14)
+    try:
+        import capability_calibration
+        original_issues_map = {issue.get("finding_id"): issue for issue in original_issues if issue.get("finding_id")}
+        contested_fids = {f.finding_id for f in dev_rebuttal.findings}
+        
+        # Contested findings
+        for rf in rebutted_findings:
+            issue = original_issues_map.get(rf.finding_id)
+            if issue:
+                cap = issue.get("concern")
+                if cap:
+                    capability_calibration.update_calibration_rebuttal(cap, rf.verdict, PROJECT_ROOT)
+                    
+        # Uncontested findings
+        for fid, issue in original_issues_map.items():
+            if fid not in contested_fids:
+                cap = issue.get("concern")
+                if cap:
+                    capability_calibration.update_calibration_rebuttal(cap, "UNCONTESTED", PROJECT_ROOT)
+    except Exception as e:
+        print(f"⚠️  [REBUTTAL] Failed to update capability calibration: {e}")
         
     # Console presentation
     print("\n" + "─" * 60)
@@ -2373,7 +2498,7 @@ def _run_review() -> int:
         active_domains = []
 
     is_hr, matches = classify_commit_risk(changed_files, active_domains)
-    session_id = _get_active_session_id()
+    session_id = _get_active_session_id() or "pre-session-init"
 
     # Allow explicit bypass via env var or local file
     if os.environ.get("SKIP_AI_REVIEW") == "1":
@@ -2529,6 +2654,53 @@ def _run_review() -> int:
     diff = get_staged_diff()
     if not diff.strip():
         return 0
+
+    current_diff_hash = _get_normalized_diff_hash(diff)
+
+    # Load GateContext (T1-G-13)
+    from gate_context import load_gate_context, get_context_path, GateContext, CoChangeWarning
+    context_file = get_context_path()
+    gate_context = None
+    if context_file.exists():
+        try:
+            gate_context = load_gate_context(context_file)
+            if not gate_context:
+                print("⚠️  [GATE] Malformed GateContext or schema version mismatch. Degrading to standalone behaviour.")
+                log_harness_event({
+                    "event_type": "state_anomaly",
+                    "severity": "WARNING",
+                    "payload": {
+                        "reason": "Malformed GateContext or schema version mismatch"
+                    }
+                })
+            elif gate_context.diff_hash != current_diff_hash:
+                print("⚠️  [GATE] Stale GateContext detected (diff hash mismatch). Degrading to standalone behaviour.")
+                log_harness_event({
+                    "event_type": "state_anomaly",
+                    "severity": "WARNING",
+                    "payload": {
+                        "reason": "Stale GateContext detected (diff hash mismatch)"
+                    }
+                })
+                gate_context = None
+        except Exception as e:
+            print(f"⚠️  [GATE] Error reading GateContext: {e}. Degrading to standalone behaviour.")
+            log_harness_event({
+                "event_type": "state_anomaly",
+                "severity": "WARNING",
+                "payload": {
+                    "reason": f"Error reading GateContext: {e}"
+                }
+            })
+            gate_context = None
+
+    if not gate_context:
+        gate_context = GateContext(
+            diff_text=diff,
+            diff_hash=current_diff_hash,
+            changed_files=changed_files,
+            session_id=session_id
+        )
 
     # Load config
     config = load_config()
@@ -2761,11 +2933,27 @@ def _run_review() -> int:
         reason = f"Provider setup failed: {e}"
         return _handle_api_unavailable(reason, changed_files, active_domains)
 
+    # 5. Run co-change estimator (T1-H-03)
+    co_change_warnings = []
+    try:
+        if run_co_change_estimator is not None:
+            co_change_warnings = run_co_change_estimator(changed_files)
+    except Exception:
+        pass
+
     # 4. Compute RouteDecision dynamically (T1-G-01, T1-G-04)
     route_decision = build_route_decision(changed_files, diff, pagerank_scores)
     # Merge any adr-specific policy notes into our routing decision
     if adr_policy_notes:
         route_decision.policy_notes.extend(adr_policy_notes)
+
+    # Route AMBIGUOUS co-change warnings strictly to policy notes (T1-H-10)
+    ambiguous_warnings = [w for w in co_change_warnings if w["confidence"] == "AMBIGUOUS"]
+    if ambiguous_warnings:
+        for w in ambiguous_warnings:
+            route_decision.policy_notes.append(
+                f"AMBIGUOUS co-change: file '{w['unstaged']}' is imported by staged '{w['staged']}' but is not staged."
+            )
 
     print("\n" + "─" * 60)
     print("⚙️  AI REVIEW DYNAMIC ROUTING DECISION")
@@ -2776,27 +2964,67 @@ def _run_review() -> int:
         print(f"     {note}")
     print("─" * 60 + "\n")
 
-    # 5. Run co-change estimator (T1-H-03)
     co_change_context = ""
-    co_change_warnings = []
-    try:
-        if run_co_change_estimator is not None:
-            co_change_warnings = run_co_change_estimator(changed_files)
-    except Exception:
-        pass
-
     if co_change_warnings:
         print("📊 CO-CHANGE BLAST RADIUS ADVISORY")
         for w in co_change_warnings:
-            conf_symbol = SYMBOL_REVIEW if w["confidence"] == "HIGH" else "💡"
+            if w["confidence"] == "EXTRACTED":
+                conf_symbol = SYMBOL_REVIEW
+            elif w["confidence"] == "INFERRED":
+                conf_symbol = "💡"
+            else:
+                conf_symbol = "❓"
             print(f"   {conf_symbol} [{w['confidence']}] {w['reason']}")
         print("─" * 60 + "\n")
 
-        high_alerts = [w for w in co_change_warnings if w["confidence"] == "HIGH"]
+        high_alerts = [w for w in co_change_warnings if w["confidence"] == "EXTRACTED"]
         if high_alerts:
             co_change_context = "WARNING: The following related files might have missing updates based on structural and historical patterns:\n"
             for w in high_alerts:
                 co_change_context += f"- {w['unstaged']} (correlated with staged '{w['staged']}' via structural imports and history)\n"
+
+    # Populate GateContext fields (T1-G-11 & T1-G-13)
+    if gate_context:
+        gate_context.co_change_warnings = [
+            CoChangeWarning(file=w["unstaged"], confidence=w["confidence"], reason=w["reason"])
+            for w in co_change_warnings
+        ]
+        # Pytest collect status
+        try:
+            pytest_evidence = gather_pytest_evidence(changed_files)
+            pytest_lines = []
+            for f, ev in pytest_evidence.items():
+                if ev["test_file"] is None:
+                    pytest_lines.append(f"{f}: No test file found")
+                elif "error" in ev:
+                    pytest_lines.append(f"{f}: Error collecting tests ({ev['error']})")
+                else:
+                    pytest_lines.append(f"{f}: {len(ev['collected_tests'])} tests collected in {ev['test_file']}")
+            gate_context.pytest_collect_status = "\n".join(pytest_lines)
+        except Exception as e:
+            gate_context.pytest_collect_status = f"Error gathering pytest evidence: {e}"
+
+        # TODO delta
+        gate_context.todo_delta = calculate_todo_delta(diff)
+        
+        # Review intensity from route_decision
+        if route_decision:
+            gate_context.review_intensity = route_decision.review_intensity
+        
+        # PageRank scores
+        gate_context.pagerank_scores = pagerank_scores
+        
+        # Save updated GateContext
+        try:
+            from gate_context import write_gate_context
+            write_gate_context(gate_context)
+        except Exception as e:
+            print(f"⚠️  [GATE] Failed to save GateContext: {e}")
+
+    # Build deterministic findings section
+    deterministic_findings = ""
+    if gate_context:
+        deterministic_findings = build_deterministic_findings_section(gate_context)
 
     # Check for file churn (remediation loop signal)
     churn_info = get_recent_file_churn(diff)
@@ -2829,6 +3057,7 @@ def _run_review() -> int:
                 repo_map=repo_map,
                 adr_context=adr_context,
                 co_change_context=co_change_context,
+                deterministic_findings=deterministic_findings,
             )
             review_dict = provider.review(SYSTEM_PROMPT, user_content)
             results.append(review_dict)
@@ -2838,6 +3067,75 @@ def _run_review() -> int:
 
         # Consensus Filtering
         raw_review = consensus_filter(results)
+
+        # Apply Capability Calibration (T1-G-14)
+        try:
+            import capability_calibration
+            calibration_data = capability_calibration.load_calibration(PROJECT_ROOT)
+            caps_seen = set()
+            calibration_config = config.get("capability_calibration", {})
+            calibration_enabled = calibration_config.get("enabled", True)
+            
+            if calibration_enabled and "issues" in raw_review and raw_review["issues"]:
+                modified_any = False
+                for issue in raw_review["issues"]:
+                    cap = issue.get("concern")
+                    if not cap:
+                        continue
+                    caps_seen.add(cap)
+                    
+                    weight = capability_calibration.get_calibrated_weight(cap, PROJECT_ROOT, config)
+                    orig_severity = issue.get("severity")
+                    
+                    if weight >= 1.1 and orig_severity == "MEDIUM":
+                        issue["severity"] = "HIGH"
+                        issue["description"] = f"[Calibrated Elevation] {issue.get('description', '')}"
+                        modified_any = True
+                        route_decision.policy_notes.append(
+                            f"Calibration elevated {cap} finding from WARN to FAIL (weight {weight:.2f})"
+                        )
+                    elif weight <= 0.9 and orig_severity == "HIGH":
+                        issue["severity"] = "MEDIUM"
+                        issue["description"] = f"[Calibrated Suppression] {issue.get('description', '')}"
+                        modified_any = True
+                        route_decision.policy_notes.append(
+                            f"Calibration suppressed {cap} finding from FAIL to WARN (weight {weight:.2f})"
+                        )
+                        
+                if modified_any:
+                    # Recompute overall verdict based on adjusted issues
+                    has_high = any(i.get("severity") == "HIGH" for i in raw_review["issues"])
+                    has_medium = any(i.get("severity") == "MEDIUM" for i in raw_review["issues"])
+                    if has_high:
+                        raw_review["verdict"] = "FAIL"
+                        raw_review["blocking_concern"] = next((i.get("concern") for i in raw_review["issues"] if i.get("severity") == "HIGH"), None)
+                    elif has_medium:
+                        raw_review["verdict"] = "WARN"
+                        raw_review["blocking_concern"] = None
+                    else:
+                        raw_review["verdict"] = "PASS"
+                        raw_review["blocking_concern"] = None
+
+            # Add policy notes for all capabilities seen
+            if calibration_enabled:
+                for cap in caps_seen:
+                    weight = capability_calibration.get_calibrated_weight(cap, PROJECT_ROOT, config)
+                    cap_info = calibration_data.get("capabilities", {}).get(cap, {"tp": 1, "fp": 1})
+                    tp = cap_info.get("tp", 1)
+                    fp = cap_info.get("fp", 1)
+                    
+                    status_str = "neutral"
+                    if weight <= 0.9:
+                        status_str = "WARN-only"
+                    elif weight >= 1.1:
+                        status_str = "FAIL-escalated"
+                        
+                    route_decision.policy_notes.append(
+                        f"{cap} findings treated as {status_str} (calibration weight {weight:.2f}, based on {fp} false positives / {tp} confirmed in this project's history)."
+                    )
+        except Exception as e:
+            print(f"⚠️  [GATE] Failed to apply capability calibration: {e}")
+
 
     except urllib.error.URLError as e:
         elapsed = time.time() - start_time
@@ -2995,6 +3293,16 @@ def _run_review() -> int:
     except ValidationError as exc:
         fail_reason = f"ReviewVerdict validation failed: {exc}"
         return _handle_api_unavailable(fail_reason, changed_files, active_domains)
+
+    # Write back final RouteDecision and ReviewVerdict (T1-G-13)
+    if gate_context:
+        try:
+            from gate_context import write_gate_context
+            gate_context.route_decision = route_decision.model_dump() if route_decision else None
+            gate_context.verdict = typed_verdict.model_dump()
+            write_gate_context(gate_context)
+        except Exception as e:
+            print(f"⚠️  [GATE] Failed to write back final GateContext: {e}")
 
     _persist_verdict(verdict_obj=typed_verdict, provider_name=provider.name)
     render_review(raw_review, churn_info)

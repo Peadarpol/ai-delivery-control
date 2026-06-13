@@ -1719,3 +1719,90 @@ class TestTokenBudgetEnforcement:
             assert exit_code == 0
 
 
+class TestCapabilityCalibrationIntegration:
+    """T1-G-14: Assert capability calibration elevates/demotes severities and updates on rebuttal."""
+
+    def test_calibration_demotes_and_elevates(self, ai_review, tmp_path):
+        from unittest.mock import patch, MagicMock
+        import capability_calibration
+        
+        # Enable calibration, set overrides or save calibration json
+        cal_data = {
+            "schema_version": "1.0",
+            "capabilities": {
+                "INTENT_ALIGNMENT": {"tp": 1, "fp": 9, "weight": 0.5},
+                "BRANCH_ISOLATION": {"tp": 9, "fp": 1, "weight": 1.5}
+            }
+        }
+        capability_calibration.save_calibration(cal_data, tmp_path)
+        
+        mock_provider = MagicMock()
+        mock_provider.name = "mock-provider"
+        mock_provider.model = "mock-model"
+        # Return INTENT_ALIGNMENT with HIGH severity (should be demoted to MEDIUM)
+        # and BRANCH_ISOLATION with MEDIUM severity (should be elevated to HIGH)
+        mock_provider.review.return_value = {
+            "verdict": "FAIL",
+            "intent_alignment": "Intent alignment",
+            "issues": [
+                {
+                    "severity": "HIGH",
+                    "concern": "INTENT_ALIGNMENT",
+                    "description": "High intent alignment concern",
+                    "remediation": "remediate"
+                },
+                {
+                    "severity": "MEDIUM",
+                    "concern": "BRANCH_ISOLATION",
+                    "description": "Medium branch isolation concern",
+                    "remediation": "remediate"
+                }
+            ],
+            "summary": "Calibration review"
+        }
+        mock_provider.last_token_usage = {}
+
+        # Set config settings
+        config = {
+            "capability_calibration": {
+                "enabled": True
+            }
+        }
+
+        with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
+                  requires_review=True, direct_pass_allowed=False, planner_note=""
+             )), \
+             patch("ai_review.load_review_context", return_value=""), \
+             patch("repo_map.generate_repo_map", return_value=""), \
+             patch("repo_map.get_pagerank_scores", return_value={}), \
+             patch("ai_review.get_adr_context", return_value=("", [], [])), \
+             patch("co_change_check.run_co_change_estimator", return_value=[]), \
+             patch("providers.get_provider", return_value=mock_provider), \
+             patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("ai_review.load_config", return_value=config), \
+             patch("ai_review._persist_verdict"), \
+             patch("ai_review.render_review"):
+
+            exit_code = ai_review._run_review()
+            # Since INTENT_ALIGNMENT was HIGH -> demoted to MEDIUM,
+            # and BRANCH_ISOLATION was MEDIUM -> elevated to HIGH,
+            # there is still a HIGH issue, so exit code is 1 (verdict FAIL).
+            assert exit_code == 1
+            
+            # Verify the issues were modified
+            called_verdict = ai_review._persist_verdict.call_args[1].get("verdict_obj")
+            assert called_verdict is not None
+            
+            # Check severities in called_verdict.issues
+            intent_issue = next(i for i in called_verdict.issues if i["concern"] == "INTENT_ALIGNMENT")
+            branch_issue = next(i for i in called_verdict.issues if i["concern"] == "BRANCH_ISOLATION")
+            
+            assert intent_issue["severity"] == "MEDIUM"
+            assert branch_issue["severity"] == "HIGH"
+            
+            # Verify policy notes were added
+            assert any("treated as WARN-only" in note for note in called_verdict.route_decision.policy_notes)
+            assert any("treated as FAIL-escalated" in note for note in called_verdict.route_decision.policy_notes)
+
+

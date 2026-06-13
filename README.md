@@ -241,6 +241,13 @@ Full setup: [docs/getting-started.md](docs/getting-started.md)
 The installer detects your stack, copies framework files, wires pre-commit hooks,
 and runs the environment validation suite. Under ten minutes from zero to working.
 
+**Runtime requirements**: Python 3.9+ (stdlib only — no pip dependencies). From
+v1.4.0, the harness writes a small SQLite index to `~/.aisdlc/harness.db` on first
+use. No new package is required; this uses Python's built-in `sqlite3`. Flat files in
+`.agent/state/` remain the source of truth — the SQLite DB is derived and rebuildable.
+In ephemeral environments (CI, containers) it falls back automatically to a
+project-local path. See [docs/getting-started.md](docs/getting-started.md) for details.
+
 ---
 
 ## Security

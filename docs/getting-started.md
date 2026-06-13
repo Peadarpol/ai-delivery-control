@@ -8,12 +8,28 @@ Install the AI Delivery Control harness into any project in under 10 minutes.
 
 | Requirement | Minimum | Notes |
 |---|---|---|
-| Python | 3.9+ | Must be on `PATH` |
+| Python | 3.9+ | Must be on `PATH`. Python stdlib is required to run the harness regardless of your project's language. |
 | git | Any recent | Target project must be a git repository |
 | pre-commit | Any recent | `pip install pre-commit` or `brew install pre-commit` |
 | Anthropic API key | — | Required for the AI review gate; gate runs in fail-open mode without it |
 
 The harness has no Python dependencies beyond the standard library.
+
+#### SQLite State Index (v1.4.0+)
+
+From v1.4.0, the harness writes a small SQLite index to `~/.aisdlc/harness.db` on
+first use. This file is shared across all projects using the harness on the same
+machine and enables cross-project session analytics.
+
+**Key facts:**
+- No new `pip` dependency — uses Python's built-in `sqlite3` module.
+- Flat files in `.agent/state/` remain the **canonical source of truth**. The SQLite
+  DB is a derived, rebuildable index only. You can delete it at any time and it will
+  be recreated on next use.
+- In locked-down, ephemeral, or containerised environments (CI runners, Docker builds)
+  where `$HOME` is not persistent, the harness automatically falls back to a
+  project-local path: `.agent/state/harness.db`. No configuration change required.
+- The fallback path should be added to `.gitignore` if you work in such environments.
 
 ### Stack Coverage & Manual Extension
 

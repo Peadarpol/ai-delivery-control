@@ -186,8 +186,31 @@ Guidance for selecting `outcome_override`:
 and uses it verbatim (`outcome_source: "agent_override"`) before falling back to git-state
 inference. Writing this field is the only way a Gemini session gets the same close-out
 fidelity as a Claude Code session with the Stop hook.
-
 Run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
+
+> [!IMPORTANT]
+> **Spec acceptance check (Stop hook) — Claude Code only.**
+> From v1.4.0, `src/scripts/acceptance_hook.py` is wired as a Claude Code Stop hook
+> via `bootstrap/templates/claude_settings_hooks.json`. It verifies that all SPEC-* IDs
+> referenced in branch commits carry `status: ACCEPTED` before the session closes.
+>
+> **This hook does NOT fire for Gemini CLI sessions** — Gemini has no equivalent Stop
+> event. On Gemini-driven feature branches, spec acceptance must be verified manually
+> before raising a PR, or enforced in CI.  This is by design, not an omission.
+> Do not attempt to call `acceptance_hook.py` from the Gemini `outcome_override` write
+> step; the hook targets the Claude Code event model.  If you add a future Gemini
+> close-hook equivalent, wire it there explicitly.
+>
+> **Known sharp edge in the Gemini mitigation (HIB-053):** The `outcome_override`
+> convention used by Gemini sessions is written to `session.json` *before* the
+> `git commit` that makes the session's work permanent.  If the session crashes or
+> is killed between those two steps, `infer_and_close_previous_session()` reads the
+> override verbatim and records `outcome: success` for work that was never committed —
+> git-state inference is never reached because `outcome_override` short-circuits it.
+> Mitigation until HIB-053 is fixed: commit each phase immediately after its tests
+> pass (do not bundle phases into a single end-of-session commit).
+> See `docs/planning/FRAMEWORK_BACKLOG.md` — HIB-053 for the planned fix to
+> `infer_and_close_previous_session()`.
 
 ---
 

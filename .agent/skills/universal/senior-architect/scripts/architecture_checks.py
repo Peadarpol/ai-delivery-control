@@ -543,6 +543,96 @@ def main():
     # Soft warnings (do not block commit)
     check_adr_annotations_count(paths_config)
 
+    # ── Write to GateContext (T1-G-13) ──
+    try:
+        import subprocess
+        import hashlib
+        sys.path.insert(0, str(Path.cwd() / "src" / "scripts"))
+        from gate_context import load_gate_context, write_gate_context, GateContext, ArchViolation
+
+        # Get staged diff and changed files
+        res = subprocess.run(
+            ["git", "diff", "--cached"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
+        diff_text = res.stdout if res.returncode == 0 else ""
+
+        res_files = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
+        changed_files = [f.strip() for f in res_files.stdout.splitlines() if f.strip()]
+
+        # Compute diff hash
+        diff_hash = ""
+        if diff_text:
+            diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+
+        gate_context = GateContext(
+            diff_text=diff_text,
+            diff_hash=diff_hash,
+            changed_files=changed_files
+        )
+
+        # Extract ADR annotations from changed files
+        adr_domains = []
+        for f in changed_files:
+            if Path(f).exists():
+                adr_domains.extend(extract_adr_annotations(f))
+        gate_context.adr_domains = list(set(adr_domains))
+
+        # Parse all_errors into ArchViolation
+        violations = []
+        for err in all_errors:
+            parts = err.split(":", 2)
+            if len(parts) >= 3 and parts[1].strip().isdigit():
+                filepath = parts[0].strip().replace("\\", "/")
+                line = int(parts[1].strip())
+                msg = parts[2].strip()
+            elif len(parts) >= 2:
+                filepath = parts[0].strip().replace("\\", "/")
+                line = 1
+                msg = parts[1].strip()
+            else:
+                filepath = "unknown"
+                line = 1
+                msg = err.strip()
+
+            severity = "FAIL"
+            if "coupling" in msg.lower() or "lifespan" in msg.lower() or "nameerror" in msg.lower():
+                severity = "WARN"
+
+            rule = "ARCHITECTURE_RULE"
+            if "layer violation" in msg.lower():
+                rule = "LAYER_BOUNDARY"
+            elif "coupling" in msg.lower():
+                rule = "HIGH_COUPLING"
+            elif "conditional branch filter" in msg.lower():
+                rule = "BRANCH_FILTER"
+            elif "aggregate root" in msg.lower():
+                rule = "AGGREGATE_ROOT"
+            elif "concrete infrastructure" in msg.lower():
+                rule = "INTERFACE_SEGREGATION"
+            elif "lifespan" in msg.lower():
+                rule = "ASGI_LIFESPAN"
+            elif "forbidden pattern" in msg.lower():
+                rule = "FORBIDDEN_PATTERN"
+
+            violations.append(
+                ArchViolation(file=filepath, line=line, rule=rule, severity=severity)
+            )
+
+        gate_context.arch_violations = violations
+        write_gate_context(gate_context)
+    except Exception as e:
+        print(f"[ARCH] Warning: Failed to populate GateContext: {e}")
+
     if all_errors:
         print(f"\n[FAIL] Found {len(all_errors)} architectural violations:")
         for err in all_errors:

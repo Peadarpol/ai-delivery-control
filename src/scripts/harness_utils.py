@@ -72,12 +72,12 @@ def log_harness_event(event_dict: Dict[str, Any], project_root: Path | None = No
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / "harness_events.jsonl"
         
-        session_id = None
+        session_id = "pre-session-init"
         session_file = root / ".agent" / "state" / "session.json"
         if session_file.exists():
             try:
                 with open(session_file, "r", encoding="utf-8") as f:
-                    session_id = json.load(f).get("session_id")
+                    session_id = json.load(f).get("session_id") or "pre-session-init"
             except Exception:
                 pass
                 

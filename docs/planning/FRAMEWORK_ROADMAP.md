@@ -386,7 +386,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 |----|------|--------|----------|
 | T1-G-13 | GateContext shared object for pre-commit chain | Medium | Gate architecture |
 | T1-G-14 | Per-capability AT9 calibration weights | Medium | Gate calibration |
-| T1-G-11 | Evidence-gathering pre-context for review gate (pytest collect, co-change, TODO delta; absorbs HIB-052 session-counting fix — see note below) | Medium | Gate |
+| T1-G-11 | Evidence-gathering pre-context for review gate (pytest collect, co-change, TODO delta; HIB-052 session-counting fix delivered as part of this item) | Medium | Gate |
 | T1-H-10 | Three-tier confidence tagging (EXTRACTED/INFERRED/AMBIGUOUS) for co-change and repo map signals | Medium-High | Repo intelligence |
 | T1-L-05a | Stop hook for acceptance_check.py on feature branch close | Low-Medium | Outer loop |
 
@@ -398,7 +398,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-D-01 | SQLite state index — single machine | State persistence |
 | T1-D-02 | Cross-project harness health | Multi-project |
 
-**HIB-052 — session_id "unknown" clustering**: Found during v1.3.4's dream phase validation. Touches the same session-counting code that T1-G-11 (evidence gathering, which reads session/event data for pre-context) and T1-H-10 (confidence tagging on repo/co-change signals) work near. Scoped into **T1-G-11**: when implementing the evidence-gathering pre-context, first audit and fix the session_id "unknown" clustering in the underlying session-counting code, since T1-G-11's pre-context signals depend on that data being correctly attributed. T1-H-10 has no direct dependency on session_id attribution and should not absorb this fix.
+**HIB-052 — session_id "unknown" clustering** ✅ **Delivered in T1-G-11, commit b645830 (v1.4.0)**: Found during v1.3.4's dream phase validation. Real sessions were collapsing into a shared `"unknown"` bucket rather than carrying their UUID, degrading per-session aggregation and pattern detection. Fixed as part of T1-G-11 delivery: `harness_utils.py`, `roster_builder.py`, and `audit_logger.py` patched to read the active session UUID at write time; `"pre-session-init"` marker now reserved exclusively for genuine pre-init events (not a shared fallback bucket); regression test added. See FRAMEWORK_BACKLOG.md HIB-052 for full detail.
 
 **Deferred to v1.4.1** (split out to keep v1.4.0 scoped — see decisions_log.md for rationale):
 

@@ -138,3 +138,83 @@ def test_file_sizes_critical(capsys):
     assert "CRITICAL: .agent/state/repo_graph_cache.json" in captured.out
     assert "12.0MB" in captured.out
     assert "WARN" not in captured.out
+
+
+# --- Capability Calibration Tests ---
+
+def test_capability_calibration_report_missing_file(capsys):
+    """Verify default message when file is missing."""
+    def mock_path_constructor(val):
+        mock_path = MagicMock()
+        mock_path.exists.return_value = False
+        return mock_path
+
+    with patch("harness_health.Path", side_effect=mock_path_constructor):
+        harness_health.report_capability_calibration()
+    captured = capsys.readouterr()
+    assert "NO CALIBRATION DATA" in captured.out
+
+
+def test_capability_calibration_report_healthy(tmp_path, capsys):
+    """Verify output of healthy capabilities."""
+    cal_file = tmp_path / "capability_calibration.json"
+    cal_data = {
+        "schema_version": "1.0",
+        "capabilities": {
+            "INTENT_ALIGNMENT": {"tp": 2, "fp": 1, "weight": 1.05}
+        }
+    }
+    import json
+    cal_file.write_text(json.dumps(cal_data), encoding="utf-8")
+
+    with patch("harness_health.Path", return_value=cal_file):
+        harness_health.report_capability_calibration()
+    captured = capsys.readouterr()
+    assert "INTENT_ALIGNMENT" in captured.out
+    assert "weight=1.05" in captured.out
+    assert "precision=0.67" in captured.out
+    assert "DEGRADING" not in captured.out
+    assert "BOUNDARY" not in captured.out
+
+
+def test_capability_calibration_report_degrading(tmp_path, capsys):
+    """Verify output and [DEGRADING] flag for low precision."""
+    cal_file = tmp_path / "capability_calibration.json"
+    cal_data = {
+        "schema_version": "1.0",
+        "capabilities": {
+            "INTENT_ALIGNMENT": {"tp": 1, "fp": 9, "weight": 0.55}  # precision = 0.1
+        }
+    }
+    import json
+    cal_file.write_text(json.dumps(cal_data), encoding="utf-8")
+
+    with patch("harness_health.Path", return_value=cal_file):
+        harness_health.report_capability_calibration()
+    captured = capsys.readouterr()
+    assert "INTENT_ALIGNMENT" in captured.out
+    assert "weight=0.55" in captured.out
+    assert "precision=0.10" in captured.out
+    assert "DEGRADING" in captured.out
+
+
+def test_capability_calibration_report_boundary_warning(tmp_path, capsys):
+    """Verify output and [AT BOUNDARY] flag when weight is clamped."""
+    cal_file = tmp_path / "capability_calibration.json"
+    cal_data = {
+        "schema_version": "1.0",
+        "capabilities": {
+            "INTENT_ALIGNMENT": {"tp": 5, "fp": 1, "weight": 1.5}
+        }
+    }
+    import json
+    cal_file.write_text(json.dumps(cal_data), encoding="utf-8")
+
+    with patch("harness_health.Path", return_value=cal_file):
+        harness_health.report_capability_calibration()
+    captured = capsys.readouterr()
+    assert "INTENT_ALIGNMENT" in captured.out
+    assert "weight=1.50" in captured.out
+    assert "precision=0.83" in captured.out
+    assert "AT BOUNDARY" in captured.out
+

@@ -27,14 +27,14 @@ SESSION_FILE = Path(".agent/state/session.json")
 _SEVERITY_MAP = {"fail": "warn", "error": "critical", "success": "info", "warn": "warn"}
 
 
-def _get_session_id() -> Optional[str]:
+def _get_session_id() -> str:
     if not SESSION_FILE.exists():
-        return None
+        return "pre-session-init"
     try:
         with open(SESSION_FILE, "r", encoding="utf-8") as f:
-            return json.load(f).get("session_id")
+            return json.load(f).get("session_id") or "pre-session-init"
     except Exception:
-        return None
+        return "pre-session-init"
 
 
 def log_action(

@@ -413,6 +413,46 @@ def report_rebuttals():
         print("\033[93m  ⚠️  [ALERT] Human Rebuttal Rate exceeds 15% (calibration signal)! Recommendation: Relax specific skills.\033[0m")
 
 
+def report_capability_calibration():
+    section_header("CAPABILITY CALIBRATION")
+    cal_file = Path(".agent/state/capability_calibration.json")
+    if not cal_file.exists():
+        print("  Status         : \033[94mNO CALIBRATION DATA (all weights neutral)\033[0m")
+        return
+        
+    try:
+        with open(cal_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        capabilities = data.get("capabilities", {})
+        if not capabilities:
+            print("  Status         : \033[94mNO CALIBRATION RECORDS\033[0m")
+            return
+            
+        for cap, stats in sorted(capabilities.items()):
+            tp = stats.get("tp", 1)
+            fp = stats.get("fp", 1)
+            weight = stats.get("weight", 1.0)
+            
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.5
+            
+            status = "HEALTHY"
+            status_text = ""
+            
+            if precision < 0.30:
+                status = "CRITICAL"
+                status_text = " [DEGRADING]"
+            elif weight == 0.5 or weight == 1.5:
+                status = "WARNING"
+                status_text = " [AT BOUNDARY - NEEDS MANUAL REVIEW]"
+                
+            color = get_color(status)
+            print(f"  {cap:25}: weight={weight:.2f}, precision={precision:.2f} (tp={tp}, fp={fp}){color}{status_text}\033[0m")
+            
+    except Exception as e:
+        print(f"  Error reading calibration data: {e}")
+
+
 def report_dream_proposal_staleness():
     section_header("DREAM PROPOSAL STALENESS")
     proposals_dir = Path(".agent/state/dream_proposals")
@@ -500,6 +540,7 @@ def main():
  
     report_ai_reviews()
     report_rebuttals()
+    report_capability_calibration()
     report_governance_audit()
     report_resilience_pointer()
     report_dlq_pointer()

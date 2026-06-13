@@ -1,0 +1,1379 @@
+commit b6458300c2a00bd25eb9cc1b9666c2cb37784867
+Author: Peter <peadarpol@gmail.com>
+Date:   Sat Jun 13 13:06:35 2026 +1000
+
+    feat(v1.4.0): Phases 1-4 — GateContext, evidence gathering, AT9 calibration, confidence tagging
+    
+    - T1-G-13: GateContext shared object (gate_context.py), atomic writes,
+      schema version degradation, architecture_checks.py + ai_review.py integration
+    - T1-G-11 / HIB-052: pytest collection + TODO delta evidence fields in
+      GateContext; session_id "unknown" clustering fixed — real sessions now
+      carry their UUID, "pre-session-init" reserved for genuine pre-init events
+      (harness_utils.py, roster_builder.py, audit_logger.py)
+    - T1-G-14 / DOC-02: per-capability AT9 calibration (capability_calibration.py)
+      — Laplace prior, multiplicative weight updates on rebuttal outcomes,
+      clamping; integrated into ai_review.py severity adjustment and rebuttal
+      flow; harness_health.py reports degrading/clamped capabilities
+    - T1-H-10: co_change_check.py three-tier confidence tags
+      (EXTRACTED/INFERRED/AMBIGUOUS), AMBIGUOUS routed to policy notes only
+    
+    304/304 tests passing (test_gate_context.py, test_capability_calibration.py
+    new; test_ai_review.py, test_harness_health.py extended)
+    
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+diff --git a/.agent/AGENTS.md b/.agent/AGENTS.md
+index 9ed0294..7775751 100644
+--- a/.agent/AGENTS.md
++++ b/.agent/AGENTS.md
+@@ -186,7 +186,6 @@ Guidance for selecting `outcome_override`:
+ and uses it verbatim (`outcome_source: "agent_override"`) before falling back to git-state
+ inference. Writing this field is the only way a Gemini session gets the same close-out
+ fidelity as a Claude Code session with the Stop hook.
+-
+ Run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
+ 
+ ---
+diff --git a/.agent/scripts/audit_logger.py b/.agent/scripts/audit_logger.py
+index f671b82..0cb1087 100644
+--- a/.agent/scripts/audit_logger.py
++++ b/.agent/scripts/audit_logger.py
+@@ -27,14 +27,14 @@ SESSION_FILE = Path(".agent/state/session.json")
+ _SEVERITY_MAP = {"fail": "warn", "error": "critical", "success": "info", "warn": "warn"}
+ 
+ 
+-def _get_session_id() -> Optional[str]:
++def _get_session_id() -> str:
+     if not SESSION_FILE.exists():
+-        return None
++        return "pre-session-init"
+     try:
+         with open(SESSION_FILE, "r", encoding="utf-8") as f:
+-            return json.load(f).get("session_id")
++            return json.load(f).get("session_id") or "pre-session-init"
+     except Exception:
+-        return None
++        return "pre-session-init"
+ 
+ 
+ def log_action(
+diff --git a/.agent/scripts/co_change_check.py b/.agent/scripts/co_change_check.py
+index 9d0afb3..733a88e 100644
+--- a/.agent/scripts/co_change_check.py
++++ b/.agent/scripts/co_change_check.py
+@@ -181,7 +181,7 @@ def run_co_change_estimator(changed_files: list[str]) -> list[dict]:
+                     {
+                         "staged": staged_file,
+                         "unstaged": other_file,
+-                        "confidence": "HIGH",
++                        "confidence": "EXTRACTED",
+                         "probability": prob,
+                         "reason": f"File '{other_file}' has both a historical co-change correlation ({prob:.1%}) and direct import relationship with staged '{staged_file}'.",
+                     }
+@@ -191,13 +191,13 @@ def run_co_change_estimator(changed_files: list[str]) -> list[dict]:
+                     {
+                         "staged": staged_file,
+                         "unstaged": other_file,
+-                        "confidence": "MEDIUM",
++                        "confidence": "INFERRED",
+                         "probability": prob,
+                         "reason": f"File '{other_file}' has a high historical co-change correlation ({prob:.1%}) with staged '{staged_file}'.",
+                     }
+                 )
+ 
+-        # Also find direct AST imports that aren't in git history (as MEDIUM/Advisory warnings)
++        # Also find direct AST imports that aren't in git history (as AMBIGUOUS warnings)
+         staged_imports = ast_imports.get(staged_file, [])
+         for imported_file in staged_imports:
+             if imported_file in normalized_changed or not imported_file.endswith(".py"):
+@@ -208,12 +208,12 @@ def run_co_change_estimator(changed_files: list[str]) -> list[dict]:
+                 continue
+             checked_pairs.add(pair)
+ 
+-            # If it's a direct import and hasn't been flagged, list as advisory
++            # If it's a direct import and hasn't been flagged, list as ambiguous
+             warnings.append(
+                 {
+                     "staged": staged_file,
+                     "unstaged": imported_file,
+-                    "confidence": "MEDIUM",
++                    "confidence": "AMBIGUOUS",
+                     "probability": 0.0,
+                     "reason": f"File '{imported_file}' is imported by staged '{staged_file}' but is not staged.",
+                 }
+diff --git a/.agent/scripts/harness_health.py b/.agent/scripts/harness_health.py
+index 1f535f3..71db769 100644
+--- a/.agent/scripts/harness_health.py
++++ b/.agent/scripts/harness_health.py
+@@ -413,6 +413,46 @@ def report_rebuttals():
+         print("\033[93m  ⚠️  [ALERT] Human Rebuttal Rate exceeds 15% (calibration signal)! Recommendation: Relax specific skills.\033[0m")
+ 
+ 
++def report_capability_calibration():
++    section_header("CAPABILITY CALIBRATION")
++    cal_file = Path(".agent/state/capability_calibration.json")
++    if not cal_file.exists():
++        print("  Status         : \033[94mNO CALIBRATION DATA (all weights neutral)\033[0m")
++        return
++        
++    try:
++        with open(cal_file, "r", encoding="utf-8") as f:
++            data = json.load(f)
++            
++        capabilities = data.get("capabilities", {})
++        if not capabilities:
++            print("  Status         : \033[94mNO CALIBRATION RECORDS\033[0m")
++            return
++            
++        for cap, stats in sorted(capabilities.items()):
++            tp = stats.get("tp", 1)
++            fp = stats.get("fp", 1)
++            weight = stats.get("weight", 1.0)
++            
++            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.5
++            
++            status = "HEALTHY"
++            status_text = ""
++            
++            if precision < 0.30:
++                status = "CRITICAL"
++                status_text = " [DEGRADING]"
++            elif weight == 0.5 or weight == 1.5:
++                status = "WARNING"
++                status_text = " [AT BOUNDARY - NEEDS MANUAL REVIEW]"
++                
++            color = get_color(status)
++            print(f"  {cap:25}: weight={weight:.2f}, precision={precision:.2f} (tp={tp}, fp={fp}){color}{status_text}\033[0m")
++            
++    except Exception as e:
++        print(f"  Error reading calibration data: {e}")
++
++
+ def report_dream_proposal_staleness():
+     section_header("DREAM PROPOSAL STALENESS")
+     proposals_dir = Path(".agent/state/dream_proposals")
+@@ -500,6 +540,7 @@ def main():
+  
+     report_ai_reviews()
+     report_rebuttals()
++    report_capability_calibration()
+     report_governance_audit()
+     report_resilience_pointer()
+     report_dlq_pointer()
+diff --git a/.agent/scripts/init_session.py b/.agent/scripts/init_session.py
+index 1441370..487be5e 100644
+--- a/.agent/scripts/init_session.py
++++ b/.agent/scripts/init_session.py
+@@ -71,7 +71,7 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
+         if prev_data.get("status") != "ACTIVE":
+             return None, None
+ 
+-        prev_id = prev_data.get("session_id", "unknown")
++        prev_id = prev_data.get("session_id", "pre-session-init")
+         prev_start = prev_data.get("start_time")
+         prev_agent = prev_data.get("agent", "Agent")
+ 
+diff --git a/.agent/skills/universal/senior-architect/scripts/architecture_checks.py b/.agent/skills/universal/senior-architect/scripts/architecture_checks.py
+index 1a6c8c6..999fcaf 100644
+--- a/.agent/skills/universal/senior-architect/scripts/architecture_checks.py
++++ b/.agent/skills/universal/senior-architect/scripts/architecture_checks.py
+@@ -543,6 +543,96 @@ def main():
+     # Soft warnings (do not block commit)
+     check_adr_annotations_count(paths_config)
+ 
++    # ── Write to GateContext (T1-G-13) ──
++    try:
++        import subprocess
++        import hashlib
++        sys.path.insert(0, str(Path.cwd() / "src" / "scripts"))
++        from gate_context import load_gate_context, write_gate_context, GateContext, ArchViolation
++
++        # Get staged diff and changed files
++        res = subprocess.run(
++            ["git", "diff", "--cached"],
++            capture_output=True,
++            text=True,
++            encoding="utf-8",
++            errors="replace"
++        )
++        diff_text = res.stdout if res.returncode == 0 else ""
++
++        res_files = subprocess.run(
++            ["git", "diff", "--cached", "--name-only"],
++            capture_output=True,
++            text=True,
++            encoding="utf-8",
++            errors="replace"
++        )
++        changed_files = [f.strip() for f in res_files.stdout.splitlines() if f.strip()]
++
++        # Compute diff hash
++        diff_hash = ""
++        if diff_text:
++            diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
++
++        gate_context = GateContext(
++            diff_text=diff_text,
++            diff_hash=diff_hash,
++            changed_files=changed_files
++        )
++
++        # Extract ADR annotations from changed files
++        adr_domains = []
++        for f in changed_files:
++            if Path(f).exists():
++                adr_domains.extend(extract_adr_annotations(f))
++        gate_context.adr_domains = list(set(adr_domains))
++
++        # Parse all_errors into ArchViolation
++        violations = []
++        for err in all_errors:
++            parts = err.split(":", 2)
++            if len(parts) >= 3 and parts[1].strip().isdigit():
++                filepath = parts[0].strip().replace("\\", "/")
++                line = int(parts[1].strip())
++                msg = parts[2].strip()
++            elif len(parts) >= 2:
++                filepath = parts[0].strip().replace("\\", "/")
++                line = 1
++                msg = parts[1].strip()
++            else:
++                filepath = "unknown"
++                line = 1
++                msg = err.strip()
++
++            severity = "FAIL"
++            if "coupling" in msg.lower() or "lifespan" in msg.lower() or "nameerror" in msg.lower():
++                severity = "WARN"
++
++            rule = "ARCHITECTURE_RULE"
++            if "layer violation" in msg.lower():
++                rule = "LAYER_BOUNDARY"
++            elif "coupling" in msg.lower():
++                rule = "HIGH_COUPLING"
++            elif "conditional branch filter" in msg.lower():
++                rule = "BRANCH_FILTER"
++            elif "aggregate root" in msg.lower():
++                rule = "AGGREGATE_ROOT"
++            elif "concrete infrastructure" in msg.lower():
++                rule = "INTERFACE_SEGREGATION"
++            elif "lifespan" in msg.lower():
++                rule = "ASGI_LIFESPAN"
++            elif "forbidden pattern" in msg.lower():
++                rule = "FORBIDDEN_PATTERN"
++
++            violations.append(
++                ArchViolation(file=filepath, line=line, rule=rule, severity=severity)
++            )
++
++        gate_context.arch_violations = violations
++        write_gate_context(gate_context)
++    except Exception as e:
++        print(f"[ARCH] Warning: Failed to populate GateContext: {e}")
++
+     if all_errors:
+         print(f"\n[FAIL] Found {len(all_errors)} architectural violations:")
+         for err in all_errors:
+diff --git a/src/scripts/ai_review.py b/src/scripts/ai_review.py
+index f33a305..c007dfb 100644
+--- a/src/scripts/ai_review.py
++++ b/src/scripts/ai_review.py
+@@ -191,6 +191,95 @@ def _get_active_session_id() -> str | None:
+     return None
+ 
+ 
++def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
++    """Gather pytest collect evidence.
++    For each changed python file, look for a corresponding test file and collect its tests.
++    """
++    evidence = {}
++    for f in changed_files:
++        if not f.endswith(".py") or f.startswith("tests/"):
++            continue
++        path = Path(f)
++        basename = path.name
++        test_name = f"test_{basename}"
++        found_tests = list(PROJECT_ROOT.glob(f"**/tests/**/{test_name}")) + list(PROJECT_ROOT.glob(f"**/tests/{test_name}"))
++        if found_tests:
++            test_file = found_tests[0]
++            try:
++                res = subprocess.run(
++                    ["pytest", "--collect-only", "-q", str(test_file)],
++                    capture_output=True,
++                    text=True,
++                    encoding="utf-8",
++                    cwd=str(PROJECT_ROOT)
++                )
++                if res.returncode == 0:
++                    tests = [line.strip() for line in res.stdout.splitlines() if line.strip() and "::" in line]
++                    evidence[f] = {
++                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
++                        "collected_tests": tests
++                    }
++                else:
++                    evidence[f] = {
++                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
++                        "error": f"pytest returned {res.returncode}"
++                    }
++            except Exception as e:
++                evidence[f] = {
++                    "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
++                    "error": str(e)
++                }
++        else:
++            evidence[f] = {
++                "test_file": None,
++                "collected_tests": []
++            }
++    return evidence
++
++
++def calculate_todo_delta(diff: str) -> int:
++    added_todos = 0
++    removed_todos = 0
++    for line in diff.splitlines():
++        if line.startswith("+") and not line.startswith("+++"):
++            if "TODO" in line.upper() or "FIXME" in line.upper():
++                added_todos += 1
++        elif line.startswith("-") and not line.startswith("---"):
++            if "TODO" in line.upper() or "FIXME" in line.upper():
++                removed_todos += 1
++    return added_todos - removed_todos
++
++
++def build_deterministic_findings_section(gate_context: Any) -> str:
++    parts = ["## Deterministic findings (pre-LLM, verified)"]
++    
++    parts.append("Architecture violations:")
++    if gate_context.arch_violations:
++        for v in gate_context.arch_violations:
++            parts.append(f"  {v.file}:{v.line} — {v.rule} — {v.severity}")
++    else:
++        parts.append("  (none)")
++        
++    parts.append("\nCo-change warnings (HIGH confidence):")
++    high_warnings = [w for w in gate_context.co_change_warnings if w.confidence == "EXTRACTED"]
++    if high_warnings:
++        for w in high_warnings:
++            parts.append(f"  {w.file} — {w.reason}")
++    else:
++        parts.append("  (none)")
++        
++    if gate_context.pytest_collect_status:
++        parts.append("\nPytest collect status:")
++        for line in gate_context.pytest_collect_status.splitlines():
++            parts.append(f"  {line.strip()}")
++            
++    if gate_context.todo_delta is not None and gate_context.todo_delta > 0:
++        parts.append(f"\nTODO/FIXME delta: +{gate_context.todo_delta} (net new TODOs/FIXMEs added)")
++        
++    parts.append(f"\nReview intensity: {gate_context.review_intensity}")
++    return "\n".join(parts)
++
++
+ def _load_token_ratios() -> Dict[str, float]:
+     """Load char_to_token_ratio from .agent/config.yaml.
+ 
+@@ -1843,6 +1932,7 @@ def _build_user_message(
+     repo_map: str = "",
+     adr_context: str = "",
+     co_change_context: str = "",
++    deterministic_findings: str = "",
+ ) -> str:
+     """Assemble the user message from diff, commit message, and context layers.
+ 
+@@ -1861,6 +1951,8 @@ def _build_user_message(
+         parts.append(f"## Active ADR Contexts\n{adr_context}")
+     if co_change_context:
+         parts.append(f"## Co-change Blast Radius Alerts\n{co_change_context}")
++    if deterministic_findings:
++        parts.append(deterministic_findings)
+     parts.append(f"## Staged Diff\n```diff\n{diff}\n```")
+     return "\n\n".join(parts)
+ 
+@@ -2261,6 +2353,29 @@ def _run_rebuttal(args) -> int:
+             f.write(json.dumps(record) + "\n")
+     except Exception:
+         pass
++
++    # Update capability calibration counts on rebuttal outcomes (T1-G-14)
++    try:
++        import capability_calibration
++        original_issues_map = {issue.get("finding_id"): issue for issue in original_issues if issue.get("finding_id")}
++        contested_fids = {f.finding_id for f in dev_rebuttal.findings}
++        
++        # Contested findings
++        for rf in rebutted_findings:
++            issue = original_issues_map.get(rf.finding_id)
++            if issue:
++                cap = issue.get("concern")
++                if cap:
++                    capability_calibration.update_calibration_rebuttal(cap, rf.verdict, PROJECT_ROOT)
++                    
++        # Uncontested findings
++        for fid, issue in original_issues_map.items():
++            if fid not in contested_fids:
++                cap = issue.get("concern")
++                if cap:
++                    capability_calibration.update_calibration_rebuttal(cap, "UNCONTESTED", PROJECT_ROOT)
++    except Exception as e:
++        print(f"⚠️  [REBUTTAL] Failed to update capability calibration: {e}")
+         
+     # Console presentation
+     print("\n" + "─" * 60)
+@@ -2373,7 +2488,7 @@ def _run_review() -> int:
+         active_domains = []
+ 
+     is_hr, matches = classify_commit_risk(changed_files, active_domains)
+-    session_id = _get_active_session_id()
++    session_id = _get_active_session_id() or "pre-session-init"
+ 
+     # Allow explicit bypass via env var or local file
+     if os.environ.get("SKIP_AI_REVIEW") == "1":
+@@ -2530,6 +2645,53 @@ def _run_review() -> int:
+     if not diff.strip():
+         return 0
+ 
++    current_diff_hash = _get_normalized_diff_hash(diff)
++
++    # Load GateContext (T1-G-13)
++    from gate_context import load_gate_context, get_context_path, GateContext, CoChangeWarning
++    context_file = get_context_path()
++    gate_context = None
++    if context_file.exists():
++        try:
++            gate_context = load_gate_context(context_file)
++            if not gate_context:
++                print("⚠️  [GATE] Malformed GateContext or schema version mismatch. Degrading to standalone behaviour.")
++                log_harness_event({
++                    "event_type": "state_anomaly",
++                    "severity": "WARNING",
++                    "payload": {
++                        "reason": "Malformed GateContext or schema version mismatch"
++                    }
++                })
++            elif gate_context.diff_hash != current_diff_hash:
++                print("⚠️  [GATE] Stale GateContext detected (diff hash mismatch). Degrading to standalone behaviour.")
++                log_harness_event({
++                    "event_type": "state_anomaly",
++                    "severity": "WARNING",
++                    "payload": {
++                        "reason": "Stale GateContext detected (diff hash mismatch)"
++                    }
++                })
++                gate_context = None
++        except Exception as e:
++            print(f"⚠️  [GATE] Error reading GateContext: {e}. Degrading to standalone behaviour.")
++            log_harness_event({
++                "event_type": "state_anomaly",
++                "severity": "WARNING",
++                "payload": {
++                    "reason": f"Error reading GateContext: {e}"
++                }
++            })
++            gate_context = None
++
++    if not gate_context:
++        gate_context = GateContext(
++            diff_text=diff,
++            diff_hash=current_diff_hash,
++            changed_files=changed_files,
++            session_id=session_id
++        )
++
+     # Load config
+     config = load_config()
+     
+@@ -2761,12 +2923,28 @@ def _run_review() -> int:
+         reason = f"Provider setup failed: {e}"
+         return _handle_api_unavailable(reason, changed_files, active_domains)
+ 
++    # 5. Run co-change estimator (T1-H-03)
++    co_change_warnings = []
++    try:
++        if run_co_change_estimator is not None:
++            co_change_warnings = run_co_change_estimator(changed_files)
++    except Exception:
++        pass
++
+     # 4. Compute RouteDecision dynamically (T1-G-01, T1-G-04)
+     route_decision = build_route_decision(changed_files, diff, pagerank_scores)
+     # Merge any adr-specific policy notes into our routing decision
+     if adr_policy_notes:
+         route_decision.policy_notes.extend(adr_policy_notes)
+ 
++    # Route AMBIGUOUS co-change warnings strictly to policy notes (T1-H-10)
++    ambiguous_warnings = [w for w in co_change_warnings if w["confidence"] == "AMBIGUOUS"]
++    if ambiguous_warnings:
++        for w in ambiguous_warnings:
++            route_decision.policy_notes.append(
++                f"AMBIGUOUS co-change: file '{w['unstaged']}' is imported by staged '{w['staged']}' but is not staged."
++            )
++
+     print("\n" + "─" * 60)
+     print("⚙️  AI REVIEW DYNAMIC ROUTING DECISION")
+     print(f"   Intensity: {route_decision.review_intensity.upper()}")
+@@ -2776,28 +2954,68 @@ def _run_review() -> int:
+         print(f"     {note}")
+     print("─" * 60 + "\n")
+ 
+-    # 5. Run co-change estimator (T1-H-03)
+     co_change_context = ""
+-    co_change_warnings = []
+-    try:
+-        if run_co_change_estimator is not None:
+-            co_change_warnings = run_co_change_estimator(changed_files)
+-    except Exception:
+-        pass
+-
+     if co_change_warnings:
+         print("📊 CO-CHANGE BLAST RADIUS ADVISORY")
+         for w in co_change_warnings:
+-            conf_symbol = SYMBOL_REVIEW if w["confidence"] == "HIGH" else "💡"
++            if w["confidence"] == "EXTRACTED":
++                conf_symbol = SYMBOL_REVIEW
++            elif w["confidence"] == "INFERRED":
++                conf_symbol = "💡"
++            else:
++                conf_symbol = "❓"
+             print(f"   {conf_symbol} [{w['confidence']}] {w['reason']}")
+         print("─" * 60 + "\n")
+ 
+-        high_alerts = [w for w in co_change_warnings if w["confidence"] == "HIGH"]
++        high_alerts = [w for w in co_change_warnings if w["confidence"] == "EXTRACTED"]
+         if high_alerts:
+             co_change_context = "WARNING: The following related files might have missing updates based on structural and historical patterns:\n"
+             for w in high_alerts:
+                 co_change_context += f"- {w['unstaged']} (correlated with staged '{w['staged']}' via structural imports and history)\n"
+ 
++    # Populate GateContext fields (T1-G-11 & T1-G-13)
++    if gate_context:
++        gate_context.co_change_warnings = [
++            CoChangeWarning(file=w["unstaged"], confidence=w["confidence"], reason=w["reason"])
++            for w in co_change_warnings
++        ]
++        # Pytest collect status
++        try:
++            pytest_evidence = gather_pytest_evidence(changed_files)
++            pytest_lines = []
++            for f, ev in pytest_evidence.items():
++                if ev["test_file"] is None:
++                    pytest_lines.append(f"{f}: No test file found")
++                elif "error" in ev:
++                    pytest_lines.append(f"{f}: Error collecting tests ({ev['error']})")
++                else:
++                    pytest_lines.append(f"{f}: {len(ev['collected_tests'])} tests collected in {ev['test_file']}")
++            gate_context.pytest_collect_status = "\n".join(pytest_lines)
++        except Exception as e:
++            gate_context.pytest_collect_status = f"Error gathering pytest evidence: {e}"
++
++        # TODO delta
++        gate_context.todo_delta = calculate_todo_delta(diff)
++        
++        # Review intensity from route_decision
++        if route_decision:
++            gate_context.review_intensity = route_decision.review_intensity
++        
++        # PageRank scores
++        gate_context.pagerank_scores = pagerank_scores
++        
++        # Save updated GateContext
++        try:
++            from gate_context import write_gate_context
++            write_gate_context(gate_context)
++        except Exception as e:
++            print(f"⚠️  [GATE] Failed to save GateContext: {e}")
++
++    # Build deterministic findings section
++    deterministic_findings = ""
++    if gate_context:
++        deterministic_findings = build_deterministic_findings_section(gate_context)
++
+     # Check for file churn (remediation loop signal)
+     churn_info = get_recent_file_churn(diff)
+ 
+@@ -2829,6 +3047,7 @@ def _run_review() -> int:
+                 repo_map=repo_map,
+                 adr_context=adr_context,
+                 co_change_context=co_change_context,
++                deterministic_findings=deterministic_findings,
+             )
+             review_dict = provider.review(SYSTEM_PROMPT, user_content)
+             results.append(review_dict)
+@@ -2839,6 +3058,75 @@ def _run_review() -> int:
+         # Consensus Filtering
+         raw_review = consensus_filter(results)
+ 
++        # Apply Capability Calibration (T1-G-14)
++        try:
++            import capability_calibration
++            calibration_data = capability_calibration.load_calibration(PROJECT_ROOT)
++            caps_seen = set()
++            calibration_config = config.get("capability_calibration", {})
++            calibration_enabled = calibration_config.get("enabled", True)
++            
++            if calibration_enabled and "issues" in raw_review and raw_review["issues"]:
++                modified_any = False
++                for issue in raw_review["issues"]:
++                    cap = issue.get("concern")
++                    if not cap:
++                        continue
++                    caps_seen.add(cap)
++                    
++                    weight = capability_calibration.get_calibrated_weight(cap, PROJECT_ROOT, config)
++                    orig_severity = issue.get("severity")
++                    
++                    if weight >= 1.1 and orig_severity == "MEDIUM":
++                        issue["severity"] = "HIGH"
++                        issue["description"] = f"[Calibrated Elevation] {issue.get('description', '')}"
++                        modified_any = True
++                        route_decision.policy_notes.append(
++                            f"Calibration elevated {cap} finding from WARN to FAIL (weight {weight:.2f})"
++                        )
++                    elif weight <= 0.9 and orig_severity == "HIGH":
++                        issue["severity"] = "MEDIUM"
++                        issue["description"] = f"[Calibrated Suppression] {issue.get('description', '')}"
++                        modified_any = True
++                        route_decision.policy_notes.append(
++                            f"Calibration suppressed {cap} finding from FAIL to WARN (weight {weight:.2f})"
++                        )
++                        
++                if modified_any:
++                    # Recompute overall verdict based on adjusted issues
++                    has_high = any(i.get("severity") == "HIGH" for i in raw_review["issues"])
++                    has_medium = any(i.get("severity") == "MEDIUM" for i in raw_review["issues"])
++                    if has_high:
++                        raw_review["verdict"] = "FAIL"
++                        raw_review["blocking_concern"] = next((i.get("concern") for i in raw_review["issues"] if i.get("severity") == "HIGH"), None)
++                    elif has_medium:
++                        raw_review["verdict"] = "WARN"
++                        raw_review["blocking_concern"] = None
++                    else:
++                        raw_review["verdict"] = "PASS"
++                        raw_review["blocking_concern"] = None
++
++            # Add policy notes for all capabilities seen
++            if calibration_enabled:
++                for cap in caps_seen:
++                    weight = capability_calibration.get_calibrated_weight(cap, PROJECT_ROOT, config)
++                    cap_info = calibration_data.get("capabilities", {}).get(cap, {"tp": 1, "fp": 1})
++                    tp = cap_info.get("tp", 1)
++                    fp = cap_info.get("fp", 1)
++                    
++                    status_str = "neutral"
++                    if weight <= 0.9:
++                        status_str = "WARN-only"
++                    elif weight >= 1.1:
++                        status_str = "FAIL-escalated"
++                        
++                    route_decision.policy_notes.append(
++                        f"{cap} findings treated as {status_str} (calibration weight {weight:.2f}, based on {fp} false positives / {tp} confirmed in this project's history)."
++                    )
++        except Exception as e:
++            print(f"⚠️  [GATE] Failed to apply capability calibration: {e}")
++
++
+     except urllib.error.URLError as e:
+         elapsed = time.time() - start_time
+         reason = f"Network error ({elapsed:.1f}s): {e}"
+@@ -2996,6 +3284,16 @@ def _run_review() -> int:
+         fail_reason = f"ReviewVerdict validation failed: {exc}"
+         return _handle_api_unavailable(fail_reason, changed_files, active_domains)
+ 
++    # Write back final RouteDecision and ReviewVerdict (T1-G-13)
++    if gate_context:
++        try:
++            from gate_context import write_gate_context
++            gate_context.route_decision = route_decision.model_dump() if route_decision else None
++            gate_context.verdict = typed_verdict.model_dump()
++            write_gate_context(gate_context)
++        except Exception as e:
++            print(f"⚠️  [GATE] Failed to write back final GateContext: {e}")
++
+     _persist_verdict(verdict_obj=typed_verdict, provider_name=provider.name)
+     render_review(raw_review, churn_info)
+     print(f"  \u23f1\ufe0f  Review completed in {elapsed:.1f}s\n")
+diff --git a/src/scripts/capability_calibration.py b/src/scripts/capability_calibration.py
+new file mode 100644
+index 0000000..c2b3887
+--- /dev/null
++++ b/src/scripts/capability_calibration.py
+@@ -0,0 +1,96 @@
++import json
++import os
++from pathlib import Path
++from typing import Dict, Any
++
++CALIBRATION_FILE_REL = Path(".agent") / "state" / "capability_calibration.json"
++
++def load_calibration(project_root: Path) -> Dict[str, Any]:
++    file_path = project_root / CALIBRATION_FILE_REL
++    if not file_path.exists():
++        return {"schema_version": "1.0", "capabilities": {}}
++    try:
++        with open(file_path, "r", encoding="utf-8") as f:
++            data = json.load(f)
++            if not isinstance(data, dict) or "capabilities" not in data:
++                return {"schema_version": "1.0", "capabilities": {}}
++            return data
++    except Exception:
++        return {"schema_version": "1.0", "capabilities": {}}
++
++def save_calibration(calibration_data: Dict[str, Any], project_root: Path) -> None:
++    file_path = project_root / CALIBRATION_FILE_REL
++    file_path.parent.mkdir(parents=True, exist_ok=True)
++    temp_file = file_path.with_suffix(".tmp")
++    try:
++        with open(temp_file, "w", encoding="utf-8") as f:
++            json.dump(calibration_data, f, indent=4)
++        if os.path.exists(file_path):
++            os.remove(file_path)
++        os.rename(temp_file, file_path)
++    except Exception as e:
++        if os.path.exists(temp_file):
++            try:
++                os.remove(temp_file)
++            except Exception:
++                pass
++        raise e
++
++def update_calibration_rebuttal(
++    capability: str,
++    verdict: str,  # "REBUTTAL_ACCEPTED" or "REBUTTAL_REJECTED" or "UNCONTESTED"
++    project_root: Path
++) -> None:
++    """Updates tp/fp counters and weight based on rebuttal outcome.
++    - REBUTTAL_ACCEPTED (false positive confirmed): fp += 1, weight *= 0.9
++    - REBUTTAL_REJECTED or uncontested (true positive): tp += 1, weight *= 1.05
++    Clamped to [0.5, 1.5].
++    """
++    data = load_calibration(project_root)
++    capabilities = data.setdefault("capabilities", {})
++    cap_data = capabilities.setdefault(capability, {"tp": 1, "fp": 1, "weight": 1.0})
++    
++    tp = cap_data.get("tp", 1)
++    fp = cap_data.get("fp", 1)
++    weight = cap_data.get("weight", 1.0)
++    
++    if verdict == "REBUTTAL_ACCEPTED":
++        fp += 1
++        weight *= 0.9
++    elif verdict in ("REBUTTAL_REJECTED", "UNCONTESTED"):
++        tp += 1
++        weight *= 1.05
++        
++    weight = max(0.5, min(1.5, weight))
++    
++    cap_data["tp"] = tp
++    cap_data["fp"] = fp
++    cap_data["weight"] = weight
++    
++    save_calibration(data, project_root)
++
++def get_calibrated_weight(
++    capability: str,
++    project_root: Path,
++    config: Dict[str, Any] = None
++) -> float:
++    """Returns the weight for the capability, respecting config settings and overrides."""
++    if config is None:
++        config = {}
++        
++    calibration_config = config.get("capability_calibration", {})
++    if not calibration_config.get("enabled", True):
++        return 1.0
++        
++    overrides = calibration_config.get("overrides", {})
++    if capability in overrides:
++        return float(overrides[capability])
++        
++    data = load_calibration(project_root)
++    capabilities = data.get("capabilities", {})
++    if capability in capabilities:
++        weight = capabilities[capability].get("weight", 1.0)
++    else:
++        weight = 1.0
++        
++    return max(0.5, min(1.5, weight))
+diff --git a/src/scripts/gate_context.py b/src/scripts/gate_context.py
+new file mode 100644
+index 0000000..821b0ad
+--- /dev/null
++++ b/src/scripts/gate_context.py
+@@ -0,0 +1,91 @@
++#!/usr/bin/env python3
++"""
++gate_context.py — Shared Gate Context Model and Utilities
++Defines the GateContext schema and provides atomic read/write functions.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import time
++from pathlib import Path
++from typing import List, Dict, Any, Optional, Literal
++from pydantic import BaseModel, Field
++
++class ArchViolation(BaseModel):
++    file: str
++    line: int
++    rule: str
++    severity: str
++
++class CoChangeWarning(BaseModel):
++    file: str
++    confidence: str  # EXTRACTED, INFERRED, or AMBIGUOUS (T1-H-10)
++    reason: str
++
++class GateContext(BaseModel):
++    schema_version: str = "1.0"
++    generated_at: Optional[str] = None
++    diff_text: str = ""
++    diff_hash: str = ""
++    changed_files: List[str] = Field(default_factory=list)
++    session_id: Optional[str] = None
++
++    # Populated by architecture_checks.py
++    arch_violations: List[ArchViolation] = Field(default_factory=list)
++    adr_domains: List[str] = Field(default_factory=list)
++
++    # Populated by repo_map.py
++    pagerank_scores: Dict[str, float] = Field(default_factory=dict)
++    review_intensity: Literal["standard", "elevated", "critical"] = "standard"
++    repo_map_text: str = ""
++
++    # Populated by co_change_check.py
++    co_change_warnings: List[CoChangeWarning] = Field(default_factory=list)
++
++    # Populated and read by ai_review.py
++    route_decision: Optional[Dict[str, Any]] = None
++    verdict: Optional[Dict[str, Any]] = None
++
++    # Evidence fields (T1-G-11)
++    pytest_collect_status: Optional[str] = None
++    todo_delta: Optional[int] = None
++
++def get_context_path(project_root: Optional[Path] = None) -> Path:
++    from harness_utils import PROJECT_ROOT
++    root = project_root or PROJECT_ROOT
++    return root / ".agent" / "state" / "gate_context_current.json"
++
++def load_gate_context(path: Optional[Path] = None) -> Optional[GateContext]:
++    if path is None:
++        path = get_context_path()
++    if not path.exists():
++        return None
++    try:
++        content = path.read_text(encoding="utf-8")
++        data = json.loads(content)
++        # Check schema version
++        if data.get("schema_version") != "1.0":
++            return None
++        return GateContext(**data)
++    except Exception:
++        # Degradation contract: return None on validation/parse error
++        return None
++
++def write_gate_context(context: GateContext, path: Optional[Path] = None) -> None:
++    if path is None:
++        path = get_context_path()
++    path.parent.mkdir(parents=True, exist_ok=True)
++    tmp_path = path.with_suffix(".json.tmp")
++    try:
++        with open(tmp_path, "w", encoding="utf-8") as f:
++            json.dump(context.model_dump(), f, indent=2)
++        os.replace(tmp_path, path)
++    except Exception as e:
++        if tmp_path.exists():
++            try:
++                os.remove(tmp_path)
++            except Exception:
++                pass
++        raise e
+diff --git a/src/scripts/harness_utils.py b/src/scripts/harness_utils.py
+index ff83033..0c8e90a 100644
+--- a/src/scripts/harness_utils.py
++++ b/src/scripts/harness_utils.py
+@@ -72,12 +72,12 @@ def log_harness_event(event_dict: Dict[str, Any], project_root: Path | None = No
+         log_dir.mkdir(parents=True, exist_ok=True)
+         log_path = log_dir / "harness_events.jsonl"
+         
+-        session_id = None
++        session_id = "pre-session-init"
+         session_file = root / ".agent" / "state" / "session.json"
+         if session_file.exists():
+             try:
+                 with open(session_file, "r", encoding="utf-8") as f:
+-                    session_id = json.load(f).get("session_id")
++                    session_id = json.load(f).get("session_id") or "pre-session-init"
+             except Exception:
+                 pass
+                 
+diff --git a/src/scripts/roster_builder.py b/src/scripts/roster_builder.py
+index 17813ad..9614f21 100644
+--- a/src/scripts/roster_builder.py
++++ b/src/scripts/roster_builder.py
+@@ -23,12 +23,12 @@ def log_harness_event(event_dict: Dict[str, Any], project_root: Path) -> None:
+         log_path = log_dir / "harness_events.jsonl"
+         
+         import datetime
+-        session_id = None
++        session_id = "pre-session-init"
+         session_file = project_root / ".agent" / "state" / "session.json"
+         if session_file.exists():
+             try:
+                 with open(session_file, "r", encoding="utf-8") as f:
+-                    session_id = json.load(f).get("session_id")
++                    session_id = json.load(f).get("session_id") or "pre-session-init"
+             except Exception:
+                 pass
+                 
+diff --git a/tests/test_ai_review.py b/tests/test_ai_review.py
+index 4c8dba2..f2037de 100644
+--- a/tests/test_ai_review.py
++++ b/tests/test_ai_review.py
+@@ -1719,3 +1719,90 @@ class TestTokenBudgetEnforcement:
+             assert exit_code == 0
+ 
+ 
++class TestCapabilityCalibrationIntegration:
++    """T1-G-14: Assert capability calibration elevates/demotes severities and updates on rebuttal."""
++
++    def test_calibration_demotes_and_elevates(self, ai_review, tmp_path):
++        from unittest.mock import patch, MagicMock
++        import capability_calibration
++        
++        # Enable calibration, set overrides or save calibration json
++        cal_data = {
++            "schema_version": "1.0",
++            "capabilities": {
++                "INTENT_ALIGNMENT": {"tp": 1, "fp": 9, "weight": 0.5},
++                "BRANCH_ISOLATION": {"tp": 9, "fp": 1, "weight": 1.5}
++            }
++        }
++        capability_calibration.save_calibration(cal_data, tmp_path)
++        
++        mock_provider = MagicMock()
++        mock_provider.name = "mock-provider"
++        mock_provider.model = "mock-model"
++        # Return INTENT_ALIGNMENT with HIGH severity (should be demoted to MEDIUM)
++        # and BRANCH_ISOLATION with MEDIUM severity (should be elevated to HIGH)
++        mock_provider.review.return_value = {
++            "verdict": "FAIL",
++            "intent_alignment": "Intent alignment",
++            "issues": [
++                {
++                    "severity": "HIGH",
++                    "concern": "INTENT_ALIGNMENT",
++                    "description": "High intent alignment concern",
++                    "remediation": "remediate"
++                },
++                {
++                    "severity": "MEDIUM",
++                    "concern": "BRANCH_ISOLATION",
++                    "description": "Medium branch isolation concern",
++                    "remediation": "remediate"
++                }
++            ],
++            "summary": "Calibration review"
++        }
++        mock_provider.last_token_usage = {}
++
++        # Set config settings
++        config = {
++            "capability_calibration": {
++                "enabled": True
++            }
++        }
++
++        with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
++             patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
++                  requires_review=True, direct_pass_allowed=False, planner_note=""
++             )), \
++             patch("ai_review.load_review_context", return_value=""), \
++             patch("repo_map.generate_repo_map", return_value=""), \
++             patch("repo_map.get_pagerank_scores", return_value={}), \
++             patch("ai_review.get_adr_context", return_value=("", [], [])), \
++             patch("co_change_check.run_co_change_estimator", return_value=[]), \
++             patch("providers.get_provider", return_value=mock_provider), \
++             patch("ai_review.PROJECT_ROOT", tmp_path), \
++             patch("ai_review.load_config", return_value=config), \
++             patch("ai_review._persist_verdict"), \
++             patch("ai_review.render_review"):
++
++            exit_code = ai_review._run_review()
++            # Since INTENT_ALIGNMENT was HIGH -> demoted to MEDIUM,
++            # and BRANCH_ISOLATION was MEDIUM -> elevated to HIGH,
++            # there is still a HIGH issue, so exit code is 1 (verdict FAIL).
++            assert exit_code == 1
++            
++            # Verify the issues were modified
++            called_verdict = ai_review._persist_verdict.call_args[1].get("verdict_obj")
++            assert called_verdict is not None
++            
++            # Check severities in called_verdict.issues
++            intent_issue = next(i for i in called_verdict.issues if i["concern"] == "INTENT_ALIGNMENT")
++            branch_issue = next(i for i in called_verdict.issues if i["concern"] == "BRANCH_ISOLATION")
++            
++            assert intent_issue["severity"] == "MEDIUM"
++            assert branch_issue["severity"] == "HIGH"
++            
++            # Verify policy notes were added
++            assert any("treated as WARN-only" in note for note in called_verdict.route_decision.policy_notes)
++            assert any("treated as FAIL-escalated" in note for note in called_verdict.route_decision.policy_notes)
++
++
+diff --git a/tests/test_harness_health.py b/tests/test_harness_health.py
+index 2a81ffa..e3d3bcf 100644
+--- a/tests/test_harness_health.py
++++ b/tests/test_harness_health.py
+@@ -138,3 +138,83 @@ def test_file_sizes_critical(capsys):
+     assert "CRITICAL: .agent/state/repo_graph_cache.json" in captured.out
+     assert "12.0MB" in captured.out
+     assert "WARN" not in captured.out
++
++
++# --- Capability Calibration Tests ---
++
++def test_capability_calibration_report_missing_file(capsys):
++    """Verify default message when file is missing."""
++    def mock_path_constructor(val):
++        mock_path = MagicMock()
++        mock_path.exists.return_value = False
++        return mock_path
++
++    with patch("harness_health.Path", side_effect=mock_path_constructor):
++        harness_health.report_capability_calibration()
++    captured = capsys.readouterr()
++    assert "NO CALIBRATION DATA" in captured.out
++
++
++def test_capability_calibration_report_healthy(tmp_path, capsys):
++    """Verify output of healthy capabilities."""
++    cal_file = tmp_path / "capability_calibration.json"
++    cal_data = {
++        "schema_version": "1.0",
++        "capabilities": {
++            "INTENT_ALIGNMENT": {"tp": 2, "fp": 1, "weight": 1.05}
++        }
++    }
++    import json
++    cal_file.write_text(json.dumps(cal_data), encoding="utf-8")
++
++    with patch("harness_health.Path", return_value=cal_file):
++        harness_health.report_capability_calibration()
++    captured = capsys.readouterr()
++    assert "INTENT_ALIGNMENT" in captured.out
++    assert "weight=1.05" in captured.out
++    assert "precision=0.67" in captured.out
++    assert "DEGRADING" not in captured.out
++    assert "BOUNDARY" not in captured.out
++
++
++def test_capability_calibration_report_degrading(tmp_path, capsys):
++    """Verify output and [DEGRADING] flag for low precision."""
++    cal_file = tmp_path / "capability_calibration.json"
++    cal_data = {
++        "schema_version": "1.0",
++        "capabilities": {
++            "INTENT_ALIGNMENT": {"tp": 1, "fp": 9, "weight": 0.55}  # precision = 0.1
++        }
++    }
++    import json
++    cal_file.write_text(json.dumps(cal_data), encoding="utf-8")
++
++    with patch("harness_health.Path", return_value=cal_file):
++        harness_health.report_capability_calibration()
++    captured = capsys.readouterr()
++    assert "INTENT_ALIGNMENT" in captured.out
++    assert "weight=0.55" in captured.out
++    assert "precision=0.10" in captured.out
++    assert "DEGRADING" in captured.out
++
++
++def test_capability_calibration_report_boundary_warning(tmp_path, capsys):
++    """Verify output and [AT BOUNDARY] flag when weight is clamped."""
++    cal_file = tmp_path / "capability_calibration.json"
++    cal_data = {
++        "schema_version": "1.0",
++        "capabilities": {
++            "INTENT_ALIGNMENT": {"tp": 5, "fp": 1, "weight": 1.5}
++        }
++    }
++    import json
++    cal_file.write_text(json.dumps(cal_data), encoding="utf-8")
++
++    with patch("harness_health.Path", return_value=cal_file):
++        harness_health.report_capability_calibration()
++    captured = capsys.readouterr()
++    assert "INTENT_ALIGNMENT" in captured.out
++    assert "weight=1.50" in captured.out
++    assert "precision=0.83" in captured.out
++    assert "AT BOUNDARY" in captured.out
++
+diff --git a/tests/unit/test_capability_calibration.py b/tests/unit/test_capability_calibration.py
+new file mode 100644
+index 0000000..6258ac7
+--- /dev/null
++++ b/tests/unit/test_capability_calibration.py
+@@ -0,0 +1,105 @@
++import pytest
++import tempfile
++import json
++from pathlib import Path
++from src.scripts.capability_calibration import (
++    load_calibration,
++    save_calibration,
++    update_calibration_rebuttal,
++    get_calibrated_weight
++)
++
++def test_load_calibration_defaults():
++    with tempfile.TemporaryDirectory() as tmpdir:
++        tmp_path = Path(tmpdir)
++        data = load_calibration(tmp_path)
++        assert data == {"schema_version": "1.0", "capabilities": {}}
++
++def test_save_and_load_calibration():
++    with tempfile.TemporaryDirectory() as tmpdir:
++        tmp_path = Path(tmpdir)
++        cal_data = {
++            "schema_version": "1.0",
++            "capabilities": {
++                "BRANCH_ISOLATION": {"tp": 3, "fp": 2, "weight": 1.1}
++            }
++        }
++        save_calibration(cal_data, tmp_path)
++        
++        loaded = load_calibration(tmp_path)
++        assert loaded["capabilities"]["BRANCH_ISOLATION"]["tp"] == 3
++        assert loaded["capabilities"]["BRANCH_ISOLATION"]["fp"] == 2
++        assert loaded["capabilities"]["BRANCH_ISOLATION"]["weight"] == 1.1
++
++def test_get_calibrated_weight():
++    with tempfile.TemporaryDirectory() as tmpdir:
++        tmp_path = Path(tmpdir)
++        
++        # Test Default
++        w = get_calibrated_weight("BRANCH_ISOLATION", tmp_path)
++        assert w == 1.0
++        
++        # Test saved weight
++        cal_data = {
++            "schema_version": "1.0",
++            "capabilities": {
++                "BRANCH_ISOLATION": {"tp": 2, "fp": 1, "weight": 1.3}
++            }
++        }
++        save_calibration(cal_data, tmp_path)
++        w = get_calibrated_weight("BRANCH_ISOLATION", tmp_path)
++        assert w == 1.3
++        
++        # Test overrides
++        config = {
++            "capability_calibration": {
++                "enabled": True,
++                "overrides": {
++                    "BRANCH_ISOLATION": 0.8
++                }
++            }
++        }
++        w = get_calibrated_weight("BRANCH_ISOLATION", tmp_path, config)
++        assert w == 0.8
++        
++        # Test disabled
++        config_disabled = {
++            "capability_calibration": {
++                "enabled": False
++            }
++        }
++        w = get_calibrated_weight("BRANCH_ISOLATION", tmp_path, config_disabled)
++        assert w == 1.0
++
++def test_update_calibration_rebuttal():
++    with tempfile.TemporaryDirectory() as tmpdir:
++        tmp_path = Path(tmpdir)
++        
++        # Initial cold start prior (tp=1, fp=1, weight=1.0)
++        # Rebuttal accepted -> fp += 1, weight *= 0.9
++        update_calibration_rebuttal("TEST_COVERAGE", "REBUTTAL_ACCEPTED", tmp_path)
++        data = load_calibration(tmp_path)
++        cap = data["capabilities"]["TEST_COVERAGE"]
++        assert cap["tp"] == 1
++        assert cap["fp"] == 2
++        assert pytest.approx(cap["weight"]) == 0.9
++        
++        # Rebuttal rejected -> tp += 1, weight *= 1.05
++        update_calibration_rebuttal("TEST_COVERAGE", "REBUTTAL_REJECTED", tmp_path)
++        data = load_calibration(tmp_path)
++        cap = data["capabilities"]["TEST_COVERAGE"]
++        assert cap["tp"] == 2
++        assert cap["fp"] == 2
++        assert pytest.approx(cap["weight"]) == 0.945
++
++        # Check clamping lower bound 0.5
++        for _ in range(20):
++            update_calibration_rebuttal("TEST_COVERAGE", "REBUTTAL_ACCEPTED", tmp_path)
++        data = load_calibration(tmp_path)
++        assert data["capabilities"]["TEST_COVERAGE"]["weight"] == 0.5
++
++        # Check clamping upper bound 1.5
++        for _ in range(40):
++            update_calibration_rebuttal("TEST_COVERAGE", "REBUTTAL_REJECTED", tmp_path)
++        data = load_calibration(tmp_path)
++        assert data["capabilities"]["TEST_COVERAGE"]["weight"] == 1.5
+diff --git a/tests/unit/test_gate_context.py b/tests/unit/test_gate_context.py
+new file mode 100644
+index 0000000..f60325b
+--- /dev/null
++++ b/tests/unit/test_gate_context.py
+@@ -0,0 +1,147 @@
++import pytest
++from pathlib import Path
++import tempfile
++import shutil
++import json
++from src.scripts.gate_context import (
++    GateContext,
++    ArchViolation,
++    CoChangeWarning,
++    load_gate_context,
++    write_gate_context,
++    get_context_path
++)
++from src.scripts.ai_review import (
++    calculate_todo_delta,
++    build_deterministic_findings_section,
++    gather_pytest_evidence
++)
++
++def test_gate_context_defaults():
++    ctx = GateContext(
++        diff_text="some diff",
++        diff_hash="hash123",
++        changed_files=["file1.py"]
++    )
++    assert ctx.schema_version == "1.0"
++    assert ctx.arch_violations == []
++    assert ctx.co_change_warnings == []
++    assert ctx.review_intensity == "standard"
++    assert ctx.todo_delta is None
++
++def test_atomic_write_and_load():
++    with tempfile.TemporaryDirectory() as tmpdir:
++        tmp_path = Path(tmpdir) / "gate_context_current.json"
++        ctx = GateContext(
++            diff_text="my diff",
++            diff_hash="hash123",
++            changed_files=["src/main.py"],
++            session_id="session-123"
++        )
++        ctx.arch_violations = [
++            ArchViolation(file="src/main.py", line=10, rule="CLEAN_ARCH", severity="FAIL")
++        ]
++        ctx.co_change_warnings = [
++            CoChangeWarning(file="src/utils.py", confidence="EXTRACTED", reason="import correlation")
++        ]
++        
++        write_gate_context(ctx, tmp_path)
++        assert tmp_path.exists()
++        
++        loaded = load_gate_context(tmp_path)
++        assert loaded is not None
++        assert loaded.diff_hash == "hash123"
++        assert len(loaded.arch_violations) == 1
++        assert loaded.arch_violations[0].file == "src/main.py"
++        assert loaded.arch_violations[0].severity == "FAIL"
++        assert len(loaded.co_change_warnings) == 1
++        assert loaded.co_change_warnings[0].confidence == "EXTRACTED"
++        assert loaded.session_id == "session-123"
++
++def test_schema_version_mismatch_degrades():
++    with tempfile.TemporaryDirectory() as tmpdir:
++        tmp_path = Path(tmpdir) / "gate_context_current.json"
++        
++        # Write incompatible version
++        incompatible_data = {
++            "schema_version": "2.0",
++            "diff_text": "diff",
++            "diff_hash": "hash"
++        }
++        with open(tmp_path, "w", encoding="utf-8") as f:
++            json.dump(incompatible_data, f)
++            
++        loaded = load_gate_context(tmp_path)
++        assert loaded is None  # Degrades to None
++
++def test_calculate_todo_delta():
++    diff_text = """
+++ # TODO: check this
++- # TODO: remove this
+++ # FIXME: fix that
+++ some other added line
++    """
++    delta = calculate_todo_delta(diff_text)
++    assert delta == 1  # 2 added (TODO, FIXME), 1 removed (TODO) -> +1
++
++def test_build_deterministic_findings_section():
++    ctx = GateContext(
++        diff_text="diff",
++        diff_hash="hash",
++        changed_files=["src/main.py"],
++        review_intensity="elevated"
++    )
++    ctx.arch_violations = [
++        ArchViolation(file="src/main.py", line=5, rule="IMPORT_RULE", severity="WARN")
++    ]
++    ctx.co_change_warnings = [
++        CoChangeWarning(file="src/utils.py", confidence="EXTRACTED", reason="strong correlation")
++    ]
++    ctx.pytest_collect_status = "src/main.py: 3 tests collected in tests/test_main.py"
++    ctx.todo_delta = 2
++    
++    findings_str = build_deterministic_findings_section(ctx)
++    assert "## Deterministic findings (pre-LLM, verified)" in findings_str
++    assert "src/main.py:5 — IMPORT_RULE — WARN" in findings_str
++    assert "src/utils.py — strong correlation" in findings_str
++    assert "src/main.py: 3 tests collected in tests/test_main.py" in findings_str
++    assert "TODO/FIXME delta: +2" in findings_str
++    assert "Review intensity: elevated" in findings_str
++
++
++def test_session_id_lifecycle_regression():
++    from src.scripts.harness_utils import log_harness_event
++    with tempfile.TemporaryDirectory() as tmpdir:
++        tmp_root = Path(tmpdir)
++        
++        # 1. Log event before session initialization
++        log_harness_event({"event_type": "test_pre_init"}, project_root=tmp_root)
++        
++        # 2. Initialize session in session.json
++        state_dir = tmp_root / ".agent" / "state"
++        state_dir.mkdir(parents=True, exist_ok=True)
++        session_file = state_dir / "session.json"
++        
++        expected_uuid = "99999999-8888-7777-6666-555555555555"
++        with open(session_file, "w", encoding="utf-8") as f:
++            json.dump({"session_id": expected_uuid, "status": "ACTIVE"}, f)
++            
++        # 3. Log event after session initialization
++        log_harness_event({"event_type": "test_post_init"}, project_root=tmp_root)
++        
++        # Read the written events log
++        events_path = state_dir / "harness_events.jsonl"
++        assert events_path.exists()
++        
++        lines = events_path.read_text(encoding="utf-8").splitlines()
++        assert len(lines) == 2
++        
++        evt_pre = json.loads(lines[0])
++        evt_post = json.loads(lines[1])
++        
++        # Verify the fallback is specifically "pre-session-init" and NOT "unknown" or None
++        assert evt_pre["session_id"] == "pre-session-init"
++        
++        # Verify the active session UUID is correctly read
++        assert evt_post["session_id"] == expected_uuid
++

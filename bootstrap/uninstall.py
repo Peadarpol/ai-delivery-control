@@ -19,6 +19,13 @@ if sys.platform == "win32":
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bootstrap import manifest, checksums, generate_checksums
 
+# Optional: SQLite state persistence row cleanup (T1-D-02). Non-fatal if unavailable.
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "scripts"))
+    from state_persistence import cleanup_project_rows as _cleanup_project_rows  # type: ignore[import]
+except ImportError:
+    _cleanup_project_rows = None  # type: ignore[assignment]
+
 
 def log_info(msg: str):
     print(f"ℹ️  {msg}")
@@ -309,6 +316,17 @@ class UninstallManager:
 
         # 7. Remove state file last (its presence signals active installation)
         self._remove(self.state_file)
+
+        # 8. Selective SQLite row-level cleanup
+        if _cleanup_project_rows is not None:
+            try:
+                deleted = _cleanup_project_rows(project_root=str(self.project_path))
+                if deleted and not self.dry_run:
+                    log_success(f"Removed {deleted} SQLite row(s) for this project from ~/.aisdlc/harness.db.")
+            except Exception as exc:
+                log_warn(f"SQLite cleanup skipped: {exc}")
+        elif not self.dry_run:
+            log_info("SQLite state persistence not available — row cleanup skipped.")
 
         if self.dry_run:
             log_success(f"Dry run complete. Would have removed {removed} file(s).")
