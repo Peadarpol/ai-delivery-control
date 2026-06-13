@@ -73,14 +73,29 @@ Scenario: Modify DB
 """, encoding="utf-8")
 
     diff_output = "diff --git a/migrations/versions/123_migration.py b/migrations/versions/123_migration.py\n"
-    
-    with patch("subprocess.run") as mock_run, patch("sys.argv", ["acceptance_check.py", "--spec", spec_id]):
-        # Mock git diff and git rev-parse for branch check
+
+    # Mock provider: schema migration without HIGH_RISK_SCHEMA_CHANGE flag → blocking verdict.
+    # Without this mock the test makes a real LLM call which may return empty → fail-open → exit 0.
+    mock_provider = MagicMock()
+    mock_provider.is_available.return_value = True
+    mock_provider.raw_completion.return_value = json.dumps({
+        "verdict": "DIVERGED",
+        "satisfied_scenarios": [],
+        "partial_scenarios": [],
+        "unimplemented_scenarios": ["Modify DB"],
+        "scope_creep_findings": ["Migration file added without [HIGH_RISK_SCHEMA_CHANGE] flag in spec"],
+        "remediation_steps": ["Add [HIGH_RISK_SCHEMA_CHANGE] to spec Constraints section"],
+        "rationale": "Schema migration detected but spec lacks the HIGH_RISK_SCHEMA_CHANGE approval flag."
+    })
+
+    with patch("subprocess.run") as mock_run, \
+         patch("sys.argv", ["acceptance_check.py", "--spec", spec_id]), \
+         patch("acceptance_check.get_provider", return_value=mock_provider):
         mock_run.side_effect = [
-            MagicMock(stdout="feature/SPEC-001\n", returncode=0), # branch check
-            MagicMock(stdout=diff_output, returncode=0)          # diff check
+            MagicMock(stdout="feature/SPEC-001\n", returncode=0),  # branch check
+            MagicMock(stdout=diff_output, returncode=0),           # diff check
         ]
-        
+
         with pytest.raises(SystemExit) as excinfo:
             acceptance_check.main()
         assert excinfo.value.code == 1
