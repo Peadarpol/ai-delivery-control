@@ -218,7 +218,7 @@ cold). Moves session summaries older than 90 days to cold archive automatically
 
 ### SQLite cross-project state persistence
 
-**SQLite persistence write layer (T1-D-01/T1-D-02, v1.4.0)**: `state_persistence.py`
+**SQLite persistence write layer (T1-D-01, v1.4.0)**: `state_persistence.py`
 mirrors harness flat-file state to a SQLite index at `~/.aisdlc/harness.db` for
 cross-project querying and analytics. Three sync functions are called automatically:
 `sync_session_to_db()` at session init, `sync_review_event_to_db()` on every verdict,
@@ -311,7 +311,7 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
 | Version | Date | Change |
 |---------|------|--------|
-| v1.4.0 | 2026-06-13 | GateContext shared typed data bus across pre-commit hook chain (T1-G-13); evidence gathering injecting pytest_collect_status and todo_delta into LLM context (T1-G-11); capability calibration per-capability TP/FP weight adjustment (T1-G-14); EXTRACTED/INFERRED/AMBIGUOUS co-change confidence tiers (T1-H-10); SQLite cross-project state persistence write layer (T1-D-01/T1-D-02); Claude Code Stop hook acceptance gate (T1-L-05a) |
+| v1.4.0 | 2026-06-13 | GateContext shared typed data bus across pre-commit hook chain (T1-G-13); evidence gathering injecting pytest_collect_status and todo_delta into LLM context (T1-G-11); capability calibration per-capability TP/FP weight adjustment (T1-G-14); EXTRACTED/INFERRED/AMBIGUOUS co-change confidence tiers (T1-H-10); SQLite cross-project state persistence write layer (T1-D-01); Claude Code Stop hook acceptance gate (T1-L-05a) |
 | v1.3.4 | 2026-06-12 | Automatic session-start stash checkpoint (T1-J-01) and mid-task checkpointing (T1-J-01a); spec collision detection (T1-L-01a); mid-session observability tool / session health CLI (T1-M-03); blocked_commands.md configuration (T1-K-06); Gemini CLI close protocol checklist (HIB-GEMINI-01); harness health checks for dream proposal staleness (HIB-HEALTH-01) and state file sizes (HIB-HEALTH-02); distill_dream.py wrong field name fix (HIB-DREAM-01), INTENT_MISMATCH routing (HIB-DREAM-02), and escalation_rate threshold redesign (HIB-DREAM-03) |
 | v1.3.3 | 2026-06-07 | Dynamic versioning from harness_version.txt (HIB-FM8-02); severity casing normalization to uppercase (HIB-FM8-01); onboarding baseline relocation to `.agent/baseline/`; rebuttal_pass.json gitignore; docs/state-file-schema.md, docs/architecture/gate-context-design.md (T1-G-13) spec, and archetype domain starter packs |
 | v1.3.1 | 2026-06-03 | UNIVERSAL_CONTEXT.md + tool shims (T1-B-01); AGENTS.md split + AGENTS_PROJECT.md (T1-A-09); concurrent write safety via _lock_file (T1-N-02); check_halt.py pre-commit hook (BUG-15); memory_manager.py three-tier foundation (T1-I-01); AST staleness detection in init_session.py (T1-I-04); T1-I-00a/00b audit log consolidation; BUG-14/16/17/18 fixes; 250 tests / 30 E2E scenarios |

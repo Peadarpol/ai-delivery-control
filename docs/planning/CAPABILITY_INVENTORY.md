@@ -383,7 +383,7 @@
 
 ---
 ## SQLite State Persistence (`state_persistence.py`)
-**Delivered**: v1.4.0 (2026-06-13) — T1-D-01 / T1-D-02
+**Delivered**: v1.4.0 (2026-06-13) — T1-D-01
 **Primary files**:
 - `src/scripts/state_persistence.py` — SQLite mirroring layer (stdlib `sqlite3` only, no new pip dependencies)
 - `~/.aisdlc/harness.db` — global cross-project SQLite index (outside project root, not committed)
@@ -409,7 +409,7 @@
 
 **Backlog dependencies**:
 - T1-D-01: SQLite persistence write layer — ✅ v1.4.0
-- T1-D-02: Cross-project analytics schema — ✅ v1.4.0
+- T1-D-02: harness_health.py read-side integration — ⬜ undelivered (reopened post-audit 2026-06-13)
 
 ---
 

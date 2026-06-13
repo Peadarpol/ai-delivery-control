@@ -38,7 +38,7 @@
 
 ### SQLite state persistence
 
-- **T1-D-01 / T1-D-02**: `state_persistence.py` — WAL-mode SQLite review event
+- **T1-D-01**: `state_persistence.py` — WAL-mode SQLite review event
   index at `~/.aisdlc/harness.db` with `busy_timeout=10s` hang-guard ceiling.
   Auto-fallback to `.agent/state/harness.db` in CI/container environments where the
   home directory is ephemeral. Fire-and-forget wiring: non-blocking sync triggers in
