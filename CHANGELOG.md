@@ -1,5 +1,94 @@
 # Changelog
 
+## v1.4.0 — 2026-06-13
+
+### Gate intelligence
+
+- **T1-G-13**: `gate_context.py` — typed Pydantic `GateContext` shared object
+  passed through the pre-commit chain via `.agent/state/gate_context_current.json`
+  (gitignored). Architecture check findings, co-change warnings, ADR domains, and
+  evidence signals are written by their respective components and read by
+  `ai_review.py` before the LLM call. Gate system prompt gains a
+  `## Deterministic findings` section. Atomic writes; schema version field for
+  graceful degradation; each component falls back to standalone behaviour if context
+  is absent. Prerequisite for T1-G-11/T1-G-14/T1-H-10 wiring.
+
+- **T1-G-11 / HIB-052**: Evidence-gathering pre-context — three deterministic
+  signals injected into the LLM call before review: (a) `pytest --collect-only -q`
+  filtered to changed modules (zero hits on a changed function injected as a finding);
+  (b) co-change blast radius summary from `co_change_check.py`; (c) TODO/FIXME net
+  delta (injected if positive). **HIB-052 bundled fix**: `session_id "unknown"`
+  clustering resolved — `harness_utils.py`, `roster_builder.py`, `audit_logger.py`
+  now read the active session UUID at write time; `"pre-session-init"` marker reserved
+  exclusively for genuine pre-init events. Regression test added.
+
+- **T1-G-14**: `capability_calibration.py` — per-capability AT9 calibration weights.
+  Laplace prior seeded from config; multiplicative updates on rebuttal outcomes
+  (ACCEPTED → weight up, REJECTED → weight down); weights clamped to `[0.25, 4.0]`.
+  Integrated into `ai_review.py` severity adjustment and rebuttal flow: borderline
+  findings in high-weight domains elevated from WARN to FAIL; inverse applied for
+  low-weight domains. `harness_health.py` surfaces capabilities with degrading or
+  clamped weights as actionable signals. Config block documented in
+  `docs/architecture/capability-calibration-design.md` (DOC-02, delivered v1.3.4).
+
+- **T1-H-10**: `co_change_check.py` three-tier confidence tags —
+  `EXTRACTED` (deterministic, AST-derived), `INFERRED` (heuristic), `AMBIGUOUS`
+  (flagged for manual review). `AMBIGUOUS` signals routed to gate policy notes only,
+  not injected as direct findings. Replaces the prior `HIGH`/`MEDIUM` binary.
+
+### SQLite state persistence
+
+- **T1-D-01 / T1-D-02**: `state_persistence.py` — WAL-mode SQLite review event
+  index at `~/.aisdlc/harness.db` with `busy_timeout=10s` hang-guard ceiling.
+  Auto-fallback to `.agent/state/harness.db` in CI/container environments where the
+  home directory is ephemeral. Fire-and-forget wiring: non-blocking sync triggers in
+  `init_session.py` and `ai_review.py`; errors swallowed — DB failures never block
+  commits or session init. `bootstrap/uninstall.py` gains selective row-level cleanup
+  (Step 8). No new pip dependencies (stdlib `sqlite3`). README and
+  `docs/getting-started.md` updated with SQLite disclosure and fallback behaviour.
+
+### Acceptance Stop hook
+
+- **T1-L-05a**: `acceptance_hook.py` — Claude Code Stop hook that verifies all
+  `SPEC-*` IDs referenced in branch commits carry `status: ACCEPTED` before the
+  session closes. Exit 0 = all accepted, 1 = not yet accepted, 2 = skipped
+  (non-feature branch or no spec found). Wired into
+  `bootstrap/templates/claude_settings_hooks.json` (installed to target projects by
+  `bootstrap/install.py`). Non-blocking — prints verdict, does not prevent session
+  end. Closes the compliance gap where `acceptance_check.py` required manual
+  invocation before PR promotion.
+
+### Governance and process
+
+- **FID-1 / FID-2 ARCHITECTURAL_INVARIANT registrations**: Pre-merge adversarial gate
+  review (via `ai_review.py` stratified mode against full branch diff) returned PASS
+  with two MEDIUM findings. Both registered as permanent `ARCHITECTURAL_INVARIANT`
+  rebuttals in `tests/data/false_positive_cases.csv` with sidecar diffs:
+  — FID-1: GateContext/SQLite load in `_run_review()` cannot block a commit
+  (fail-open + graceful degradation governs; `ai_review.py:2666-2695`)
+  — FID-2: 10s `busy_timeout` in `state_persistence.py` is a hang-guard ceiling,
+  not a latency SLA (fire-and-forget design; errors swallowed in `_persist_verdict`)
+
+### Filed for v1.4.1
+
+- **HIB-053**: `outcome_override` write-before-commit flaw in HIB-GEMINI-01 close
+  protocol. Gemini writes `outcome_override: "success"` to `session.json` before the
+  `git commit`, so a crash between steps causes `infer_and_close_previous_session()`
+  to permanently record `success` for uncommitted work. Planned fix: cross-check that
+  at least one commit exists after `session.start_time` before accepting the success
+  claim; downgrade to `partial` with a WARNING if not. `gemini_session_close.json`
+  path has the same flaw and must be fixed in the same change.
+
+- **HIB-054**: `false_positive_to_eval.py` crashes on Windows non-UTF-8 terminals
+  (`UnicodeEncodeError` on emoji `print()` calls). The sidecar `.diff` IS written
+  before the crash, but the CSV row write never executes — leaving the registry with
+  a header-only row and a traceback. Workaround: `PYTHONIOENCODING=utf-8` prefix.
+  Fix: `io.TextIOWrapper` shim (matching `ai_review.py:44-52`) or replace emoji with
+  ASCII equivalents (`[OK]`/`[FAIL]`/`[INFO]`). `incident_to_eval.py` must be audited
+  for the same pattern in the same pass.
+
+---
+
 ## v1.3.4 — 2026-06-08
 
 ### Dream phase fixes (was silently non-functional — now fixed)
