@@ -15,6 +15,10 @@ FRAMEWORK_OWNED = [
     "src/scripts/roster_builder.py",
     "src/scripts/review_context_universal.md",
     "src/scripts/harness_utils.py",
+    "src/scripts/gate_context.py",
+    "src/scripts/capability_calibration.py",
+    "src/scripts/state_persistence.py",
+    "src/scripts/acceptance_hook.py",
 ]
 
 PROJECT_OWNED = [

@@ -15,6 +15,12 @@ import time
 import uuid
 from datetime import UTC, datetime
 
+# Optional: SQLite state persistence (T1-D-01). Non-fatal if unavailable.
+try:
+    from state_persistence import sync_session_to_db as _sync_session_to_db
+except ImportError:
+    _sync_session_to_db = None  # type: ignore[assignment]
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 STATE_DIR = Path(".agent/state")
@@ -493,6 +499,11 @@ def initialize_session(agent_name: str = "Harness") -> str:
             print("   Please review architectural context before execution:")
             print(f"   {PROJECT_ROOT}/.agent/state/decisions_log.md")
             print("=" * 80 + "\n")
+
+        # Non-blocking SQLite sync — errors are caught inside sync_session_to_db
+        if _sync_session_to_db is not None:
+            _sync_session_to_db(session_data)
+
         return session_id
 
 

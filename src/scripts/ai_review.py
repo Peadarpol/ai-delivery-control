@@ -42,7 +42,7 @@ io = __import__("io")
 random = __import__("random")
 
 # Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
-if sys.platform == "win32":
+if sys.platform == "win32" and "pytest" not in sys.modules:
     try:
         if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -50,6 +50,12 @@ if sys.platform == "win32":
             sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
     except Exception:
         pass
+
+# Optional: SQLite state persistence (T1-D-01). Non-fatal if unavailable.
+try:
+    from state_persistence import sync_review_event_to_db as _sync_review_event_to_db
+except ImportError:
+    _sync_review_event_to_db = None  # type: ignore[assignment]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -2080,6 +2086,10 @@ def _persist_verdict(
 
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+
+        # Non-blocking SQLite mirror — fire-and-forget; errors caught inside the function
+        if _sync_review_event_to_db is not None:
+            _sync_review_event_to_db(record)
     except Exception:
         pass  # Never block a commit due to logging failure
 
