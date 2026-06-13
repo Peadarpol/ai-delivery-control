@@ -186,7 +186,6 @@ Guidance for selecting `outcome_override`:
 and uses it verbatim (`outcome_source: "agent_override"`) before falling back to git-state
 inference. Writing this field is the only way a Gemini session gets the same close-out
 fidelity as a Claude Code session with the Stop hook.
-
 Run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
 
 ---

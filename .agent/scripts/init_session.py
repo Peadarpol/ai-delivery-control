@@ -71,7 +71,7 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         if prev_data.get("status") != "ACTIVE":
             return None, None
 
-        prev_id = prev_data.get("session_id", "unknown")
+        prev_id = prev_data.get("session_id", "pre-session-init")
         prev_start = prev_data.get("start_time")
         prev_agent = prev_data.get("agent", "Agent")
 

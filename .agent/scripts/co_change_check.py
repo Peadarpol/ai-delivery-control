@@ -181,7 +181,7 @@ def run_co_change_estimator(changed_files: list[str]) -> list[dict]:
                     {
                         "staged": staged_file,
                         "unstaged": other_file,
-                        "confidence": "HIGH",
+                        "confidence": "EXTRACTED",
                         "probability": prob,
                         "reason": f"File '{other_file}' has both a historical co-change correlation ({prob:.1%}) and direct import relationship with staged '{staged_file}'.",
                     }
@@ -191,13 +191,13 @@ def run_co_change_estimator(changed_files: list[str]) -> list[dict]:
                     {
                         "staged": staged_file,
                         "unstaged": other_file,
-                        "confidence": "MEDIUM",
+                        "confidence": "INFERRED",
                         "probability": prob,
                         "reason": f"File '{other_file}' has a high historical co-change correlation ({prob:.1%}) with staged '{staged_file}'.",
                     }
                 )
 
-        # Also find direct AST imports that aren't in git history (as MEDIUM/Advisory warnings)
+        # Also find direct AST imports that aren't in git history (as AMBIGUOUS warnings)
         staged_imports = ast_imports.get(staged_file, [])
         for imported_file in staged_imports:
             if imported_file in normalized_changed or not imported_file.endswith(".py"):
@@ -208,12 +208,12 @@ def run_co_change_estimator(changed_files: list[str]) -> list[dict]:
                 continue
             checked_pairs.add(pair)
 
-            # If it's a direct import and hasn't been flagged, list as advisory
+            # If it's a direct import and hasn't been flagged, list as ambiguous
             warnings.append(
                 {
                     "staged": staged_file,
                     "unstaged": imported_file,
-                    "confidence": "MEDIUM",
+                    "confidence": "AMBIGUOUS",
                     "probability": 0.0,
                     "reason": f"File '{imported_file}' is imported by staged '{staged_file}' but is not staged.",
                 }
