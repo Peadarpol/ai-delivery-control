@@ -135,6 +135,14 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             outcome = prev_data["outcome_override"]
             source = prev_data.get("outcome_override_source", "agent_override")
             note = prev_data.get("outcome_override_note", "Closed via explicit override.")
+            # HIB-053: cross-check before accepting success claim
+            if outcome == "success" and not _override_success_has_commit(prev_start):
+                outcome = "partial"
+                note = (
+                    "outcome_override claimed success but no commit found after session start. "
+                    "Downgraded to partial (HIB-053 write-before-verify guard)."
+                )
+                source = "inferred"
         else:
             # 1. Check for escalation
             is_escalated = False
