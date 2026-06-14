@@ -59,29 +59,54 @@ class TestInitSessionSpecAwareness:
             assert outcome == "abandoned"
             assert "closed with no commits" in note.lower()
 
-    def test_infer_success_on_spec_modified_no_commits(self, clean_state):
-        """No commits, but a SPEC file is modified after start_time -> infers success."""
+    def test_uncommitted_spec_no_commit_is_partial(self, clean_state):
+        """No commits, but an uncommitted SPEC file exists -> infers partial (HIB-053b)."""
         tmp_path, session_file, ledger_file = clean_state
         
-        # Create a spec file modified recently
         specs_dir = tmp_path / "docs" / "planning" / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
-        spec_file = specs_dir / "SPEC-001.md"
-        spec_file.write_text("Specification content", encoding="utf-8")
-        
-        # Set file modification time to future relative to session start (2026-05-30 00:00:00)
-        future_timestamp = datetime(2026, 5, 30, 1, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(spec_file, (future_timestamp, future_timestamp))
         
         with patch("init_session.SESSION_FILE", session_file), \
              patch("init_session.LEDGER_FILE", ledger_file), \
              patch("init_session.STATE_DIR", session_file.parent), \
              patch("init_session.get_commits_after", return_value=[]), \
+             patch("init_session._uncommitted_spec_changes", return_value=True), \
+             patch("init_session.PROJECT_ROOT", tmp_path):
+             
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "partial"
+            assert "Downgraded to partial (HIB-053b guard)" in note
+
+    def test_committed_spec_is_success(self, clean_state):
+        """A committed spec file change with no open tasks -> infers success."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.get_commits_after", return_value=[{"sha": "123", "date": "2026-05-30", "message": "feat: SPEC-001 updated"}]), \
+             patch("init_session._uncommitted_spec_changes", return_value=False), \
              patch("init_session.PROJECT_ROOT", tmp_path):
              
             outcome, note = init_session.infer_and_close_previous_session()
             assert outcome == "success"
-            assert "Specification compiled/updated" in note
+            assert "All committed changes completed" in note
+
+    @patch("subprocess.run")
+    def test_uncommitted_spec_changes_helper(self, mock_run):
+        """Verify that _uncommitted_spec_changes runs git status with the correct arguments."""
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = " M docs/planning/specs/SPEC-001.md"
+        mock_run.return_value = mock_res
+        
+        dummy_path = Path("/dummy/specs")
+        result = init_session._uncommitted_spec_changes(dummy_path)
+        assert result is True
+        mock_run.assert_called_once_with(
+            ["git", "status", "--porcelain", "--", str(dummy_path)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace"
+        )
 
     def test_explicit_outcome_override_handshake(self, clean_state):
         """If session has outcome_override from BA close handshake -> obeys override."""

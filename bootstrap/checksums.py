@@ -6515,7 +6515,7 @@ V1_4_2 = {
     '.agent/scripts/false_positive_to_eval.py': '4c1f2c719f2c591efc66b117d60623f6cabd82241ee66cb30a35a0372629a142',
     '.agent/scripts/governance_check.py': '7fb3e98e8946ebf5ebcbff94f19bf06322ba2061634fb8dab40597a005015dee',
     '.agent/scripts/harness_health.py': '5c9ecd409b0b4ccda302fc9fb793f5270f0ac58d02b7efad55f1a94cae62b2e8',
-    '.agent/scripts/init_session.py': '2fa606d9f620eb6ee1f93805ed15e99309b1a161494453823703f2ea1ede9323',
+    '.agent/scripts/init_session.py': '36028efcd85fc5436254e78d2cc189336edc29e3b7c606e4b51e944dc03a2193',
     '.agent/scripts/onboarding.py': 'c663b331430b1bfdf7a33b06d67d0eed33174c85d9efbe04d78353149fc67c4d',
     '.agent/scripts/pm_scaffold.py': 'b440e1fdb5aa3cd7f0071d34f9ce03a11e1dad3b9022eeda63ec7f5d53794fe7',
     '.agent/scripts/retention_cleanup.py': '653753473bbb8f3d0088291e438cee504291c21c03c446f37082b0b8f72fbd5f',

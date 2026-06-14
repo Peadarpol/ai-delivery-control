@@ -66,6 +66,19 @@ def _override_success_has_commit(prev_start: str) -> bool:
     return len(get_commits_after(prev_start)) > 0
 
 
+def _uncommitted_spec_changes(specs_dir: Path) -> bool:
+    """Reliable signal that uncommitted spec work exists (replaces mtime)."""
+    try:
+        res = subprocess.run(
+            ["git", "status", "--porcelain", "--", str(specs_dir)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        return bool(res.stdout.strip())
+    except Exception:
+        return False
+
+
+
 
 def infer_and_close_previous_session() -> tuple[str | None, str | None]:
     """Retrospectively close the previous session and log its outcome to the ledger."""
@@ -195,16 +208,9 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
                                 pass
                         
                         if specs_dir.exists() and specs_dir.is_dir():
-                            prev_start_dt = parse_iso_datetime(prev_start)
-                            for spec_file in specs_dir.glob("SPEC-*.md"):
-                                try:
-                                    mtime = datetime.fromtimestamp(spec_file.stat().st_mtime)
-                                    if mtime > prev_start_dt:
-                                        spec_files_modified = True
-                                        action_str = f"Compiled/updated specification: {spec_file.name}"
-                                        break
-                                except Exception:
-                                    pass
+                            if _uncommitted_spec_changes(specs_dir):
+                                spec_files_modified = True
+                                action_str = "Uncommitted specification changes present"
                     except Exception:
                         pass
 
@@ -223,18 +229,17 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
                         except Exception:
                             pass
 
-                    if not has_fail and not has_open_tasks:
-                        outcome = "success"
-                        if commits:
+                    if commits:
+                        if not has_fail and not has_open_tasks:
+                            outcome = "success"
                             note = "All committed changes completed with no pending open tasks."
                         else:
-                            note = "Specification compiled/updated with no active commits."
+                            outcome = "partial"
+                            note = f"Changes committed but open tasks or review failures remain. (FAIL reviews: {has_fail}, open tasks: {has_open_tasks})"
                     else:
                         outcome = "partial"
-                        if commits:
-                            note = f"Changes committed but open tasks or review failures remain. (FAIL reviews: {has_fail}, open tasks: {has_open_tasks})"
-                        else:
-                            note = f"Specification compiled/updated but open tasks remain. (open tasks: {has_open_tasks})"
+                        note = ("Uncommitted specification changes present but no commit found — "
+                                "work not persisted. Downgraded to partial (HIB-053b guard).")
                 else:
                     # 3. No commits, no spec changes, and not escalated => abandoned
                     outcome = "abandoned"
