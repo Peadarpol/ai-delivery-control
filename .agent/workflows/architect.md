@@ -462,6 +462,14 @@ What is the issue we're addressing? Why is a decision needed now?
 - **Goals**: [What success looks like]
 - **Constraints**: [Technical, budget, timeline]
 
+## Decision Block
+
+**Tradeoffs Navigated:**
+- [AT-ID]: [Brief explanation of how this decision balances this tradeoff - refer to review_context_universal.md]
+
+**Failure Modes Exposed (and Mitigated):**
+- [FM-ID]: [How the design prevents this failure mode from occurring - refer to review_context_universal.md]
+
 ## Considered Options
 
 ### Option A: [Name]
