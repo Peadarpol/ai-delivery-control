@@ -346,7 +346,7 @@ S0-05 must be cut before any beta invitations are sent.
 |----|------|----------|--------|
 | S0-16 | GPG-sign all releases | Supply chain | ⬜ |
 | S0-17 | `validate.py --security` mode — hash and display governance files interactively | Verifiability | ⬜ |
-| S0-18 | `docs/security/` — document every context injection point as a visibility baseline | Transparency | ⬜ |
+| S0-18 | `docs/security/` — document every context injection point as a visibility baseline | Transparency | ✅ (absorbed by T1-K-02) |
 | T1-K-05 | Formal security review: context-injection attack surface published as `docs/security/attack-surface-review.md` | Security | ⬜ |
 | T1-K-03 | Governance file diff highlighting on upgrade (AGENTS.md, governance.md, workflows) — on by default | Security | ⬜ |
 
@@ -407,9 +407,9 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-L-12 | Spec grader per-criterion feedback | Medium | Outer loop |
 | T1-L-13 | Decision block format for ADR annotations | Low | Outer loop |
 | T1-L-14 | System archetype classification in spec template | Low | Outer loop |
-| T1-K-02 | Formal security review: context-injection attack surface | Medium | Security |
-| T1-K-02a | Quarantine pattern as architectural context-injection mitigation | Low | Security |
-| T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security |
+| T1-K-02 | Formal security review: context-injection attack surface | Medium | Security | ✅ (v1.4.1) |
+| T1-K-02a | Quarantine pattern as architectural context-injection mitigation | Low | Security | ✅ (v1.4.1) |
+| T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security | ✅ (v1.4.1) |
 
 **Sprint planning notes (pre-v1.4.0)**:
 
@@ -430,9 +430,9 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-L-12 | Spec grader per-criterion feedback | Medium | Outer loop |
 | T1-L-13 | Decision block format for ADR annotations | Low | Outer loop |
 | T1-L-14 | System archetype classification in spec template | Low | Outer loop |
-| T1-K-02 | Formal security review: context-injection attack surface (`docs/security/attack-surface-review.md`) | Medium | Security |
-| T1-K-02a | Quarantine pattern as architectural context-injection mitigation (delivered in same doc as T1-K-02) | Low | Security |
-| T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security |
+| T1-K-02 | Formal security review: context-injection attack surface (`docs/security/attack-surface-review.md`) | Medium | Security | ✅ (v1.4.1) |
+| T1-K-02a | Quarantine pattern as architectural context-injection mitigation (delivered in same doc as T1-K-02) | Low | Security | ✅ (v1.4.1) |
+| T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security | ✅ (v1.4.1) |
 
 **Dependency note**: T1-L-13 depends on T1-G-12 ✅ (AT/FM vocabulary, delivered v1.3.3) — no blocker. T1-L-14 depends on T1-G-12 ✅ and benefits from T1-L-12 landing first (natural delivery companion per backlog). T1-K-02a delivers inside the T1-K-02 document — sequence as one PR.
 

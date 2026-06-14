@@ -970,8 +970,8 @@
 - The document assumes the `decisions_log.md` and `business_rules.md` referenced in §1 exist at conventional paths; these paths use GymBase conventions (`docs/decisions/business_rules.md`, `docs/architecture/ARCHITECTURE.md`) that may not exist in a generic install
 
 **Backlog dependencies**:
-- T1-K-02: Formal security review of context-injection attack surface — ⬜ undelivered (v1.3.0)
-- S0-18: `docs/security/` context injection point documentation — ⬜ undelivered (v1.3.0)
+- T1-K-02: Formal security review of context-injection attack surface — ✅ (v1.4.1) (v1.3.0)
+- S0-18: `docs/security/` context injection point documentation — ✅ absorbed by T1-K-02 (v1.3.0)
 
 ---
 ## Universal Context File (`UNIVERSAL_CONTEXT.md`)
