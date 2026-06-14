@@ -410,6 +410,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-K-02 | Formal security review: context-injection attack surface | Medium | Security | ✅ (v1.4.1) |
 | T1-K-02a | Quarantine pattern as architectural context-injection mitigation | Low | Security | ✅ (v1.4.1) |
 | T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security | ✅ (v1.4.1) |
+| T1-K-07 | Quarantine structural bypass mitigation | High | Security | ⬜ |
 
 **Sprint planning notes (pre-v1.4.0)**:
 
