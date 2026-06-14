@@ -32,5 +32,17 @@ scratch/
 .hypothesis/
 .claude/
 
-# E2E test project local files
+# E2E test project local files (bootstrap artifacts — not source)
 tests/e2e/test_project/src/scripts/ai_review.py
+tests/e2e/test_project/src/scripts/acceptance_hook.py
+tests/e2e/test_project/src/scripts/capability_calibration.py
+tests/e2e/test_project/src/scripts/gate_context.py
+tests/e2e/test_project/src/scripts/harness_utils.py
+tests/e2e/test_project/src/scripts/roster_builder.py
+tests/e2e/test_project/src/scripts/state_persistence.py
+tests/e2e/test_project/.agent/scripts/
+tests/e2e/test_project/.agent/skills/
+tests/e2e/test_project/.agent/templates/
+tests/e2e/test_project/.agent/workflows/
+tests/e2e/test_project/.agent/.framework_migration_state
+tests/e2e/e2e_out.txt

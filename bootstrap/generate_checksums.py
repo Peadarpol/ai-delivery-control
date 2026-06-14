@@ -146,13 +146,16 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
         print(f"Error: Failed to import bootstrap.checksums ({e})", file=sys.stderr)
         sys.exit(1)
         
-    # Check 1: Digest match against what is currently on disk for V1_2_0
-    v1_2_0_var = "V1_2_0"
-    if not hasattr(checksums, v1_2_0_var):
-        print(f"Error: {v1_2_0_var} not found in checksums.py!", file=sys.stderr)
+    # Check 1: Digest match against what is currently on disk for current version
+    version_file = bootstrap_dir.parent / "harness_version.txt"
+    version = "1.2.0"
+    if version_file.exists():
+        version = version_file.read_text(encoding="utf-8").strip()
+    version_var = f"V{format_version_var(version)}"
+    if not hasattr(checksums, version_var):
+        print(f"Error: {version_var} not found in checksums.py!", file=sys.stderr)
         sys.exit(1)
-        
-    v1_2_0_dict = getattr(checksums, v1_2_0_var)
+    version_dict = getattr(checksums, version_var)
     current_files = expand_patterns(framework_root, manifest.FRAMEWORK_OWNED)
     
     # Calculate digests on disk and compare
@@ -163,9 +166,9 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
         full_path = framework_root / f
         current_digest = compute_sha256(full_path)
         
-        expected_digest = v1_2_0_dict.get(rel_path)
+        expected_digest = version_dict.get(rel_path)
         if expected_digest is None:
-            print(f"MISMATCH: File '{rel_path}' exists on disk but is not recorded in {v1_2_0_var} checksums.", file=sys.stderr)
+            print(f"MISMATCH: File '{rel_path}' exists on disk but is not recorded in {version_var} checksums.", file=sys.stderr)
             failures += 1
         elif current_digest != expected_digest:
             print(f"MISMATCH: File '{rel_path}' digest on disk ({current_digest}) does not match recorded ({expected_digest}).", file=sys.stderr)
@@ -174,10 +177,10 @@ def run_verify(framework_root: Path, bootstrap_dir: Path):
             checked += 1
             
     # Check if files in checksum dict are missing on disk
-    for rel_path in v1_2_0_dict.keys():
+    for rel_path in version_dict.keys():
         full_path = framework_root / rel_path
         if not full_path.exists():
-            print(f"MISMATCH: File '{rel_path}' recorded in {v1_2_0_var} but does not exist on disk.", file=sys.stderr)
+            print(f"MISMATCH: File '{rel_path}' recorded in {version_var} but does not exist on disk.", file=sys.stderr)
             failures += 1
             
     # Check 2: Non-empty assertion for versions referenced in migration chain
