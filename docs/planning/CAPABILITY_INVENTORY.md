@@ -876,7 +876,7 @@
 - `tests/unit/test_upgrade_units.py` — upgrade unit tests
 - `tests/unit/test_gate_context.py` — GateContext schema, load/write, degradation contract (T1-G-13)
 - `tests/unit/test_capability_calibration.py` — calibration weight update, config overrides, clamp bounds (T1-G-14)
-- `tests/unit/test_state_persistence.py` — SQLite schema, upsert, rebuild, cleanup, graceful degradation (T1-D-01/T1-D-02)
+- `tests/unit/test_state_persistence.py` — SQLite schema, upsert, rebuild, cleanup, graceful degradation (T1-D-01)
 - `tests/unit/test_acceptance_hook.py` — branch pattern matching, spec status extraction, exit codes (T1-L-05a)
 - `tests/e2e/run_e2e_verification.py` — E2E scenario runner
 - `tests/e2e/test_project/` — representative installed project for E2E testing
