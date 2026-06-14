@@ -468,6 +468,7 @@
 
 **Backlog dependencies**:
 - T1-H-02: ADR annotation and wiki injection — ✅ delivered
+- T1-L-13: Decision block format for ADR annotations — ✅ (v1.4.1)
 - T1-H-08: Branch-isolated model roster in compiled wiki — ✅ delivered (via `roster_builder.py`)
 
 ---
@@ -565,6 +566,8 @@
 **Backlog dependencies**:
 - T1-L-00: Outer loop methodology profile system — ✅ delivered (pre-sprint 2026-06-02)
 - T1-L-01a: Spec collision detection — ✅ delivered (v1.3.4)
+- T1-L-12: Spec grader per-criterion feedback — ✅ (v1.4.1)
+- T1-L-14: System archetype classification in spec template — ✅ (v1.4.1)
 
 ---
 ## Business Analyst Workflow (`business-analyst.md`)
@@ -970,8 +973,10 @@
 - The document assumes the `decisions_log.md` and `business_rules.md` referenced in §1 exist at conventional paths; these paths use GymBase conventions (`docs/decisions/business_rules.md`, `docs/architecture/ARCHITECTURE.md`) that may not exist in a generic install
 
 **Backlog dependencies**:
-- T1-K-02: Formal security review of context-injection attack surface — ⬜ undelivered (v1.3.0)
-- S0-18: `docs/security/` context injection point documentation — ⬜ undelivered (v1.3.0)
+- T1-K-02: Formal security review of context-injection attack surface — ✅ (v1.4.1) (v1.3.0)
+- T1-K-02a: Quarantine pattern as architectural context-injection mitigation — ✅ (v1.4.1)
+- T1-K-05a: Environment variable sanitisation in gate subprocess calls — ✅ (v1.4.1)
+- S0-18: `docs/security/` context injection point documentation — ✅ absorbed by T1-K-02 (v1.3.0)
 
 ---
 ## Universal Context File (`UNIVERSAL_CONTEXT.md`)

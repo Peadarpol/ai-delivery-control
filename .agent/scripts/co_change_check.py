@@ -2,6 +2,13 @@ import json
 import subprocess
 from pathlib import Path
 
+import sys
+try:
+    from harness_utils import _safe_git_env
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "scripts"))
+    from harness_utils import _safe_git_env
+
 # Resolve PROJECT_ROOT
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
@@ -18,6 +25,7 @@ def check_refactor_keyword() -> bool:
             text=True,
             encoding="utf-8",
             cwd=str(PROJECT_ROOT),
+            env=_safe_git_env()
         )
         if res.returncode == 0:
             msg = res.stdout.lower()
@@ -39,6 +47,7 @@ def get_git_co_changes() -> dict[str, dict[str, float]]:
             text=True,
             encoding="utf-8",
             cwd=str(PROJECT_ROOT),
+            env=_safe_git_env()
         )
         if result.returncode != 0:
             return {}
