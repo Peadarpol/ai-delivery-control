@@ -420,9 +420,12 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict, arc
 
     archetype_scrutiny = ""
     ARCHETYPE_FM_MAP = {
-        "CRUD_WORKFLOW": ["FM1: Desync", "FM4: Unhandled Edge Cases"],
-        "INTEGRATION_PIPELINE": ["FM3: Logic Duplication", "FM6: Unhandled Upstream Errors"],
-        "ASYNC_PROCESSOR": ["FM5: Race Conditions", "FM9: Unhandled Message Drops"]
+        "A1": ["FM6: Hotspotting", "FM3: Unbounded Resource Consumption"],
+        "A2": ["FM3: Unbounded Resource Consumption", "FM6: Hotspotting", "FM7: Thundering Herd"],
+        "A3": ["FM4: Data Consistency Failure", "FM10: Security Breach"],
+        "A4": ["FM6: Hotspotting", "FM8: Schema / Contract Violation"],
+        "A5": ["FM8: Schema / Contract Violation", "FM9: Silent Data Corruption"],
+        "A6": ["FM2: Cascading Failures", "FM8: Schema / Contract Violation"]
     }
     if archetype:
         fms = ARCHETYPE_FM_MAP.get(archetype, [])

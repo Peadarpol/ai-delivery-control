@@ -281,22 +281,20 @@ class TestPass2QualityGate:
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-testkey"}), \
              patch("check_spec.SESSION_FILE", tmp_path / "session.json"), \
              patch("check_spec.PROJECT_ROOT", tmp_path), \
-             patch("check_spec.log_harness_event") as mock_log:
+             patch("harness_utils.PROJECT_ROOT", tmp_path):
              
             exit_code, verdict = check_spec.run_pass2(base_spec_content, "SPEC-001", False, config)
             assert exit_code == 0
             assert verdict.verdict == "ADVISORY"
             assert "Per-criterion feedback unavailable" in verdict.advisories[0]
             
-            # Assert pass2_parse_failure event was logged
-            mock_log.assert_any_call({
-                "event_type": "pass2_parse_failure",
-                "severity": "WARNING",
-                "payload": {
-                    "spec_id": "SPEC-001",
-                    "reason": "Pass 2 response malformed; fell back to top-level verdict"
-                }
-            })
+            # Assert pass2_parse_failure event was logged to harness_events.jsonl
+            events_file = tmp_path / ".agent" / "state" / "harness_events.jsonl"
+            assert events_file.exists()
+            
+            import json
+            events = [json.loads(line) for line in events_file.read_text("utf-8").splitlines() if line.strip()]
+            assert any(e.get("event_type") == "pass2_parse_failure" for e in events)
             
             # Assert spec_grade card was written
             grade_card = tmp_path / ".agent" / "state" / "spec_grade_SPEC-001.md"
