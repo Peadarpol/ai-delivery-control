@@ -61,6 +61,11 @@ def get_commits_after(start_time_str: str) -> list[dict]:
     except Exception:
         return []
 
+def _override_success_has_commit(prev_start: str) -> bool:
+    """Cross-check: does a claimed success have a backing commit?"""
+    return len(get_commits_after(prev_start)) > 0
+
+
 
 def infer_and_close_previous_session() -> tuple[str | None, str | None]:
     """Retrospectively close the previous session and log its outcome to the ledger."""
