@@ -1,8 +1,8 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.1
-**Target Release**: v1.4.2
+**Current Version**: 1.4.2
+**Target Release**: v1.5.0
 **Last Updated**: 2026-06-14
 
 ---
@@ -533,7 +533,7 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.3.0 (v1.2.0.1 shipped 2026-05-31)
+**Active milestone**: v1.5.0 (v1.4.2 shipped 2026-06-14)
 **Sprint tracking**: `.agent/state/active_context.md`
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:

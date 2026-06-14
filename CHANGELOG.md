@@ -3,7 +3,10 @@
 ## v1.4.2 — 2026-06-14
 
 ### Gate Correctness & Backlog Repair
-- Reconciled backlog and roadmap milestones, and updated issue statuses.
+- **HIB-055**: Restored universal-rule enforcement at review time. Universal RULE sections (TDD-law, DB-session-bypass, dependency-approval) are now always-injected into the LLM context. The extensive AT/FM vocabulary is trigger-gated and injected only when an ADR or decision block is present in the diff, preventing token budget collisions.
+- **T1-L-13a**: Implemented the LLM-side ADVISORY rule for ADR decision-block review, evaluating the coherence of named AT tradeoffs and exposed failure modes using the AT/FM vocabulary.
+- **HIB-053b**: Fixed spec-mtime false-success in session close inference by replacing the unreliable filesystem mtime scanning with `git status --porcelain` and capping commitless specification work at `partial` (downgrading from `success`).
+- **Roadmap & Backlog Reconciliation**: Repaired backlog and roadmap drift, re-registered missing HIB items, updated capability dependencies, and re-tiered `T1-K-07` to Medium.
 
 ## v1.4.1 — 2026-06-14
 

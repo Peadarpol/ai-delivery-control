@@ -53,6 +53,7 @@
 - T1-I-07: Token counter wiring — ✅ completed pre-sprint 2026-06-02; `ai_review.py` now increments `session.json` token counters after each LLM call
 - T1-N-02: Gate concurrent write safety — ✅ v1.3.1
 - T1-N-06: `pause_turn` stop reason handling — ⬜ undelivered
+- HIB-055: Universal review-context RULE sections selection/injection — ✅ (v1.4.2)
 
 ---
 ## Gate Context (`gate_context.py`)
@@ -209,6 +210,7 @@
 - T1-I-07 session token budget WARN/HALT — ✅ delivered (via check_halt.py); wiring to session.json completed pre-sprint 2026-06-02
 - T1-J-01 automatic checkpoint — ✅ delivered (v1.3.4) (creates a git stash automatically at startup in `init_session.py`)
 - T1-N-01 multi-agent session hierarchy schema — ⬜ undelivered (parent_session_id not in session.json)
+- HIB-053b: Spec-mtime false-success in session close inference — ✅ (v1.4.2)
 
 ---
 ## Session State (`session.json` schema)
@@ -469,6 +471,7 @@
 **Backlog dependencies**:
 - T1-H-02: ADR annotation and wiki injection — ✅ delivered
 - T1-L-13: Decision block format for ADR annotations — ✅ (v1.4.1)
+- T1-L-13a: Deferred ADVISORY rule for ADR decision blocks — ✅ (v1.4.2)
 - T1-H-08: Branch-isolated model roster in compiled wiki — ✅ delivered (via `roster_builder.py`)
 
 ---
