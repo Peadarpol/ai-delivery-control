@@ -1645,10 +1645,16 @@ def load_review_context(diff: str = "") -> str:
 
     if not diff:
         return combined
-    return _select_context_sections(diff, combined)
+
+    # Extract all universal section IDs via regex and identify always-include ones
+    universal_ids = set(re.findall(r"<!-- SECTION:([\w_]+) -->", universal_content))
+    trigger_gated_universal = {"vocabulary", "adr_decision_block"}
+    always_include = universal_ids - trigger_gated_universal
+
+    return _select_context_sections(diff, combined, always_include=always_include)
 
 
-def _select_context_sections(diff: str, context_text: str) -> str:
+def _select_context_sections(diff: str, context_text: str, always_include: Optional[set[str]] = None) -> str:
     """
     Parses context_text for <!-- SECTION:id --> markers and returns only sections
     relevant to the staged diff (PA-02).
@@ -1675,7 +1681,12 @@ def _select_context_sections(diff: str, context_text: str) -> str:
     }
 
     # 2. Identify active sections
-    active_sections = {"micro_checks"}  # Always include micro_checks
+    if always_include is None:
+        active_sections = {"micro_checks"}  # Fallback if always_include is not provided
+    else:
+        active_sections = set(always_include)
+        active_sections.add("micro_checks")
+
     for section_id, patterns in trigger_map.items():
         if any(p in diff for p in patterns):
             active_sections.add(section_id)
