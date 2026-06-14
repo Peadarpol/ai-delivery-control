@@ -167,3 +167,18 @@ def _lock_session(session_file: Path, timeout: float = 5.0, delay: float = 0.05)
                 lock_path.rmdir()
             except Exception:
                 pass
+
+
+def _safe_git_env() -> dict:
+    """Minimal environment for git subprocess calls.
+    Strips API keys, OIDC tokens, and shell session variables.
+    GIT_* passthrough is the safety net for non-standard git env vars.
+    PYTHONPATH intentionally excluded — all call sites invoke git only.
+    """
+    import os
+    allowed = {
+        "PATH", "HOME", "USERPROFILE", "SystemRoot",
+        "TEMP", "TMP", "HOMEDRIVE", "HOMEPATH",
+    }
+    return {k: v for k, v in os.environ.items()
+            if k in allowed or k.startswith("GIT_")}
