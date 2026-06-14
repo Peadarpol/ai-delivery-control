@@ -78,7 +78,13 @@ None.
 
 class TestPass1Structural:
     def test_golden_path_passes(self, base_spec_content):
-        ok, errors, high_risk = check_spec.run_pass1(base_spec_content, "SPEC-001")
+        result = check_spec.run_pass1(base_spec_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        high_risk = result.high_risk_dba
         assert ok is True
         assert len(errors) == 0
         assert high_risk is False
@@ -86,52 +92,100 @@ class TestPass1Structural:
     def test_missing_sections_fails(self, base_spec_content):
         # Remove Goal & Context section
         bad_content = base_spec_content.replace("## 1. Goal & Context", "## 1. Vague Header")
-        ok, errors, _ = check_spec.run_pass1(bad_content, "SPEC-001")
+        result = check_spec.run_pass1(bad_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is False
         assert any("Goal & Context" in err for err in errors)
 
     def test_empty_source_issue_fails(self, base_spec_content):
         bad_content = base_spec_content.replace("https://github.com/owner/repo/issues/42", "[Placeholder URL]")
-        ok, errors, _ = check_spec.run_pass1(bad_content, "SPEC-001")
+        result = check_spec.run_pass1(bad_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is False
         assert any("issue reference" in err.lower() for err in errors)
 
     def test_missing_gherkin_keywords_fails(self, base_spec_content):
         # Remove 'Then' keyword
         bad_content = base_spec_content.replace("Then they should be redirected", "And they should be redirected")
-        ok, errors, _ = check_spec.run_pass1(bad_content, "SPEC-001")
+        result = check_spec.run_pass1(bad_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is False
         assert any("Gherkin validation" in err or "missing: Then" in err for err in errors)
 
     def test_strict_word_boundary_gherkin_matching(self, base_spec_content):
         # Use a word containing 'then' (e.g. authenticathenticate) but no actual 'Then' keyword
         bad_content = base_spec_content.replace("Then they should be redirected", "And authenticathenticate they should be redirected")
-        ok, errors, _ = check_spec.run_pass1(bad_content, "SPEC-001")
+        result = check_spec.run_pass1(bad_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is False
         assert any("Gherkin validation" in err or "missing: Then" in err for err in errors)
 
     def test_lenient_assumptions_checks(self, base_spec_content):
         # Bullets without resolution prefix fail
         bad_content = base_spec_content.replace("- [Resolved: existing middleware] Auth handled.", "- Vague assumption bullet")
-        ok, errors, _ = check_spec.run_pass1(bad_content, "SPEC-001")
+        result = check_spec.run_pass1(bad_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is False
         assert any("lenient assumptions check" in err.lower() for err in errors)
 
     def test_lenient_assumptions_ignores_blank_lines(self, base_spec_content):
         # Assumptions with blank lines or plain introductory paragraph (non-bullets) passes
         content_with_notes = base_spec_content.replace("## 3. Assumptions", "## 3. Assumptions\n\nSome introductory note here.\n\n")
-        ok, errors, _ = check_spec.run_pass1(content_with_notes, "SPEC-001")
+        result = check_spec.run_pass1(content_with_notes, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is True
 
     def test_pending_assumptions_block_approval(self, base_spec_content):
         bad_content = base_spec_content.replace("[Resolved: existing middleware]", "[Pending: needs discussion]")
-        ok, errors, _ = check_spec.run_pass1(bad_content, "SPEC-001")
+        result = check_spec.run_pass1(bad_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is False
         assert any("pending" in err.lower() for err in errors)
 
     def test_elevated_dba_risk_tag(self, base_spec_content):
         bad_content = base_spec_content.replace("## 5. Architectural Constraints\nNone.", "## 5. Architectural Constraints\n- [HIGH_RISK_SCHEMA_CHANGE] Proposed schema change.")
-        ok, errors, high_risk = check_spec.run_pass1(bad_content, "SPEC-001")
+        result = check_spec.run_pass1(bad_content, "SPEC-001")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        high_risk = result.high_risk_dba
         assert ok is True
         assert high_risk is True
 
@@ -142,7 +196,13 @@ class TestDraftWarningBypass:
     def test_draft_passes_locally_with_warning(self, base_spec_content):
         draft_content = base_spec_content.replace("APPROVED", "DRAFT")
         with patch.dict(os.environ, {"PRE_COMMIT": "0"}):
-            ok, errors, _ = check_spec.run_pass1(draft_content, "SPEC-001")
+            result = check_spec.run_pass1(draft_content, "SPEC-001")
+
+            ok = result.passed
+
+            errors = result.errors
+
+            _ = result.high_risk_dba
             # Local DRAFT bypass allowed
             assert ok is True
             assert len(errors) == 0
@@ -150,7 +210,13 @@ class TestDraftWarningBypass:
     def test_draft_blocked_during_commit(self, base_spec_content):
         draft_content = base_spec_content.replace("APPROVED", "DRAFT")
         with patch.dict(os.environ, {"PRE_COMMIT": "1"}):
-            ok, errors, _ = check_spec.run_pass1(draft_content, "SPEC-001")
+            result = check_spec.run_pass1(draft_content, "SPEC-001")
+
+            ok = result.passed
+
+            errors = result.errors
+
+            _ = result.high_risk_dba
             # Committing DRAFT blocks
             assert ok is False
             assert any("APPROVED" in err for err in errors)
@@ -348,21 +414,39 @@ class TestOuterLoopMode:
     def test_discovery_mode_downgrades_block_to_warn(self, base_spec_content):
         """Missing heading in discovery mode → exit 0 (advisory only)."""
         bad = base_spec_content.replace("## 1. Goal & Context", "## 1. Vague Header")
-        ok, errors, _ = check_spec.run_pass1(bad, "SPEC-001", mode="discovery")
+        result = check_spec.run_pass1(bad, "SPEC-001", mode="discovery")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is True, "Discovery mode must never block on structural checks"
         assert errors == [], "No errors should accumulate in discovery mode"
 
     def test_incremental_mode_blocks_missing_heading(self, base_spec_content):
         """Missing heading in incremental mode → exit 1 (existing behaviour unchanged)."""
         bad = base_spec_content.replace("## 1. Goal & Context", "## 1. Vague Header")
-        ok, errors, _ = check_spec.run_pass1(bad, "SPEC-001", mode="incremental")
+        result = check_spec.run_pass1(bad, "SPEC-001", mode="incremental")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is False
         assert any("Goal & Context" in e for e in errors)
 
     def test_discovery_mode_skips_gherkin_requirement(self, base_spec_content):
         """Missing Gherkin keywords in discovery mode → advisory, not a block."""
         bad = base_spec_content.replace("Then they should be redirected", "And they should proceed")
-        ok, errors, _ = check_spec.run_pass1(bad, "SPEC-001", mode="discovery")
+        result = check_spec.run_pass1(bad, "SPEC-001", mode="discovery")
+
+        ok = result.passed
+
+        errors = result.errors
+
+        _ = result.high_risk_dba
         assert ok is True
         assert errors == []
 
@@ -370,7 +454,13 @@ class TestOuterLoopMode:
         """DRAFT status in local (non-CI) mode blocks in contractual — no local bypass."""
         draft = base_spec_content.replace("**Status**: APPROVED", "**Status**: DRAFT")
         with patch.dict(os.environ, {"PRE_COMMIT": "0", "CI": "0"}, clear=False):
-            ok, errors, _ = check_spec.run_pass1(draft, "SPEC-001", mode="contractual")
+            result = check_spec.run_pass1(draft, "SPEC-001", mode="contractual")
+
+            ok = result.passed
+
+            errors = result.errors
+
+            _ = result.high_risk_dba
         assert ok is False
         assert any("APPROVED" in e for e in errors)
 
@@ -388,7 +478,13 @@ class TestOuterLoopMode:
             "- [Pending: needs discussion] Auth approach unclear.",
         )
         with patch.dict(os.environ, {"PRE_COMMIT": "0", "CI": "0"}, clear=False):
-            ok, errors, _ = check_spec.run_pass1(pending, "SPEC-001", mode="contractual")
+            result = check_spec.run_pass1(pending, "SPEC-001", mode="contractual")
+
+            ok = result.passed
+
+            errors = result.errors
+
+            _ = result.high_risk_dba
         assert ok is False
         assert any("pending" in e.lower() for e in errors)
 
