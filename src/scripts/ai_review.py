@@ -1608,6 +1608,9 @@ def _strip_wiki_headers(content: str) -> str:
     return "\n".join(clean_lines).strip()
 
 
+_ADR_TRIGGERS = ["# ADR:", "Decision /", "Exposes: FM", "AT[", "docs/adr/"]
+
+
 def load_review_context(diff: str = "") -> str:
     """
     Load project architecture guidelines for the review prompt.
@@ -1678,6 +1681,8 @@ def _select_context_sections(diff: str, context_text: str, always_include: Optio
         "rbac": ["require_permission", "Role", "permission", "src/presentation/api/"],
         "migrations": ["migrations/versions/", "alembic", "op.add_column"],
         "clean_arch": ["src/domain/", "src/application/", "src/infrastructure/"],
+        "vocabulary": _ADR_TRIGGERS,
+        "adr_decision_block": _ADR_TRIGGERS,
     }
 
     # 2. Identify active sections
@@ -3351,6 +3356,8 @@ def _get_active_context_sections(diff: str) -> str:
         "rbac": ["require_permission", "Role", "permission", "src/presentation/api/"],
         "migrations": ["migrations/versions/", "alembic", "op.add_column"],
         "clean_arch": ["src/domain/", "src/application/", "src/infrastructure/"],
+        "vocabulary": _ADR_TRIGGERS,
+        "adr_decision_block": _ADR_TRIGGERS,
     }
     active = {"micro_checks"}
     for section_id, patterns in trigger_map.items():

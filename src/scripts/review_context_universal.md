@@ -6,188 +6,75 @@
 
 ---
 
-## [RULE:SECRETS] Secrets and Credentials Protection
+## [RULE:SECRETS] Secrets Protection
 <!-- SECTION:secrets -->
-
-Never commit secrets, API keys, passwords, database credentials, or tokens to version control.
-Always use environment variables or a secure secret manager.
+No secrets, keys, or credentials in git. Use environment variables/secret managers.
 
 ---
 
-## [RULE:TDD-LAW] Test-Driven Development Iron Law
+## [RULE:TDD-LAW] TDD Law
 <!-- SECTION:tdd_law -->
-
-Every new feature, bug fix, or service method must have corresponding tests.
-Flag any staged code change that lacks test coverage or disables/weakens existing tests.
+All new features, fixes, or service methods must have corresponding tests. Do not weaken/disable tests.
 
 ---
 
-## [RULE:DATABASE-BYPASS] Bypassing Repository Layers
+## [RULE:DATABASE-BYPASS] Repository Bypass
 <!-- SECTION:database_bypass -->
-
-Domain/business and presentation layers must not access database sessions or queries directly.
-Always route database access through a Repository or Unit of Work pattern layer to ensure transactional safety.
+Domain/business/API layers must route DB access through Repository/Unit of Work; no direct session/query access.
 
 ---
 
-## [RULE:CLEAN-CODE] Commented-out Code & Dead Code
+## [RULE:CLEAN-CODE] Dead Code
 <!-- SECTION:clean_code -->
-
-Never commit commented-out code blocks or obsolete functions in source files.
-Clean up dead imports and stale placeholders before staging.
+Clean up dead/commented-out code, obsolete functions, dead imports, and stale placeholders.
 
 ---
 
 ## [RULE:DEPENDENCIES] Dependency Governance
 <!-- SECTION:dependencies -->
-
-Any addition, removal, or modification of dependencies in pyproject.toml, package.json, or other package files must be explicitly documented and listed for developer/user review.
+Document and list all pyproject.toml/package.json/dependency changes for review.
 
 ---
 
-## [SENSOR:DIFF-AUDIT] Universal Micro-Check Prompts
+## [SENSOR:DIFF-AUDIT] Micro-Checks
 <!-- SECTION:micro_checks -->
-
-When the staged diff contains any of the following patterns, check the corresponding requirement.
-
-| If the diff adds or changes...                                    | Then check...                                                                                                                                                                              | Default severity |
-|-------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------|
-| A new outbound HTTP call (`requests.*`, `httpx.*`, `urllib.*`)    | Does it specify an explicit `timeout=` parameter (both connect and read)?                                                                                                                  | MEDIUM           |
-| A new `logger.error(...)` inside an `except` block               | Does it include `exc_info=True`?                                                                                                                                                           | LOW              |
-| A new `Mapped[dict]` / `JSON` column in database models           | Is there a corresponding validation schema added in the same diff?                                                                                                                         | MEDIUM           |
-| A new `*Create` or `*Update` schema                               | Does it forbid extra fields (`{"extra": "forbid"}`)?                                                                                                                                       | MEDIUM           |
-| A new `retry` loop or exception-and-retry pattern               | Does it use exponential backoff with jitter rather than a fixed sleep?                                                                                                                    | LOW              |
+- HTTP calls (`requests`/`httpx`/`urllib`): check for explicit `timeout=` (connect & read) [MEDIUM]
+- `logger.error` in `except`: check for `exc_info=True` [LOW]
+- `Mapped[dict]`/`JSON` column: check for validation schema in same diff [MEDIUM]
+- `*Create`/`*Update` schema: check for extra field restriction (`extra="forbid"`) [MEDIUM]
+- `retry` loop: check for exponential backoff + jitter [LOW]
 
 ---
 
-## [APPENDIX:VOCABULARY] Engineering Vocabulary — AT/FM Codes
-
+## [APPENDIX:VOCABULARY] AT/FM Vocabulary
 <!-- SECTION:vocabulary -->
+Use AT/FM codes in verdicts. Define specific reasons.
+AT Tradeoffs: AT1 Consistency vs Availability, AT2 Latency vs Throughput, AT3 Simplicity vs Flexibility, AT4 Precomputation vs On-Demand, AT5 Centralisation vs Distribution, AT6 Generality vs Specialisation, AT7 Automation vs Control, AT8 Coupling vs Cohesion, AT9 Correctness vs Performance, AT10 Synchronous vs Asynchronous.
+FM Failure Modes: FM1 Single Point of Failure, FM2 Cascading Failures, FM3 Unbounded Resource Consumption, FM4 Data Consistency Failure, FM5 Latency Amplification, FM6 Hotspotting, FM7 Thundering Herd, FM8 Schema/Contract Violation, FM9 Silent Data Corruption, FM10 Security Breach, FM11 Observability Blindness, FM12 Split-Brain.
+Archetypes: A1 Search & Discovery, A2 Social, A3 Marketplace/Transaction, A4 Media, A5 Data Intelligence, A6 Platform/API.
 
-When naming findings in your review verdict, use AT/FM codes where applicable.
-State the specific reason the code applies — never the generic definition.
-Example: "FM9: silent data corruption — log_unauthorized_access writes are
-silently dropped on exception paths because the test fixture commits where
-production get_db() does not."
+---
 
-### AT — Architecture Tradeoffs (10)
-
-Every design decision resolves one of these.
-
-| Code | Name                           | You are choosing between                          |
-|------|--------------------------------|---------------------------------------------------|
-| AT1  | Consistency vs Availability    | Correct data vs system stays up                   |
-| AT2  | Latency vs Throughput          | Speed per request vs requests per second          |
-| AT3  | Simplicity vs Flexibility      | Easy to understand vs easy to extend              |
-| AT4  | Precomputation vs On-Demand    | Pay at write time vs pay at read time             |
-| AT5  | Centralisation vs Distribution | Single authority vs no single point of failure    |
-| AT6  | Generality vs Specialisation   | All cases vs common case optimised                |
-| AT7  | Automation vs Control          | System decides vs human decides                   |
-| AT8  | Coupling vs Cohesion           | Independent deployment vs co-located logic        |
-| AT9  | Correctness vs Performance     | Right answer vs fast answer                       |
-| AT10 | Synchronous vs Asynchronous    | Immediate response vs deferred processing         |
-
-### FM — Failure Modes (12)
-
-Every component introduces at least one.
-
-| Code | Name                           | What goes wrong                                   |
-|------|--------------------------------|---------------------------------------------------|
-| FM1  | Single Point of Failure        | One component dies, system dies                   |
-| FM2  | Cascading Failures             | One failure triggers the next                     |
-| FM3  | Unbounded Resource Consumption | Memory / connections / threads grow without limit |
-| FM4  | Data Consistency Failure       | Components disagree on state                      |
-| FM5  | Latency Amplification          | Small latencies multiply across hops              |
-| FM6  | Hotspotting                    | One node gets disproportionate load               |
-| FM7  | Thundering Herd                | Mass simultaneous retry overwhelms recovery       |
-| FM8  | Schema / Contract Violation    | One side of a boundary changes, other breaks      |
-| FM9  | Silent Data Corruption         | Wrong data propagates without alerts              |
-| FM10 | Security Breach                | Unauthorised access to data or compute            |
-| FM11 | Observability Blindness        | System fails but team cannot see where            |
-| FM12 | Split-Brain                    | Two nodes both think they are primary             |
-
-### System Archetype Classification (project-specific)
-
-Your project's archetype classification and the corresponding FM weights belong in
-`review_context_project.md`, not here.
-
-When `review_context_project.md` defines a system archetype, weight the associated
-failure modes most heavily when reviewing diffs for that project.
-
-**How to classify your project**: identify which of the six archetypes best describes
-the system, or which combination applies:
-
-| Code | Archetype                  | Core concern                   | FM weights        |
-|------|----------------------------|--------------------------------|-------------------|
-| A1   | Search & Discovery         | Relevance + latency            | FM6, FM3          |
-| A2   | Social & Communication     | Delivery + fan-out             | FM3, FM6, FM7     |
-| A3   | Marketplace & Transaction  | Correctness + consistency      | FM4, FM10         |
-| A4   | Media Delivery             | CDN hit rate + storage         | FM6, FM8          |
-| A5   | Data Intelligence          | Quality + freshness            | FM8, FM9          |
-| A6   | Platform & API             | Reliability + backwards compat | FM2, FM8          |
-
-Add to your `review_context_project.md`:
-
-```
-## System Archetype
-[A1–A6 or combination — e.g. "A3 Marketplace & Transaction"]
-
-### Archetype FM Weights
-[List which failure modes to weight most heavily for this codebase
-and map them to your project-specific architectural invariants]
-
-Example (A3 project):
-FM4 Data Consistency Failure → maps to: [your UoW/transaction rules]
-FM10 Security Breach         → maps to: [your RBAC/auth rules]
-FM8  Schema Violation        → maps to: [your migration detection rules]
-FM9  Silent Data Corruption  → maps to: [your audit log path rules]
-```
-
-### Decision Block Format (ADVISORY check)
-
-When a commit introduces a new architectural pattern — new service, new async boundary,
-new data store, new external integration — check whether the referenced ADR contains a
-decision block in this format:
-
+## [RULE:ADR-DECISION-BLOCK] Decision Block Format (ADVISORY check)
+<!-- SECTION:adr_decision_block -->
+For new patterns (service, async boundary, data store, external integration), ADR must contain a decision block in format:
 ```
 Decision: [what was chosen]
 Tradeoff: AT[N] — choosing [pole] because [reason]
 Exposes:  FM[N] — [what could go wrong]
 Mitigation: [how the failure mode is addressed]
 ```
+If missing, flag as ADVISORY.
 
-A decision that cannot name its AT tradeoff or its exposed FM is an incomplete
-architectural record. Flag as ADVISORY.
-
-*Source: The Computing Series — computingseries.com (CC BY 4.0)*
-
-## Gate Finding Output Format
-
-Every FAIL and qualifying WARN finding in the gate verdict must use the decision
-block format. A finding that cannot be expressed in this format is a suspicion,
-not a finding — return suspicions as questions to the developer, not as blocking
-concerns.
-
-Required format for each FAIL or WARN finding:
-
+## Finding Format
+All FAIL/WARN verdicts must use format:
 ```
-Finding:      [one sentence — what the code does, not what it should do]
-Tradeoff:     AT[N] — this code chose [specific pole] which [consequence for this system]
-Exposes:      FM[N] — this creates [specific named risk]; [file:line if determinable]
-Remediation:  [specific change that addresses the FM without reverting the AT intent]
+Finding:      [one sentence - what code does]
+Tradeoff:     AT[N] - chose [specific pole] with [consequence]
+Exposes:      FM[N] - [specific risk]; [file:line if FM4/FM10 FAIL]
+Remediation:  [specific change addressing the FM without reverting AT intent]
 ```
-
 Rules:
-- AT and FM codes must come from the vocabulary tables above. No invented codes.
-- The Tradeoff line names a specific pole, not just the tradeoff category.
-  Incorrect: "AT1 — consistency vs availability"
-  Correct:   "AT1 — this code chose availability; the cache write precedes the database
-              commit, so a crash between the two leaves the cache holding a value the
-              database will never confirm"
-- The Exposes line names a specific risk in this codebase, not the generic FM definition.
-  FM10 and FM4 findings at FAIL severity must include file:line.
-- The Remediation addresses the FM. "Delete this" is not a remediation.
-- PASS_FAST and PASS verdicts do not require the decision block.
-- WARN verdicts require the decision block when the concern touches FM4, FM9, FM10,
-  or FM12. For other WARN concerns it is encouraged but not required.
-
+- Codes from vocabulary only. Tradeoff must name specific pole. Exposes must name specific risk.
+- FM4/FM10 FAIL findings must include file:line.
+- WARN requires format only for FM4/FM9/FM10/FM12. PASS/PASS_FAST do not require it.
