@@ -61,6 +61,11 @@ def get_commits_after(start_time_str: str) -> list[dict]:
     except Exception:
         return []
 
+def _override_success_has_commit(prev_start: str) -> bool:
+    """Cross-check: does a claimed success have a backing commit?"""
+    return len(get_commits_after(prev_start)) > 0
+
+
 
 def infer_and_close_previous_session() -> tuple[str | None, str | None]:
     """Retrospectively close the previous session and log its outcome to the ledger."""
@@ -130,6 +135,14 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             outcome = prev_data["outcome_override"]
             source = prev_data.get("outcome_override_source", "agent_override")
             note = prev_data.get("outcome_override_note", "Closed via explicit override.")
+            # HIB-053: cross-check before accepting success claim
+            if outcome == "success" and not _override_success_has_commit(prev_start):
+                outcome = "partial"
+                note = (
+                    "outcome_override claimed success but no commit found after session start. "
+                    "Downgraded to partial (HIB-053 write-before-verify guard)."
+                )
+                source = "inferred"
         else:
             # 1. Check for escalation
             is_escalated = False
@@ -241,8 +254,18 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             try:
                 close_data = json.loads(close_file.read_text(encoding="utf-8"))
                 if close_data.get("session_id") == prev_id:
-                    outcome = close_data.get("outcome", outcome)
-                    note = close_data.get("outcome_note", note)
+                    claimed_outcome = close_data.get("outcome", outcome)
+                    # HIB-053: cross-check before accepting success claim
+                    if claimed_outcome == "success" and not _override_success_has_commit(prev_start):
+                        claimed_outcome = "partial"
+                        close_note = (
+                            "gemini_session_close claimed success but no commit found after session start. "
+                            "Downgraded to partial (HIB-053 write-before-verify guard)."
+                        )
+                    else:
+                        close_note = close_data.get("outcome_note", note)
+                    outcome = claimed_outcome
+                    note = close_note
                     source = "gemini_close"
                     try:
                         close_file.unlink()

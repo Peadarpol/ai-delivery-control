@@ -105,6 +105,50 @@ class TestInitSessionSpecAwareness:
             assert outcome == "success"
             assert note == "Explicit override test."
 
+    def test_override_success_downgraded_when_no_commits(self, clean_state):
+        """outcome_override claims success but no commits exist -> downgraded to partial."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import json
+        with open(session_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["outcome_override"] = "success"
+        data["outcome_override_source"] = "agent_override"
+        with open(session_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+            
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+             
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "partial"
+            assert "Downgraded to partial" in note
+            assert "write-before-verify guard" in note
+
+    def test_override_success_accepted_when_commits_exist(self, clean_state):
+        """outcome_override claims success and commits exist -> success accepted."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import json
+        with open(session_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["outcome_override"] = "success"
+        data["outcome_override_source"] = "agent_override"
+        with open(session_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+            
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[{"sha": "abc", "date": "2026-05-30", "message": "fix"}]):
+             
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "success"
+
 
 class TestInitSessionGitStash:
     @patch("subprocess.run")
@@ -171,6 +215,31 @@ class TestInitSessionGeminiClose:
             assert note == "Closed via gemini close protocol test"
             assert "Gemini close file consumed" in captured.out
             assert not close_file.exists()
+
+    def test_gemini_close_success_downgraded_when_no_commits(self, clean_state, capsys):
+        """gemini_session_close claims success but no commits exist -> downgraded to partial."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import json
+        close_file = session_file.parent / "gemini_session_close.json"
+        close_data = {
+            "session_id": "test-session-123",
+            "outcome": "success",
+            "outcome_note": "Should be downgraded"
+        }
+        close_file.write_text(json.dumps(close_data), encoding="utf-8")
+
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            
+            assert outcome == "partial"
+            assert "Downgraded to partial" in note
+            assert "write-before-verify guard" in note
 
     def test_gemini_close_mismatch(self, clean_state, capsys):
         """Verify that a non-matching session close file is not consumed and issues warning."""
