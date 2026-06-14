@@ -3,6 +3,13 @@ import re
 import sys
 from pathlib import Path
 
+import sys
+try:
+    from harness_utils import _safe_git_env
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "src" / "scripts"))
+    from harness_utils import _safe_git_env
+
 # --- Fallback YAML Parser ---
 
 def parse_yaml_fallback(content: str) -> dict:
@@ -587,7 +594,8 @@ def main():
             capture_output=True,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            env=_safe_git_env()
         )
         diff_text = res.stdout if res.returncode == 0 else ""
 
@@ -596,7 +604,8 @@ def main():
             capture_output=True,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            env=_safe_git_env()
         )
         changed_files = [f.strip() for f in res_files.stdout.splitlines() if f.strip()]
 

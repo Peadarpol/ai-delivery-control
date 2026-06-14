@@ -5,6 +5,13 @@ import subprocess
 import time
 from pathlib import Path
 
+import sys
+try:
+    from harness_utils import _safe_git_env
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "src" / "scripts"))
+    from harness_utils import _safe_git_env
+
 def find_project_root() -> Path:
     try:
         result = subprocess.run(
@@ -12,6 +19,7 @@ def find_project_root() -> Path:
             capture_output=True,
             text=True,
             encoding="utf-8",
+            env=_safe_git_env()
         )
         if result.returncode == 0 and result.stdout.strip():
             return Path(result.stdout.strip())
