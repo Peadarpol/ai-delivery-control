@@ -254,8 +254,18 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             try:
                 close_data = json.loads(close_file.read_text(encoding="utf-8"))
                 if close_data.get("session_id") == prev_id:
-                    outcome = close_data.get("outcome", outcome)
-                    note = close_data.get("outcome_note", note)
+                    claimed_outcome = close_data.get("outcome", outcome)
+                    # HIB-053: cross-check before accepting success claim
+                    if claimed_outcome == "success" and not _override_success_has_commit(prev_start):
+                        claimed_outcome = "partial"
+                        close_note = (
+                            "gemini_session_close claimed success but no commit found after session start. "
+                            "Downgraded to partial (HIB-053 write-before-verify guard)."
+                        )
+                    else:
+                        close_note = close_data.get("outcome_note", note)
+                    outcome = claimed_outcome
+                    note = close_note
                     source = "gemini_close"
                     try:
                         close_file.unlink()
