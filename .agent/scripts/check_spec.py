@@ -16,6 +16,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
+from dataclasses import dataclass, field
 
 # Bootstrap: add src/scripts to path before harness_utils import
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
@@ -46,6 +47,22 @@ SESSION_FILE = STATE_DIR / "session.json"
 EVENTS_FILE = STATE_DIR / "harness_events.jsonl"
 
 
+
+@dataclass
+class Pass1Result:
+    passed: bool
+    errors: list[str] = field(default_factory=list)
+    high_risk_dba: bool = False
+    archetype: str | None = None
+
+class CriterionFeedback(BaseModel):
+
+    criterion_text: str = Field(..., description="The original text of the criterion.")
+    is_testable: bool = Field(..., description="Is the criterion testable and concrete?")
+    is_specific: bool = Field(..., description="Is it specific and unambiguous?")
+    is_measurable: bool = Field(..., description="Does it define measurable success?")
+    feedback: str = Field(..., description="Actionable feedback for this specific criterion.")
+
 class SpecQualityVerdict(BaseModel):
     verdict: Literal["PASS", "ADVISORY", "FAIL"] = Field(..., description="Overall quality assessment. FAIL blocks work.")
     clarity_score: int = Field(..., description="1-10 clarity rating.")
@@ -54,6 +71,7 @@ class SpecQualityVerdict(BaseModel):
     resolved_assumptions: bool = Field(..., description="Are surfaced assumptions clearly resolved?")
     advisories: List[str] = Field(default_factory=list, description="Constructive feedback to print.")
     blocking_concerns: List[str] = Field(default_factory=list, description="Severe blocking errors (must be empty on PASS).")
+    per_criterion_feedback: List[CriterionFeedback] = Field(default_factory=list, description="Per-criterion breakdown.")
 
 
 def load_config() -> dict:
@@ -233,7 +251,7 @@ def resolve_spec_file(spec_input: str | None, specs_path: str) -> tuple[str, Pat
     return None
 
 
-def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> tuple[bool, list[str], bool]:
+def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> Pass1Result:
     """Execute Pass 1: Structural static checks. Returns (Passed, Errors, HighRiskDBA).
 
     mode controls enforcement level:
@@ -243,6 +261,7 @@ def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> tuple[bo
     """
     errors = []
     high_risk_dba = False
+    archetype = None
 
     def _fail(message: str) -> None:
         """Record a structural failure — advisory-only in discovery, blocking otherwise."""
@@ -338,6 +357,11 @@ def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> tuple[bo
     if re.search(r"\[HIGH_RISK_SCHEMA_CHANGE\]", content, re.IGNORECASE):
         high_risk_dba = True
 
+    # Archetype check
+    archetype_match = re.search(r"\bSystem Archetype\s*:\s*(.+)", content, re.IGNORECASE)
+    if archetype_match:
+        archetype = archetype_match.group(1).strip()
+
     # 7. Status Sign-off APPROVED Check (mode-conditional)
     is_approved = bool(re.search(r"\*\*Status\*\*:\s*APPROVED", content, re.IGNORECASE))
     pre_commit_env = os.environ.get("PRE_COMMIT") == "1"
@@ -356,10 +380,10 @@ def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> tuple[bo
             else:
                 errors.append("Specification status must be set to 'APPROVED' prior to commit/PR gate execution.")
 
-    return len(errors) == 0, errors, high_risk_dba
+    return Pass1Result(passed=len(errors) == 0, errors=errors, high_risk_dba=high_risk_dba, archetype=archetype)
 
 
-def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> tuple[int, SpecQualityVerdict | None]:
+def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict, archetype: str | None = None) -> tuple[int, SpecQualityVerdict | None]:
     """Execute Pass 2: Quality LLM Gate. Returns (ExitCode, Verdict)."""
     # 1. CI Skip check
     ci_env = os.environ.get("CI") == "1" or os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("GITLAB_CI") == "true"
@@ -393,7 +417,27 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
             "isolation boundaries. If these details are absent, you must reject with FAIL."
         )
 
+
+    archetype_scrutiny = ""
+    ARCHETYPE_FM_MAP = {
+        "A1": ["FM6: Hotspotting", "FM3: Unbounded Resource Consumption"],
+        "A2": ["FM3: Unbounded Resource Consumption", "FM6: Hotspotting", "FM7: Thundering Herd"],
+        "A3": ["FM4: Data Consistency Failure", "FM10: Security Breach"],
+        "A4": ["FM6: Hotspotting", "FM8: Schema / Contract Violation"],
+        "A5": ["FM8: Schema / Contract Violation", "FM9: Silent Data Corruption"],
+        "A6": ["FM2: Cascading Failures", "FM8: Schema / Contract Violation"]
+    }
+    if archetype:
+        fms = ARCHETYPE_FM_MAP.get(archetype, [])
+        if fms:
+            archetype_scrutiny = (
+                f"\nSystem Archetype: {archetype}\n"
+                f"Dominant failure modes: {fms}\n"
+                f"Apply heightened scrutiny to criteria that could expose these FMs."
+            )
+
     # 3. System Prompt and Isolation
+
     system_prompt = (
         "You are an adversarial AI Specification Quality Auditor. Your sole job is to review software specifications "
         "and ruthlessly flag vagueness, unstated assumptions, ambiguous boundaries, and untestable acceptance criteria.\n\n"
@@ -403,7 +447,7 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
         "1. Testable Criteria: Are the acceptance criteria (Gherkin/BDD scenarios) specific, testable, and measurable?\n"
         "2. Sharp Boundaries: Is the out-of-scope section explicit enough to prevent scope creep? Are boundaries sharp?\n"
         "3. Resolved Assumptions: Are all surfaced assumptions explicitly resolved?\n"
-        f"{dba_scrutiny}\n"
+        f"{dba_scrutiny}\n{archetype_scrutiny}\n"
         "You must return a JSON response conforming strictly to the SpecQualityVerdict schema:\n"
         "{\n"
         '  "verdict": "PASS" | "ADVISORY" | "FAIL",\n'
@@ -412,7 +456,16 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
         '  "sharp_boundaries": bool,\n'
         '  "resolved_assumptions": bool,\n'
         '  "advisories": ["advisory1", ...],\n'
-        '  "blocking_concerns": ["concern1", ...] (must be empty on PASS)\n'
+        '  "blocking_concerns": ["concern1", ...] (must be empty on PASS),\n'
+        '  "per_criterion_feedback": [\n'
+        '    {\n'
+        '      "criterion_text": "...",\n'
+        '      "is_testable": bool,\n'
+        '      "is_specific": bool,\n'
+        '      "is_measurable": bool,\n'
+        '      "feedback": "..."\n'
+        '    }\n'
+        '  ]\n'
         "}"
     )
 
@@ -440,6 +493,7 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
             resolved_assumptions=is_pass,
             advisories=["Mock advisory message"] if is_adv or is_pass else [],
             blocking_concerns=mock_concerns if mock_verdict == "FAIL" else [],
+            per_criterion_feedback=[]
         )
         return handle_pass2_outcome(verdict, spec_id, 0, 0)
 
@@ -474,11 +528,33 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
         # Parse result
         try:
             verdict_dict = json.loads(response_text)
-            verdict = SpecQualityVerdict(**verdict_dict)
         except Exception as pe:
-            # Parse error / Validation error -> Configuration/Format error, exit 1
-            print(f"❌ [REVIEW-GATE] Configuration Error: LLM response failed quality verdict schema validation: {pe}\nRaw text: {response_text}", file=sys.stderr)
+            print(f"❌ [REVIEW-GATE] Configuration Error: LLM response failed JSON parsing: {pe}\nRaw text: {response_text}", file=sys.stderr)
             return 1, None
+
+        try:
+            verdict = SpecQualityVerdict(**verdict_dict)
+        except Exception as e:
+            log_harness_event({
+                "event_type": "pass2_parse_failure",
+                "severity": "WARNING",
+                "payload": {
+                    "spec_id": spec_id,
+                    "reason": "Pass 2 response malformed; fell back to top-level verdict"
+                }
+            })
+            verdict = SpecQualityVerdict(
+                verdict=verdict_dict.get("verdict", "ADVISORY"),
+                clarity_score=verdict_dict.get("clarity_score", 5),
+                testable_criteria=verdict_dict.get("testable_criteria", False),
+                sharp_boundaries=verdict_dict.get("sharp_boundaries", False),
+                resolved_assumptions=verdict_dict.get("resolved_assumptions", False),
+                advisories=verdict_dict.get("advisories", [
+                    "Per-criterion feedback unavailable — LLM response malformed."
+                ]),
+                blocking_concerns=verdict_dict.get("blocking_concerns", []),
+                per_criterion_feedback=[]
+            )
             
         # Update token spent log atomically under lock
         with _lock_session(SESSION_FILE):
@@ -524,6 +600,36 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
         return 1, None
 
 
+def write_spec_grade_card(verdict: SpecQualityVerdict, spec_id: str) -> None:
+    """Writes .agent/state/spec_grade_{SPEC_ID}.md."""
+    state_dir = PROJECT_ROOT / ".agent" / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    card_path = state_dir / f"spec_grade_{spec_id}.md"
+    
+    content = [f"# Spec Grade Card: {spec_id}", f"**Verdict:** {verdict.verdict}", f"**Clarity Score:** {verdict.clarity_score}/10", ""]
+    if verdict.advisories:
+        content.append("## Advisories")
+        for adv in verdict.advisories:
+            content.append(f"- {adv}")
+        content.append("")
+    if verdict.blocking_concerns:
+        content.append("## Blocking Concerns")
+        for conc in verdict.blocking_concerns:
+            content.append(f"- ❌ {conc}")
+        content.append("")
+    if verdict.per_criterion_feedback:
+        content.append("## Per-Criterion Feedback")
+        for f in verdict.per_criterion_feedback:
+            status = "✅" if (f.is_testable and f.is_specific and f.is_measurable) else "⚠️"
+            content.append(f"### {status} Criterion: {f.criterion_text[:50]}...")
+            content.append(f"- **Testable:** {f.is_testable}")
+            content.append(f"- **Specific:** {f.is_specific}")
+            content.append(f"- **Measurable:** {f.is_measurable}")
+            content.append(f"- **Feedback:** {f.feedback}")
+            content.append("")
+            
+    card_path.write_text("\n".join(content), encoding="utf-8")
+
 def handle_pass2_outcome(verdict: SpecQualityVerdict, spec_id: str, input_tokens: int, output_tokens: int) -> tuple[int, SpecQualityVerdict]:
     """Uniform printing, persistent audit log creation, and outcome routing."""
     # Persistent Audit Trail in harness_events.jsonl
@@ -547,6 +653,11 @@ def handle_pass2_outcome(verdict: SpecQualityVerdict, spec_id: str, input_tokens
         "severity": "ERROR" if verdict.verdict == "FAIL" else "WARNING" if verdict.verdict == "ADVISORY" else "INFO",
         "payload": payload
     })
+
+    try:
+        write_spec_grade_card(verdict, spec_id)
+    except Exception as e:
+        print(f"⚠️  [REVIEW-GATE] Failed to write spec grade card: {e}", file=sys.stderr)
 
     if verdict.verdict == "PASS":
         print(f"✅ [REVIEW-GATE] Pass 2 Quality Gate PASSED for '{spec_id}'. Clarity Score: {verdict.clarity_score}/10.")
@@ -683,10 +794,10 @@ def main() -> int:
     print(f"🔍 [REVIEW-GATE] Running Pass 1: Static Structural Checks for '{spec_id}'...")
 
     # 6. Pass 1 with mode
-    pass1_ok, pass1_errors, high_risk_dba = run_pass1(content, spec_id, mode)
-    if not pass1_ok:
+    result = run_pass1(content, spec_id, mode)
+    if not result.passed:
         print(f"❌ [REVIEW-GATE] Pass 1 Structural Checks FAILED for '{spec_id}':", file=sys.stderr)
-        for err in pass1_errors:
+        for err in result.errors:
             print(f"  ❌ {err}", file=sys.stderr)
         return 1
 
@@ -702,7 +813,7 @@ def main() -> int:
         print("  Review both specs to confirm distinct scope before proceeding.")
 
     print(f"🔍 [REVIEW-GATE] Running Pass 2: Quality Review for '{spec_id}'...")
-    exit_code, _ = run_pass2(content, spec_id, high_risk_dba, config)
+    exit_code, _ = run_pass2(content, spec_id, result.high_risk_dba, config, result.archetype)
     return exit_code
 
 

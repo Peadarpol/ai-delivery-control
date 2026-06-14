@@ -71,8 +71,8 @@ implementation life. Extends an LLM call that already fires; adds prompt length,
 catches the failure class (silent-on-NFR specs → silently-wrong-on-NFR code) that is most expensive
 to unwind downstream. Plausibly **negative net loop cost** on a non-trivial feature.
 **Driver delta**: +0 round-trips (extends existing), +0 mandated docs, possible +1 spec redraft if it fires.
-**Relationship to existing**: Natural extension of **T1-L-12** (spec grader per-criterion feedback, ⬜)
-and complements **T1-L-14** (archetype-driven FM weighting, ⬜).
+**Relationship to existing**: Natural extension of **T1-L-12** (spec grader per-criterion feedback, ✅ (v1.4.1))
+and complements **T1-L-14** (archetype-driven FM weighting, ✅ (v1.4.1)).
 **Tier rationale**: Strongest candidate even for a solo dev — pays for itself in avoided re-implementation.
 **Effort**: Low.
 
