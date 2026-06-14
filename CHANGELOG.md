@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.2 — 2026-06-14
+
+### Gate Correctness & Backlog Repair
+- Reconciled backlog and roadmap milestones, and updated issue statuses.
+
 ## v1.4.1 — 2026-06-14
 
 ### Bug fixes

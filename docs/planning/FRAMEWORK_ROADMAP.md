@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.3.4
-**Target Release**: v1.4.0
-**Last Updated**: 2026-06-12
+**Current Version**: 1.4.1
+**Target Release**: v1.4.2
+**Last Updated**: 2026-06-14
 
 ---
 
@@ -365,7 +365,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ---
 
-### v1.4.0 — Intelligent Gate 📋 PLANNED (Q1 2027)
+### v1.4.0 — Intelligent Gate ✅ SHIPPED (2026-06-13)
 
 **Goal**: The gate gains deterministic pre-context (evidence gathering, shared `GateContext`, per-capability calibration) and a confidence model for structural signals. Most of the original "Chain A — Gate Intelligence" scope (PageRank repo map, ADR injection, diff-aware routing, wiki layer, model tiering, policy notes) shipped earlier than planned — see Capability Inventory note below. v1.4.0 narrows to the remaining gate-context and calibration work plus state persistence.
 
@@ -418,7 +418,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ---
 
-### v1.4.1 — Outer Loop Quality & Security Review 📋 PLANNED (Q1/Q2 2027)
+### v1.4.1 — Outer Loop Quality & Security Review ✅ SHIPPED (2026-06-14)
 
 **Goal**: Complete the outer loop grading/classification trio (spec grader, decision blocks, archetype classification) and deliver the formal context-injection security review before broader distribution. Split from v1.4.0 to keep that milestone's Medium/Medium-High gate-architecture work from compounding with this Medium-effort outer-loop and security batch.
 
@@ -436,6 +436,21 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security | ✅ (v1.4.1) |
 
 **Dependency note**: T1-L-13 depends on T1-G-12 ✅ (AT/FM vocabulary, delivered v1.3.3) — no blocker. T1-L-14 depends on T1-G-12 ✅ and benefits from T1-L-12 landing first (natural delivery companion per backlog). T1-K-02a delivers inside the T1-K-02 document — sequence as one PR.
+
+---
+
+### v1.4.2 — Gate Correctness & Backlog Repair ✅ SHIPPED (2026-06-14)
+
+**Goal**: Restore universal-rule enforcement at review time — the gate's universal RULE layer and AT/FM vocabulary were silently filtered out of the LLM context (HIB-055). Also repair backlog/roadmap integrity drift discovered post-v1.4.1, and fix a sibling false-success bug in session close inference (HIB-053b).
+
+**Delivered**:
+
+| ID | Item | Effort | Category | Status |
+|----|------|--------|----------|--------|
+| HIB-055 | Universal RULE sections + AT/FM vocabulary reach the reviewer (always-inject RULE sections; trigger-gate vocabulary on ADR presence) | Medium | Gate correctness | ✅ (v1.4.2) |
+| T1-L-13a | ADR decision-block ADVISORY rule (LLM-side), consuming HIB-055's vocabulary trigger | Low | Outer loop | ✅ (v1.4.2) |
+| HIB-053b | Spec-mtime false-success in `infer_and_close_previous_session()` — cap commitless spec work at partial; use `git status` not mtime | Medium | Bug fix | ✅ (v1.4.2) |
+| (repair) | Backlog repair: re-register HIB-055, HIB-053c; reconcile T1-L-13/T1-G-12 markers; roadmap reconciliation | Low | Hygiene | ✅ (v1.4.2) |
 
 ---
 
@@ -651,9 +666,10 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.0
+**Active milestone**: v1.4.2
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**Next major milestone**: v1.4.0 (planning begins)
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅
+**Next major milestone**: v1.5.0 (planning begins)
 
 ---
 
