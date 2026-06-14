@@ -200,6 +200,43 @@ class TestPass2QualityGate:
             assert "Ambiguous Gherkin steps" in verdict.blocking_concerns
 
 
+    @patch("providers.get_provider")
+    def test_pass2_malformed_json_degrades_cleanly(self, mock_get_provider, base_spec_content, tmp_path):
+        mock_provider = MagicMock()
+        # Return valid JSON but missing required Pydantic fields to trigger fallback
+        mock_provider.call_llm.return_value = (
+            '{"clarity_score": 9}',
+            100, 20
+        )
+        mock_get_provider.return_value = mock_provider
+        
+        config = {"budget_provider": "anthropic", "budget_model": "claude-haiku"}
+        
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-testkey"}), \
+             patch("check_spec.SESSION_FILE", tmp_path / "session.json"), \
+             patch("check_spec.PROJECT_ROOT", tmp_path), \
+             patch("check_spec.log_harness_event") as mock_log:
+             
+            exit_code, verdict = check_spec.run_pass2(base_spec_content, "SPEC-001", False, config)
+            assert exit_code == 0
+            assert verdict.verdict == "ADVISORY"
+            assert "Per-criterion feedback unavailable" in verdict.advisories[0]
+            
+            # Assert pass2_parse_failure event was logged
+            mock_log.assert_any_call({
+                "event_type": "pass2_parse_failure",
+                "severity": "WARNING",
+                "payload": {
+                    "spec_id": "SPEC-001",
+                    "reason": "Pass 2 response malformed; fell back to top-level verdict"
+                }
+            })
+            
+            # Assert spec_grade card was written
+            grade_card = tmp_path / ".agent" / "state" / "spec_grade_SPEC-001.md"
+            assert grade_card.exists()
+            assert "Spec Grade Card: SPEC-001" in grade_card.read_text("utf-8")
+
 # ── Configuration vs Availability Failure partitioning ─────────────────────────
 
 class TestConfigVsAvailabilityFailures:

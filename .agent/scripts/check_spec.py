@@ -46,6 +46,13 @@ SESSION_FILE = STATE_DIR / "session.json"
 EVENTS_FILE = STATE_DIR / "harness_events.jsonl"
 
 
+class CriterionFeedback(BaseModel):
+    criterion_text: str = Field(..., description="The original text of the criterion.")
+    is_testable: bool = Field(..., description="Is the criterion testable and concrete?")
+    is_specific: bool = Field(..., description="Is it specific and unambiguous?")
+    is_measurable: bool = Field(..., description="Does it define measurable success?")
+    feedback: str = Field(..., description="Actionable feedback for this specific criterion.")
+
 class SpecQualityVerdict(BaseModel):
     verdict: Literal["PASS", "ADVISORY", "FAIL"] = Field(..., description="Overall quality assessment. FAIL blocks work.")
     clarity_score: int = Field(..., description="1-10 clarity rating.")
@@ -54,6 +61,7 @@ class SpecQualityVerdict(BaseModel):
     resolved_assumptions: bool = Field(..., description="Are surfaced assumptions clearly resolved?")
     advisories: List[str] = Field(default_factory=list, description="Constructive feedback to print.")
     blocking_concerns: List[str] = Field(default_factory=list, description="Severe blocking errors (must be empty on PASS).")
+    per_criterion_feedback: List[CriterionFeedback] = Field(default_factory=list, description="Per-criterion breakdown.")
 
 
 def load_config() -> dict:
@@ -412,7 +420,16 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
         '  "sharp_boundaries": bool,\n'
         '  "resolved_assumptions": bool,\n'
         '  "advisories": ["advisory1", ...],\n'
-        '  "blocking_concerns": ["concern1", ...] (must be empty on PASS)\n'
+        '  "blocking_concerns": ["concern1", ...] (must be empty on PASS),\n'
+        '  "per_criterion_feedback": [\n'
+        '    {\n'
+        '      "criterion_text": "...",\n'
+        '      "is_testable": bool,\n'
+        '      "is_specific": bool,\n'
+        '      "is_measurable": bool,\n'
+        '      "feedback": "..."\n'
+        '    }\n'
+        '  ]\n'
         "}"
     )
 
@@ -440,6 +457,7 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
             resolved_assumptions=is_pass,
             advisories=["Mock advisory message"] if is_adv or is_pass else [],
             blocking_concerns=mock_concerns if mock_verdict == "FAIL" else [],
+            per_criterion_feedback=[]
         )
         return handle_pass2_outcome(verdict, spec_id, 0, 0)
 
@@ -474,11 +492,33 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
         # Parse result
         try:
             verdict_dict = json.loads(response_text)
-            verdict = SpecQualityVerdict(**verdict_dict)
         except Exception as pe:
-            # Parse error / Validation error -> Configuration/Format error, exit 1
-            print(f"❌ [REVIEW-GATE] Configuration Error: LLM response failed quality verdict schema validation: {pe}\nRaw text: {response_text}", file=sys.stderr)
+            print(f"❌ [REVIEW-GATE] Configuration Error: LLM response failed JSON parsing: {pe}\nRaw text: {response_text}", file=sys.stderr)
             return 1, None
+
+        try:
+            verdict = SpecQualityVerdict(**verdict_dict)
+        except Exception as e:
+            log_harness_event({
+                "event_type": "pass2_parse_failure",
+                "severity": "WARNING",
+                "payload": {
+                    "spec_id": spec_id,
+                    "reason": "Pass 2 response malformed; fell back to top-level verdict"
+                }
+            })
+            verdict = SpecQualityVerdict(
+                verdict=verdict_dict.get("verdict", "ADVISORY"),
+                clarity_score=verdict_dict.get("clarity_score", 5),
+                testable_criteria=verdict_dict.get("testable_criteria", False),
+                sharp_boundaries=verdict_dict.get("sharp_boundaries", False),
+                resolved_assumptions=verdict_dict.get("resolved_assumptions", False),
+                advisories=verdict_dict.get("advisories", [
+                    "Per-criterion feedback unavailable — LLM response malformed."
+                ]),
+                blocking_concerns=verdict_dict.get("blocking_concerns", []),
+                per_criterion_feedback=[]
+            )
             
         # Update token spent log atomically under lock
         with _lock_session(SESSION_FILE):
@@ -524,6 +564,36 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict) -> 
         return 1, None
 
 
+def write_spec_grade_card(verdict: SpecQualityVerdict, spec_id: str) -> None:
+    """Writes .agent/state/spec_grade_{SPEC_ID}.md."""
+    state_dir = PROJECT_ROOT / ".agent" / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    card_path = state_dir / f"spec_grade_{spec_id}.md"
+    
+    content = [f"# Spec Grade Card: {spec_id}", f"**Verdict:** {verdict.verdict}", f"**Clarity Score:** {verdict.clarity_score}/10", ""]
+    if verdict.advisories:
+        content.append("## Advisories")
+        for adv in verdict.advisories:
+            content.append(f"- {adv}")
+        content.append("")
+    if verdict.blocking_concerns:
+        content.append("## Blocking Concerns")
+        for conc in verdict.blocking_concerns:
+            content.append(f"- ❌ {conc}")
+        content.append("")
+    if verdict.per_criterion_feedback:
+        content.append("## Per-Criterion Feedback")
+        for f in verdict.per_criterion_feedback:
+            status = "✅" if (f.is_testable and f.is_specific and f.is_measurable) else "⚠️"
+            content.append(f"### {status} Criterion: {f.criterion_text[:50]}...")
+            content.append(f"- **Testable:** {f.is_testable}")
+            content.append(f"- **Specific:** {f.is_specific}")
+            content.append(f"- **Measurable:** {f.is_measurable}")
+            content.append(f"- **Feedback:** {f.feedback}")
+            content.append("")
+            
+    card_path.write_text("\n".join(content), encoding="utf-8")
+
 def handle_pass2_outcome(verdict: SpecQualityVerdict, spec_id: str, input_tokens: int, output_tokens: int) -> tuple[int, SpecQualityVerdict]:
     """Uniform printing, persistent audit log creation, and outcome routing."""
     # Persistent Audit Trail in harness_events.jsonl
@@ -547,6 +617,11 @@ def handle_pass2_outcome(verdict: SpecQualityVerdict, spec_id: str, input_tokens
         "severity": "ERROR" if verdict.verdict == "FAIL" else "WARNING" if verdict.verdict == "ADVISORY" else "INFO",
         "payload": payload
     })
+
+    try:
+        write_spec_grade_card(verdict, spec_id)
+    except Exception as e:
+        print(f"⚠️  [REVIEW-GATE] Failed to write spec grade card: {e}", file=sys.stderr)
 
     if verdict.verdict == "PASS":
         print(f"✅ [REVIEW-GATE] Pass 2 Quality Gate PASSED for '{spec_id}'. Clarity Score: {verdict.clarity_score}/10.")
