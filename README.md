@@ -200,13 +200,14 @@ by structure.
 
 Convention degrades under pressure. The gate does not.
 
-The distinction maps to AT7 — Automation vs Control. Routine decisions with clear criteria
-are set toward automation: the gate reviews every commit consistently, without fatigue.
-High-stakes decisions with ambiguous criteria are set toward control: dream phase proposals
-require human approval, specifications require human sign-off, escalation triggers require
-human intervention. Automation amplifies both correct and incorrect decisions — which is
-why the gate is hard precisely where ungoverned code becomes permanent, and convention
-governs everywhere that human judgement adds more value than mechanical consistency.
+The distinction is deliberate. Routine decisions with clear criteria
+are pushed toward automation: the gate reviews every commit consistently, without fatigue.
+High-stakes decisions with ambiguous criteria remain under human control: dream phase proposals
+require approval, specifications require human sign-off and escalation triggers require
+human intervention. 
+Automation amplifies both correct and incorrect decisions, which is why the framework applies
+hard enforcement precisely where ungoverned code becomes permanent. Everywhere else, convention
+governs because human judgement adds more value than mechanical consistency.
 
 | Mechanism | Enforcement |
 |---|---|
