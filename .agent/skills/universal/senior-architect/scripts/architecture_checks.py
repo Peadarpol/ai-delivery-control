@@ -436,6 +436,32 @@ def check_adr_annotations_count(paths_config: dict):
             print(f"  ! {warning}")
 
 
+def check_adr_decision_blocks(paths_config: dict) -> list[str]:
+    """Ensures ADRs contain the standard Decision Block scaffold. Soft advisory only."""
+    advisories = []
+    docs_dir = Path("docs") / "adr"
+    if not docs_dir.exists():
+        docs_dir = Path("docs") / "decisions" / "adr"
+        if not docs_dir.exists():
+            return advisories
+
+    for path in docs_dir.rglob("*.md"):
+        try:
+            content = path.read_text(encoding="utf-8")
+            if "template" in path.name.lower():
+                continue
+            
+            has_decision_block = bool(re.search(r"##\s+Decision Block", content, re.IGNORECASE))
+            has_tradeoffs = bool(re.search(r"Tradeoffs Navigated", content, re.IGNORECASE))
+            has_failures = bool(re.search(r"Failure Modes Exposed", content, re.IGNORECASE))
+            
+            if not has_decision_block or not has_tradeoffs or not has_failures:
+                advisories.append(f"{path}: Missing or incomplete 'Decision Block' section. Consider scaffolding AT/FM tradeoffs.")
+        except Exception:
+            pass
+            
+    return advisories
+
 def compute_coupling_metrics(architecture_config: dict) -> list[str]:
     """Computes basic coupling metrics (import counts) for critical files against configured thresholds."""
     errors = []
@@ -542,6 +568,11 @@ def main():
 
     # Soft warnings (do not block commit)
     check_adr_annotations_count(paths_config)
+    adr_advisories = check_adr_decision_blocks(paths_config)
+    if adr_advisories:
+        print("\n[ADVISORY] ADR Decision Block Checks:")
+        for adv in adr_advisories:
+            print(f"  \u2139\ufe0f  {adv}")
 
     # ── Write to GateContext (T1-G-13) ──
     try:
