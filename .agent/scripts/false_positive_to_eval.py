@@ -14,8 +14,18 @@ import csv
 import hashlib
 import os
 import subprocess
+import sys
 from pathlib import Path
 
+if sys.platform == "win32":
+    import io
+    try:
+        if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+        if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+    except Exception:
+        pass
 
 def get_project_root() -> Path:
     """Resolve project root using git."""

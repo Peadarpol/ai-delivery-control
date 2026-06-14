@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.1 — 2026-06-14
+
+### Bug fixes
+- **HIB-053**: Fixed `outcome_override` and `gemini_session_close.json` write-before-commit flaws in session close protocol. Added cross-checks to verify a commit exists before accepting a success claim, downgrading to `partial` otherwise.
+- **HIB-054**: Fixed `UnicodeEncodeError` in `false_positive_to_eval.py` and `incident_to_eval.py` on Windows by wrapping standard output/error streams with UTF-8 encoding shims.
+- Framework patch migration included to roll `config.yaml` version forward.
+
 ## v1.4.0 — 2026-06-13
 
 ### Gate intelligence
