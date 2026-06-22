@@ -44,9 +44,9 @@ This makes them explicit and, where it counts, automatic.
 
 Four things, at four points in your workflow:
 
-**Before implementation begins** — a specification must exist and pass quality checks.
+**Before implementation begins** — a specification is expected to exist and pass quality checks.
 The spec gate verifies that acceptance criteria, scope boundaries, and a human
-sign-off are present before a single line of code is written.
+sign-off are present, with the goal of catching gaps before code work begins.
 
 **Before the agent starts coding** — it reads your project context, names the workflow
 it will follow, and states its approach. No freestyle.
