@@ -1,7 +1,7 @@
 # Blocked Commands — Human Approval Required
 
 These command patterns require explicit human approval before execution.
-Reference: AGENTS.md §5 Prohibition Table (P-01–P-17).
+Reference: AGENTS.md §4 Absolute Prohibitions (H/S/C/G series).
 
 ## Database destructive operations
 - `DROP TABLE`
