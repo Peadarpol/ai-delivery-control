@@ -1,6 +1,6 @@
 # AGENTS.md — Cross-Tool Agent Standard
 
-> **Scope**: Loaded automatically by Gemini CLI, Claude Code, Cursor, Windsurf, and other editors.
+> **Scope**: Loaded automatically by Gemini CLI, Claude Code, Cursor, Cline, and other editors.
 > This file contains portable, tool-agnostic rules shared across all AI agents in this project.
 > Tool-specific additions live in `CLAUDE.md`, `GEMINI.md`, and `.cursorrules`.
 > Full governance rules: `.agent/governance.md`. Commands & paths: `.agent/config.yaml`.
@@ -187,6 +187,24 @@ and uses it verbatim (`outcome_source: "agent_override"`) before falling back to
 inference. Writing this field is the only way a Gemini session gets the same close-out
 fidelity as a Claude Code session with the Stop hook.
 Run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
+
+### Cline — explicit outcome write (HIB-CLINE-01)
+
+Cline has no native Stop hook on Windows. Without this step, a completed Cline session is structurally indistinguishable from mid-task abandonment until the next session's retrospective inference runs against git state, which is a weaker signal.
+
+**Before ending any Cline session**, in addition to steps 1–7 above, write the following fields to `.agent/state/session.json`:
+
+```json
+{
+  "outcome_override": "success | partial | abandoned | escalated",
+  "outcome_override_source": "agent_override",
+  "outcome_override_note": "One-sentence summary of what was completed and what, if anything, remains open."
+}
+```
+
+Guidance for selecting `outcome_override` matches the Gemini CLI guidance (success, partial, abandoned, or escalated).
+
+`init_session.py`'s `infer_and_close_previous_session()` reads `outcome_override` first and uses it verbatim (`outcome_source: "agent_override"`). Writing this field is the only way a Cline session gets the same close-out fidelity as a Claude Code session with the Stop hook.
 
 > [!IMPORTANT]
 > **Spec acceptance check (Stop hook) — Claude Code only.**

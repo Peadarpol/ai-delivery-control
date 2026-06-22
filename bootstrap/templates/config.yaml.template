@@ -74,6 +74,14 @@ model_routing:
   review_provider: anthropic
   review_model: claude-sonnet-4-20250514
 
+  # Cline (VS Code) — local Ollama-hosted coding agent
+  # Set cline_model to the model name pulled in your local Ollama instance.
+  # This entry is documentation only — no harness script reads it at runtime.
+  # The ai_review.py gate uses review_provider/review_model regardless of cline_model.
+  cline_provider: ollama
+  cline_model: null                  # e.g. qwen2.5-coder:32b, deepseek-coder-v2
+  cline_base_url: http://localhost:11434
+
 # Universal Capabilities Map
 # Workflows should refer to these keys to avoid hardcoding paths/commands
 capabilities:
