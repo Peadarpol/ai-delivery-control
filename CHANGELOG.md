@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4.4 — 2026-06-22
+
+### Integration Release — five unmerged feature branches folded into main
+
+- **BUG-04/BUG-05**: PASS/PASS_FAST verdicts now written to audit log; ADR domain names correctly mapped to capability names in routing
+- **T1-K-05a / Security**: `_safe_git_env()` sanitises environment variables passed to all subprocess calls in `architecture_checks.py`, `co_change_check.py`, and `repo_map.py`
+- **HIB-053** (additional hardening): further guards on session close inference against write-before-commit race
+- **T1-L-12**: `SpecGradeCard` — per-criterion feedback from `check_spec.py` Pass 2
+- **T1-L-13**: Decision block format enforcement for ADR annotations
+- **T1-L-14**: System archetype classification in spec template (A1–A6)
+- **T1-K-11**: Stale branch detection added to `harness_health.py` — surfaces branches with unmerged commits older than 14 days
+- **CodeQL**: Scoped to Python only via `.github/codeql/codeql-config.yml`
+- 372 tests passing (up from 358 at v1.4.2); checksum registry covers 643 files.
 
 ## v1.4.3 — 2026-06-22
 
