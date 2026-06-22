@@ -4,12 +4,13 @@ AI coding tools are capable. They will also happily commit broken code, implemen
 something adjacent to what you asked for, or quietly lose track of decisions made
 three hours earlier — unless you give them structure.
 
-This framework gives them structure.
+This framework provides that structure.
 
 **You govern. Agents deliver.**
 
-It works with Claude Code, Gemini CLI, Cursor, Windsurf, or any LLM-based coding
-agent. It is free, runs entirely on your machine, and requires no server infrastructure.
+It works with any LLM-based coding agent that respects its hooks and conventions —
+with the fullest integration today for Claude Code and Gemini CLI. It is free, runs
+entirely on your machine, and requires no server infrastructure.
 
 ---
 
@@ -19,9 +20,10 @@ When any agent can prototype anything in hours, the bottleneck shifts. It is no
 longer about writing code. It is about ensuring the code that gets written is the
 right code, built correctly, for the right reason.
 
-This framework is the answer to that shift. It does not make agents more capable —
-it makes them more accountable. The highest-value engineering skill is no longer
-writing syntax. It is engineering the conditions under which correct syntax can emerge.
+This framework is an answer to that shift. It does not make agents more capable —
+it makes them more accountable. As AI becomes more capable, the value shifts from
+writing code to providing the structure, context, and judgement needed to ensure
+the right code gets written.
 
 Most AI coding guidance focuses on getting agents to do more. Less attention goes to
 what happens when they do the wrong thing — and how you find out before it matters.
@@ -33,39 +35,44 @@ A few things go wrong regularly in AI-assisted development:
 - The agent in a long session loses context and starts improvising
 - There is no record of what was decided, or why
 
-If you are working alone or in a small team without years of professional engineering
-experience behind you, these problems are easy to miss until they compound. The habits
-this framework enforces are the ones that experienced engineers carry in their heads.
-This makes them explicit and, where it counts, automatic.
+These problems are easy to miss until they compound. The habits this framework
+enforces are the ones experienced engineers carry in their heads — it makes them
+explicit and, where it counts, automatic.
 
 ---
 
 ## What it does
 
-Four things, at four points in your workflow:
+The framework governs the whole delivery lifecycle. The four checkpoints you meet
+most directly:
 
 **Before implementation begins** — a specification is expected to exist and pass quality checks.
 The spec gate verifies that acceptance criteria, scope boundaries, and a human
 sign-off are present, with the goal of catching gaps before code work begins.
 
 **Before the agent starts coding** — it reads your project context, names the workflow
-it will follow, and states its approach. No freestyle.
+it will follow, and states its approach. Ad-hoc execution is no longer the default.
 
 **Before each commit lands** — every commit passes through an AI adversarial review.
 A separate model, independent from the one that wrote the code, checks the diff against
-your project's rules. `FAIL` blocks the commit. This is the only mechanism in the
-framework that actually prevents something.
+your project's rules. FAIL blocks the commit. The gate is the framework's strongest
+enforcement point — though not its only one (see Hard enforcement vs convention).
 
 **At the end of each session** — the agent writes a structured record of what it did,
 what decisions it made, and what is still open. You have an audit trail.
+
+These four checkpoints are the most visible touchpoints. Behind them sit
+requirement-to-commit traceability, architecture-boundary checks, session recovery,
+and a self-improvement loop — described below.
 
 ---
 
 ## The gate
 
-The pre-commit AI review is the core of the framework. It implements what Anthropic
-calls the evaluator-optimizer pattern: one model generates, a separate model
-evaluates. The reviewing model has no access to the writing agent's reasoning —
+The pre-commit AI review is the framework's strongest enforcement mechanism -
+and its most visible part. It implements what Anthropic calls the 
+evaluator-optimizer pattern: one model generates, a separate model evaluates.
+The reviewing model has no access to the writing agent's reasoning —
 only the diff and your project's rules. It cannot rationalise the implementation.
 
 This matters because AI models have jagged intelligence — excellent at some tasks,
@@ -84,7 +91,7 @@ The gate also gets smarter the longer you use it. Recurring failure patterns acr
 sessions feed a self-improvement loop that proposes targeted updates to your
 project's review rules — calibrated to your specific codebase, not generic best
 practice. A framework installed for six months has a review context shaped by six
-months of real failure patterns. That cannot be fast-followed.
+months of real failure patterns.
 
 If the gate flags something you believe is wrong, there is a governed path to contest
 it — a structured rebuttal protocol that logs the argument and gets a second opinion,
@@ -147,27 +154,33 @@ that gap by requiring a governed path from business need to working code:
 3. Every commit references the spec it implements — the traceability gate blocks
    commits that cannot be traced to an approved requirement.
 4. Before the PR is raised, an acceptance gate checks that the implementation
-   satisfies the spec's intent — not just that it compiles and passes tests.
+   satisfies the approved specification — not just that it compiles and passes tests.
 
 The result: a feature cannot start without an approved spec, every commit traces
-back to a requirement, and intent alignment is verified before code is promoted.
+back to a requirement, and alignment with the approved specification is verified before code is promoted
 
 ---
 
 ## Skills
 
-22 universal skills ship with the framework. Each describes how to approach a specific
-type of work and includes a `validate.py` script the agent must run before declaring
-the task complete.
+The framework ships with 22 universal skills covering:
 
-`api-design` · `c4-architect` · `code-migration` · `code-review` · `database-design` ·
-`debugging` · `devops-cicd` · `kaizen` · `performance-optimization` · `playwright-skill` ·
-`python-async` · `python-automation` · `python-fastapi` · `python-testing` · `refactoring` ·
-`security-audit` · `senior-architect` · `systematic-debugging` · `test-driven-development` ·
-`test-writing` · `testing-patterns` · `verification-before-completion`
+- architecture
+- debugging
+- migration
+- code review
+- testing
+- security
+- performance
+- refactoring
+- API design
+
+Each skill contains guidance, examples and validation steps that run before work is considered complete.
+
+See docs/wiki/Skills.md for the complete catalogue.
 
 Stack-specific skills layer on top when the installer detects a matching stack.
-Currently ships with full support for **Python / FastAPI** and a stub for
+The framework currently ships with full support for **Python / FastAPI** and a stub for
 **Node.js / Express**. Other stacks work through the universal skills with manual
 configuration. Skills you customise are never overwritten on re-install.
 
@@ -175,10 +188,10 @@ configuration. Skills you customise are never overwritten on re-install.
 
 ## Hard enforcement vs convention
 
-The pre-commit gate, the repository identity guard, and the architecture boundary
-checks are the only mechanisms that actually block anything. Everything else —
-session lifecycle, workflow phases, the prohibition table — depends on the agent
-following instructions.
+The pre-commit gate, the architecture boundary checks, the commit traceability gate,
+and the HALT sentinel are the only mechanisms that actually block anything. Everything
+else — session lifecycle, workflow phases, the prohibition table, the repository
+identity check — depends on the agent following instructions.
 
 This is deliberate. Hard enforcement at every point would make the framework
 unusable. The gate is hard because it operates at the commit boundary, where
@@ -187,20 +200,22 @@ by structure.
 
 Convention degrades under pressure. The gate does not.
 
-The distinction maps to AT7 — Automation vs Control. Routine decisions with clear criteria
-are set toward automation: the gate reviews every commit consistently, without fatigue.
-High-stakes decisions with ambiguous criteria are set toward control: dream phase proposals
-require human approval, specifications require human sign-off, escalation triggers require
-human intervention. Automation amplifies both correct and incorrect decisions — which is
-why the gate is hard precisely where ungoverned code becomes permanent, and convention
-governs everywhere that human judgement adds more value than mechanical consistency.
+The distinction is deliberate. Routine decisions with clear criteria
+are pushed toward automation: the gate reviews every commit consistently, without fatigue.
+High-stakes decisions with ambiguous criteria remain under human control: dream phase proposals
+require approval, specifications require human sign-off and escalation triggers require
+human intervention. 
+Automation amplifies both correct and incorrect decisions, which is why the framework applies
+hard enforcement precisely where ungoverned code becomes permanent. Everywhere else, convention
+governs because human judgement adds more value than mechanical consistency.
 
 | Mechanism | Enforcement |
 |---|---|
 | Pre-commit AI review gate | Blocks commit on FAIL |
 | Architecture boundary checks | Blocks commit on violations |
-| Repository identity guard (G-01) | Blocks git operations in wrong repo |
 | Commit traceability gate | Blocks untraced commits |
+| HALT sentinel | Blocks commit and session start when tripped |
+| Repository identity check (P-14) | Convention — runs at session start |
 | Session startup protocol | Convention — agent compliance |
 | Workflow phases | Convention — agent compliance |
 | Prohibition table (H/S/C/G series) | Convention — agent compliance |
@@ -279,13 +294,28 @@ Full security model and responsible disclosure: [`SECURITY.md`](SECURITY.md)
 
 ## What it does not do
 
-- Not a replacement for engineering judgement — ownership is more expensive than
-  creation, and judgement about what deserves to exist remains human work
+- Not a replacement for engineering judgement — ownership is more expensive than creation, and judgement about what deserves to exist remains human work
 - Not production monitoring or alerting
 - Not infrastructure provisioning
 - Not an autonomous delivery agent — you are still making the decisions
 - Not a runtime guard — the gate governs what enters the repository; it does not intercept tool calls, API calls, or file operations an agent makes during a session before any commit is made
 - Not compliance-mapped to regulatory standards (planned for v3.0.0)
+
+---
+
+## Philosophy
+
+AI Delivery Control does not decide what should be built.
+
+The people who use it remain responsible for deciding what to build and for the architectural decisions that shape how it is built.
+
+Its role is to help ensure that requirements, decisions, and constraints remain clear, consistent, and traceable as they are transformed into working software.
+
+The framework is not attempting to replace engineering judgement.
+
+It exists to preserve and reinforce it.
+
+Humans govern. Agents deliver.
 
 ---
 
@@ -296,9 +326,8 @@ of active feature delivery. The framework governs its own development: all chang
 are made on feature branches, gated by the same pre-commit AI review, and merged
 via PR.
 
-The session history, gate verdicts, and dream phase proposals from that development
-are the source of the framework's project-specific calibration — and cannot be
-replicated by installing the framework today.
+The resulting session history, gate verdicts and dream phase proposals have provided
+the calibration data used to refine the framework over time.
 
 ---
 
@@ -313,12 +342,15 @@ replicated by installing the framework today.
 ---
 
 ## Documentation
-## 📚 Documentation
 
 **Start here**: [Quick Reference Guide](docs/wiki/Quick-Reference.md)
 
-### Full Wiki (17 Pages)
-All documentation is in [`docs/wiki/`](docs/wiki/) — part of this repository's version control:
+
+### Wiki
+All documentation lives under [`docs/wiki/`](docs/wiki/) — part of this repository's version control:
+
+
+Start with:
 
 | Page | Purpose |
 |------|---------|
@@ -327,20 +359,13 @@ All documentation is in [`docs/wiki/`](docs/wiki/) — part of this repository's
 | [Glossary](docs/wiki/Glossary.md) | 50+ key terms |
 | [Installation & Setup](docs/wiki/Installation-Setup.md) | <10 min setup |
 | [The Pre-Commit Gate](docs/wiki/The-Pre-Commit-Gate.md) | How the gate works end-to-end |
-| [Gate Verdicts Explained](docs/wiki/Gate-Verdicts-Explained.md) | PASS/WARN/FAIL verdicts |
-| [Governance Rules](docs/wiki/Governance-Rules.md) | Prohibitions + escalation |
 | [Workflows Overview](docs/wiki/Workflows-Overview.md) | All 18 workflows |
 | [Skills](docs/wiki/Skills.md) | Universal skills + custom skill authoring |
-| [Configuration](docs/wiki/Configuration.md) | `.agent/config.yaml` reference |
-| [Customization](docs/wiki/Customization.md) | Extending the framework |
-| [Dream Phase](docs/wiki/Dream-Phase.md) | Self-improvement loop |
-| [Architecture Decisions](docs/wiki/Architecture-Decisions.md) | Design philosophy |
-| [Scope and Boundaries](docs/wiki/Scope-and-Boundaries.md) | What the framework guarantees |
-| [Troubleshooting](docs/wiki/Troubleshooting.md) | Common issues and fixes |
-| [Security](docs/wiki/Security.md) | Security model + responsible disclosure |
 | [FAQ](docs/wiki/FAQ.md) | Common questions |
 
+Everything else is linked from the wiki home page.
+
+Other useful docs:
 - [Getting Started](docs/getting-started.md)
 - [Configuration Reference](docs/configuration.md)
-- [Framework Backlog](docs/planning/FRAMEWORK_BACKLOG.md)
 - [Changelog](CHANGELOG.md)
