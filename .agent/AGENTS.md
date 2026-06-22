@@ -62,8 +62,8 @@ Before any task involving code changes across more than one file or layer:
 | Architecture decision | `/architect` |
 | Schema / migration change | `/dba` |
 | Security concern | `/security` |
-| Performance issue | `/perf` |
-| Tests only | `/qa` or `/test-engineer` |
+| Performance issue | `/performance` |
+| Tests only | `/test-engineer` |
 | Release / changelog | `/release` |
 
 ---
