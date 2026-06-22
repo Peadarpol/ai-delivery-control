@@ -306,22 +306,27 @@ class Installer:
             except Exception as e:
                 self.log_verbose(f"Failed to seed repo name in check_repo.py: {e}")
                 
-        # Copy src/scripts/ai_review.py to project scripts folder
+        # Copy framework-owned scripts to project scripts folder
         scripts_dest_dir = self.project_path / self.src_path / "scripts"
         scripts_dest_dir.mkdir(parents=True, exist_ok=True)
         
-        src_ai_review = self.framework_path / "src" / "scripts" / "ai_review.py"
-        dest_ai_review = scripts_dest_dir / "ai_review.py"
-        if src_ai_review.exists():
-            self.log_verbose(f"Copying AI review script: {src_ai_review} -> {dest_ai_review}")
-            shutil.copy2(src_ai_review, dest_ai_review)
-            
-        # Copy src/scripts/review_context_universal.md to project scripts folder
-        src_universal = self.framework_path / "src" / "scripts" / "review_context_universal.md"
-        dest_universal = scripts_dest_dir / "review_context_universal.md"
-        if src_universal.exists():
-            self.log_verbose(f"Copying Universal context layer: {src_universal} -> {dest_universal}")
-            shutil.copy2(src_universal, dest_universal)
+        framework_scripts = [
+            "ai_review.py",
+            "providers.py",
+            "roster_builder.py",
+            "review_context_universal.md",
+            "harness_utils.py",
+            "gate_context.py",
+            "capability_calibration.py",
+            "state_persistence.py",
+            "acceptance_hook.py",
+        ]
+        for script_name in framework_scripts:
+            src_script = self.framework_path / "src" / "scripts" / script_name
+            dest_script = scripts_dest_dir / script_name
+            if src_script.exists():
+                self.log_verbose(f"Copying framework script: {src_script} -> {dest_script}")
+                shutil.copy2(src_script, dest_script)
             
         # Create empty dynamic state directories
         empty_dirs = [
