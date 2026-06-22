@@ -18,6 +18,7 @@
 - **Roadmap & Backlog Reconciliation**: Repaired backlog and roadmap drift, re-registered missing HIB items, updated capability dependencies, and re-tiered `T1-K-07` to Medium.
 
 
+
 ## v1.4.1 — 2026-06-14
 
 ### Bug fixes

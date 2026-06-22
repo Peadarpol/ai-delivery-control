@@ -79,6 +79,7 @@ def _uncommitted_spec_changes(specs_dir: Path) -> bool:
 
 
 
+
 def infer_and_close_previous_session() -> tuple[str | None, str | None]:
     """Retrospectively close the previous session and log its outcome to the ledger."""
     if not SESSION_FILE.exists():
