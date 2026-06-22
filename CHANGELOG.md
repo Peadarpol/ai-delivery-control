@@ -17,6 +17,7 @@
 - **HIB-053b**: Fixed spec-mtime false-success in session close inference by replacing the unreliable filesystem mtime scanning with `git status --porcelain` and capping commitless specification work at `partial` (downgrading from `success`).
 - **Roadmap & Backlog Reconciliation**: Repaired backlog and roadmap drift, re-registered missing HIB items, updated capability dependencies, and re-tiered `T1-K-07` to Medium.
 
+
 ## v1.4.1 — 2026-06-14
 
 ### Bug fixes
