@@ -479,10 +479,10 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 | ID | Item | Category |
 |----|------|----------|
-| T1-K-08 | Fix architecture_checks.py silent PASS on zero files scanned | Governance & Consistency |
-| T1-K-09 | Add consistency gate: assert cross-references exist and gates actually gate | Governance & Consistency |
-| T1-K-10 | Single-source session startup/close/escalation protocols (same treatment as prohibition fix) | Governance & Consistency |
-| T1-M-14 | Clean up stale P-series references in AGENTS.md §9.1 and positive reframing of H-series (option B) | Governance & Consistency |
+| T1-K-08 | Fix architecture_checks.py silent PASS on zero files scanned | Governance & Consistency | ✅ v1.4.3 |
+| T1-K-09 | Add consistency gate: assert cross-references exist and gates actually gate | Governance & Consistency | ✅ v1.4.3 |
+| T1-K-10 | Single-source session startup/close/escalation protocols (same treatment as prohibition fix) | Governance & Consistency | ✅ v1.4.3 |
+| T1-M-14 | Clean up stale P-series references in AGENTS.md §9.1 and positive reframing of H-series (option B) | Governance & Consistency | ✅ v1.4.3 |
 
 ---
 
