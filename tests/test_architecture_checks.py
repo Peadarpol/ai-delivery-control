@@ -109,3 +109,4 @@ def test_main_passes_when_layers_contain_python_files(tmp_path):
     code = _run_main_in(tmp_path)
     # Should pass (0) — one file found, no violations
     assert code == 0, "Expected exit(0) when layers exist and contain Python files"
+
