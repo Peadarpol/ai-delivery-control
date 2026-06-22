@@ -218,3 +218,60 @@ def test_capability_calibration_report_boundary_warning(tmp_path, capsys):
     assert "precision=0.83" in captured.out
     assert "AT BOUNDARY" in captured.out
 
+
+# --- Unmerged Stale Branches Tests ---
+
+def test_report_unmerged_branches_healthy_no_branches(capsys):
+    """Verify healthy status when git returns no unmerged branches."""
+    mock_run = MagicMock()
+    # Mocking first subprocess.run (local branch check) to return empty
+    mock_run.return_value = MagicMock(returncode=0, stdout="")
+    
+    with patch("subprocess.run", mock_run), \
+         patch("harness_health.load_config", return_value={}):
+        harness_health.report_unmerged_branches()
+        
+    captured = capsys.readouterr()
+    assert "HEALTHY (no unmerged branches)" in captured.out
+
+
+def test_report_unmerged_branches_healthy_recent_branch(capsys):
+    """Verify healthy status when unmerged branch exists but last commit is recent."""
+    mock_run = MagicMock()
+    # First call: git branch --no-merged main
+    res1 = MagicMock(returncode=0, stdout="  feat/recent-branch\n")
+    # Second call: git log -1 --format=%ct feat/recent-branch
+    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    res2 = MagicMock(returncode=0, stdout=str(now_ts))
+    
+    mock_run.side_effect = [res1, res2]
+    
+    with patch("subprocess.run", mock_run), \
+         patch("harness_health.load_config", return_value={}):
+        harness_health.report_unmerged_branches()
+        
+    captured = capsys.readouterr()
+    assert "HEALTHY (no stale unmerged branches)" in captured.out
+
+
+def test_report_unmerged_branches_degrading_stale_branch(capsys):
+    """Verify degrading status when unmerged branch exists and last commit is older than threshold."""
+    mock_run = MagicMock()
+    # First call: git branch --no-merged main
+    res1 = MagicMock(returncode=0, stdout="  feat/stale-branch\n")
+    # Second call: git log -1 --format=%ct feat/stale-branch (e.g. 20 days ago)
+    stale_ts = int((datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=20)).timestamp())
+    res2 = MagicMock(returncode=0, stdout=str(stale_ts))
+    
+    mock_run.side_effect = [res1, res2]
+    
+    with patch("subprocess.run", mock_run), \
+         patch("harness_health.load_config", return_value={}):
+        harness_health.report_unmerged_branches()
+        
+    captured = capsys.readouterr()
+    assert "DEGRADING" in captured.out
+    assert "feat/stale-branch" in captured.out
+    assert "last commit was 20 days ago" in captured.out
+
+
