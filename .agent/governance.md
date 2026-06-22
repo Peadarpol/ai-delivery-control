@@ -4,15 +4,40 @@
 
 ---
 
-## 1. Mandatory Pre-Task Checks
+## 1. Session Startup — Canonical Protocol
 
-Before starting any coding task, you MUST:
+> **The canonical, authoritative session startup sequence is [`.agent/AGENTS.md`](AGENTS.md) §1.**
+> Follow it exactly. This section records the *rationale* behind the startup steps and explains
+> why they appear in the order they do. If this section and `AGENTS.md` §1 ever disagree,
+> **AGENTS.md wins.**
 
-1. **Read domain context**: `docs/decisions/business_rules.md` (canonical source for domain and business rules).
-2. **Read architecture**: `docs/architecture/ARCHITECTURE.md` — verify layer boundaries haven't changed.
-3. **Identify the governing workflow**: Determine which workflow applies (e.g., `feature-implementation.md`, `bug-fix.md`). If unsure, ask the user.
-4. **Check session state**: Read `.agent/state/active_context.md` and `.agent/state/decisions_log.md` for continuity and architectural truth.
-5. **Confirm starting state**: You must be starting from IDLE, not resuming mid-workflow without context.
+### Why the startup sequence exists
+
+The startup sequence solves a specific failure mode: an agent begins work on the wrong context.
+Without a deterministic startup check, an agent running in an IDE window that was last active
+on a different task will silently continue the wrong work, overwrite good state, or commit to the
+wrong branch.  The ordered checks in `AGENTS.md` §1 are designed to surface those mismatches
+before any code is touched:
+
+1. **`check_halt.py`** — terminates immediately if a HALT sentinel is set from a previous session.
+   This is the outermost gate: nothing else runs if the harness has been stopped.
+2. **`init_session.py`** — establishes a session UUID, creates a git stash checkpoint, and
+   closes any prior session that was left open (retrospective inference for non-Claude agents).
+3. **`git log` / `git branch`** — ground-truth verification that the active branch and recent
+   commits match the agent's expectations.  Session state files are often stale; git log is not.
+4. **`active_context.md`** — reconciled against git log to catch drift.  If the two disagree,
+   git log wins.
+5. **`decisions_log.md`** — architectural and business decisions that constrain all subsequent
+   code choices.  Reading this before writing a line of code is the single most effective way to
+   avoid rework.
+6. **`last_session_summary.md`** — treated as hints, not facts.  Use it to orient, not to trust.
+
+The sequence intentionally does **not** read `docs/decisions/business_rules.md` or
+`docs/architecture/ARCHITECTURE.md` at startup; those are project-specific artifacts.  Projects
+that require them should add the reads to their own `AGENTS.md` §1 extension (see
+[`docs/customisation.md`](../docs/customisation.md) §4.2).
+
+> **Pointer:** For the executable steps (in order), see `AGENTS.md` §1.
 
 ---
 
@@ -216,16 +241,40 @@ After resolving any production bug or escaped failure:
 
 ---
 
-## 6. Session Logging
+## 6. Session Close — Canonical Protocol
 
-At the end of every session:
-1. Append a summary to `.agent/state/last_session_summary.md` documenting:
-   - What was accomplished
-   - What was left incomplete
-   - Any decisions that were deferred
-2. Append a row to `.agent/state/session_ledger.md` session history table.
+> **The canonical, authoritative session close sequence is [`.agent/AGENTS.md`](AGENTS.md) §6.**
+> Follow it exactly (all seven mandatory steps). This section records the *rationale* behind
+> the close steps. If this section and `AGENTS.md` §6 ever disagree, **AGENTS.md wins.**
 
----
+### Why the session close protocol exists
+
+The close protocol solves the handoff problem: a fresh session must be able to reconstruct its
+starting position entirely from structured state files, without conversation history.  Each step
+writes a piece of that reconstruction:
+
+- **`session.json` task magnitude** — ensures the session is correctly classified for the session
+  ledger and retrospective inference.  Downgrading from `major` to `micro` without justification
+  loses the signal that significant work happened this session.
+- **Context compaction at 80% budget** — a session that runs beyond 80% of its token budget is
+  operating in degraded mode.  Compaction before close truncates sediment (explored paths,
+  discarded options) so the next session starts in the "smart zone" rather than inheriting stale
+  reasoning artifacts.
+- **`active_context.md`** — the single file a fresh session reads first.  It must be current;
+  stale context here cascades into every startup reconciliation.
+- **`decisions_log.md`** — all technical, architectural, and business decisions made this session.
+  If a decision is not logged, the next session will re-derive it — sometimes differently —
+  causing silent architectural drift.
+- **`last_session_summary.md`** — human-readable orientation for the next session.  Treated as
+  hints, not ground truth, but useful for recall on long-running tasks.
+- **`session_ledger.jsonl` / `session_ledger.md`** — the machine-readable and human-readable
+  audit trail.  Required for `init_session.py`'s retrospective inference.
+- **Platform-specific outcome write** (Gemini: `gemini_session_close.json`; Cline: `session.json
+  outcome_override`) — without this, a completed non-Claude session is structurally
+  indistinguishable from mid-task abandonment at the next session's startup.
+
+> **Pointer:** For the executable steps (in order), see `AGENTS.md` §6.  The platform-specific
+> notes (Gemini CLI, Cline, Claude Code Stop hook) are documented there.
 
 ---
 

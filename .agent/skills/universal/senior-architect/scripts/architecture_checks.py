@@ -153,6 +153,7 @@ class LayerViolationVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
+        # NOTE: relative imports (node.level > 0) are skipped — node.module is None or a fragment, so absolute prefix matching does not apply.
         if node.module:
             for forbidden in self.forbidden_prefixes:
                 if node.module.startswith(forbidden):
@@ -557,10 +558,34 @@ def main():
     paths_config = config.get("paths", {})
     architecture_config = config.get("architecture")
 
-    if not config or architecture_config is None:
-        print("[ARCH] No architecture configuration found in .agent/config.yaml — skipping checks.")
+    if not config:
+        # No config.yaml at all — this is almost certainly a misconfiguration or a run
+        # outside the project root.  Fail loud so CI surfaces the problem rather than
+        # recording a silent PASS.
+        print("[ARCH] FAIL: .agent/config.yaml not found or could not be read.")
+        print("       Run this script from the repository root where .agent/config.yaml lives.")
+        sys.exit(1)
+
+    if architecture_config is None:
+        # config.yaml exists but has no 'architecture:' block.  Warn and exit cleanly —
+        # the operator has consciously opted out of layer checks for this project.
+        print("[ARCH] No 'architecture:' block found in .agent/config.yaml — checks skipped.")
         print("       Add an 'architecture:' block to enable layer boundary enforcement.")
         sys.exit(0)
+
+    # --- Count files that will actually be scanned so we can detect misconfiguration ---
+    # Gather layer paths from config (same logic as compute_coupling_metrics).
+    configured_layers = architecture_config.get("layers", [])
+    layer_dirs = [Path(layer["path"]) for layer in configured_layers if layer.get("path")]
+    total_scanned = 0
+    scan_summary: list[str] = []
+    for layer_dir in layer_dirs:
+        if not layer_dir.exists():
+            scan_summary.append(f"  [MISS]  {layer_dir}  (path does not exist)")
+        else:
+            count = len(list(layer_dir.rglob("*.py")))
+            total_scanned += count
+            scan_summary.append(f"  [OK]    {layer_dir}  ({count} .py files)")
 
     all_errors = []
     all_errors.extend(check_forbidden_patterns(architecture_config))
@@ -572,6 +597,24 @@ def main():
     all_errors.extend(check_asgi_lifespan(paths_config))
     all_errors.extend(compute_coupling_metrics(architecture_config))
     all_errors.extend(check_type_checking_imports(paths_config))
+
+    # --- Audit summary: print layer scan results before verdict ---
+    if configured_layers:
+        print("[ARCH] Layer scan summary:")
+        for line in scan_summary:
+            print(line)
+        print(f"[ARCH] Total .py files scanned across all layers: {total_scanned}")
+
+        if layer_dirs and total_scanned == 0:
+            # Every configured layer path either does not exist or contains no Python files.
+            # This is almost certainly a path misconfiguration — a silent PASS here would
+            # mean the gate passes without having checked anything.
+            print(
+                "[ARCH] FAIL: architecture layers are configured but zero Python files were "
+                "found across all layer paths.  Check that the 'path' values in "
+                ".agent/config.yaml match the actual source layout."
+            )
+            sys.exit(1)
 
     # Soft warnings (do not block commit)
     check_adr_annotations_count(paths_config)
