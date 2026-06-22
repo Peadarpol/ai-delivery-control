@@ -231,6 +231,100 @@ Lists the base class names the architecture checker uses to identify domain aggr
 roots when verifying layering rules. Match these to the actual base classes in your
 domain layer.
 
+## 4. Prohibition Tiers
+
+To keep the framework templates clean and maintainable, agent prohibitions are structured into a three-tier model:
+
+1. **Universal Prohibitions (Tier 1)**: Apply to every project using the framework, unconditionally (cognitive, autonomy, security, and version control rules). These are maintained directly in the framework's `.agent/AGENTS.md` and cannot be modified by individual projects.
+2. **Project-Specific Rules (Tier 2)**: Stack-specific or project-specific constraints (e.g. specific package managers, config rules, or environments). These belong in the project's own `.agent/AGENTS.md` under `## §4.2 — Project-Specific Rules`.
+3. **Pattern-Conditional Rules (Tier 3)**: Applicable only when a specific architectural pattern is active (e.g. Clean Architecture, Repository + UoW, multi-tenancy, specific CI/CD branching topology). These belong in the project's own `.agent/AGENTS.md` under `## §4.3 — Pattern-Conditional Rules`.
+
+### Classification Decision Table
+
+Use this quick decision table to categorize a new project rule:
+
+| Ask yourself | Answer | Tier |
+|---|---|---|
+| Would this rule apply to a React project, a Rust CLI, a data pipeline, and a mobile app equally? | Yes | Universal (§4.1) — already in template |
+| Does this rule only make sense given our specific stack or tooling choice? | Yes | Project-Specific (§4.2) — add to your AGENTS.md |
+| Does this rule only apply if a specific architectural pattern is active? | Yes | Pattern-Conditional (§4.3) — add to your AGENTS.md with precondition |
+
+---
+
+### Copy-Pasteable Templates for Adopters
+
+You can copy and paste the following templates into your project's `.agent/AGENTS.md` file to configure customized constraints.
+
+#### Template for §4.2 — Project-Specific Rules
+
+```markdown
+## §4.2 — Project-Specific Rules
+
+> These rules apply because this project uses [stack/toolchain/pattern].
+> They are not universal. Do not carry them to other projects.
+
+| ID | Never do this | Precondition |
+|---|---|---|
+| PS-01 | [rule description, e.g. Never use npm install — always use pnpm add] | [precondition, e.g. Project uses pnpm] |
+| PS-02 | [rule description, e.g. Never modify .env files without documenting the change] | [precondition, e.g. Project uses .env files] |
+```
+
+> [!NOTE]
+> The `Precondition` column is mandatory. It ensures that subsequent agents understand why the constraint exists and do not treat it as a universal framework rule.
+
+#### Template for §4.3 — Pattern-Conditional Rules
+
+```markdown
+## §4.3 — Pattern-Conditional Rules
+
+> These rules apply ONLY because this project uses the patterns listed below.
+> Do not apply these rules to projects that do not use these patterns.
+
+### Clean Architecture / Hexagonal Architecture
+Active in this project: YES / NO
+
+If YES:
+| ID | Never do this |
+|---|---|
+| PC-CA-01 | Never import infrastructure layer from domain or business layers. |
+| PC-CA-02 | Never import presentation layer from application or domain layers. |
+
+### Repository + Unit of Work Pattern
+Active in this project: YES / NO
+
+If YES:
+| ID | Never do this |
+|---|---|
+| PC-UOW-01 | Never access database sessions directly, bypassing the Repository/UoW pattern. |
+| PC-UOW-02 | Never call commit() outside the Unit of Work boundary. |
+
+### Incremental Database Migrations
+Active in this project: YES / NO
+
+If YES:
+| ID | Never do this |
+|---|---|
+| PC-MIG-01 | Never delete or modify existing migration files once committed. |
+| PC-MIG-02 | Never make direct schema changes outside the migration toolchain. |
+
+### Multi-Tenant Data Isolation
+Active in this project: YES / NO
+
+If YES:
+| ID | Never do this |
+|---|---|
+| PC-MT-01 | Never modify tenant/branch isolation logic without explicit human instruction and a security review. |
+| PC-MT-02 | Never write a query that could return rows across tenant boundaries. |
+
+### Protected CI/CD Staging Topology
+Active in this project: YES / NO
+
+If YES:
+| ID | Never do this |
+|---|---|
+| PC-CD-01 | Never commit directly to the deployment branch for CI/CD fixes — use a short-lived fix branch, merge to deployment branch, then merge back to the active feature branch. |
+```
+
 ---
 
 ## What not to customise
@@ -246,4 +340,4 @@ The following files are framework-owned and overwritten on installer re-runs:
 | `.agent/workflows/*` | Delivery workflow definitions |
 | `.agent/UNIVERSAL_CONTEXT.md` | Machine-generated; refreshed on every install |
 
-Put your additions in the three customisation surfaces above. They are always preserved.
+Put your additions in the customisation surfaces above. They are always preserved.
