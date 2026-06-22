@@ -1,0 +1,50 @@
+# CLINE.md — Cline Supplement
+# [PROJECT_NAME_PLACEHOLDER]
+
+> Auto-loaded by Cline (VS Code) at session start.
+> **All governance rules, startup protocol, and session close requirements live in
+> `.agent/UNIVERSAL_CONTEXT.md` and `.agent/AGENTS.md` — read those first.**
+> This file adds Cline-specific behaviour only.
+
+---
+
+## Read First
+
+Before anything else, read:
+1. `.agent/UNIVERSAL_CONTEXT.md` — project identity, harness version, key file locations
+2. `.agent/AGENTS.md` — mandatory session startup protocol, workflow-first rules,
+   absolute prohibitions (the H/S/C/G universal series in §4.1), escalation triggers, and session close requirements
+3. `.clinerules/` — directory containing rules loaded automatically by the Cline Rules panel.
+
+---
+
+## Cline-Specific Environment
+
+- **OS**: Windows (under the VS Code shell environment) — use PowerShell syntax for shell commands (`Get-ChildItem`, not `ls`).
+- **Package manager**: [PROJECT_PACKAGE_MANAGER]
+- **Test command**: [TEST_RUN_ALL_COMMAND_PLACEHOLDER]
+- **Rules Panel**: The rules under `.clinerules/` are loaded dynamically by Cline's Rules panel. Make sure they are active during your session.
+
+---
+
+## Session Startup (Mandatory)
+
+Always run the manual session startup sequence before any other actions:
+1. Run `python .agent/scripts/check_halt.py` to ensure no HALT block is active.
+2. Run `python .agent/scripts/init_session.py --agent Cline` to initialize the session.
+
+---
+
+## Session Close (Mandatory)
+
+Cline does not support Stop hooks on Windows. Before ending a session, write your outcome override to `.agent/state/session.json`:
+
+```json
+{
+  "outcome_override": "success | partial | abandoned | escalated",
+  "outcome_override_source": "agent_override",
+  "outcome_override_note": "One-sentence summary of what was completed and what remains open."
+}
+```
+
+This is the only way `init_session.py` can determine session success cleanly.

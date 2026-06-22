@@ -227,7 +227,7 @@ class Installer:
         target_skills = target_agent / "skills"
         
         # Directories to copy from framework's .agent (excluding skills which is copied flat and non-destructively)
-        agent_dirs_to_copy = ["scripts", "workflows", "evals"]
+        agent_dirs_to_copy = ["scripts", "workflows", "evals", "templates"]
         for d in agent_dirs_to_copy:
             src_dir = self.framework_path / ".agent" / d
             dest_dir = target_agent / d
@@ -306,22 +306,27 @@ class Installer:
             except Exception as e:
                 self.log_verbose(f"Failed to seed repo name in check_repo.py: {e}")
                 
-        # Copy src/scripts/ai_review.py to project scripts folder
+        # Copy framework-owned scripts to project scripts folder
         scripts_dest_dir = self.project_path / self.src_path / "scripts"
         scripts_dest_dir.mkdir(parents=True, exist_ok=True)
         
-        src_ai_review = self.framework_path / "src" / "scripts" / "ai_review.py"
-        dest_ai_review = scripts_dest_dir / "ai_review.py"
-        if src_ai_review.exists():
-            self.log_verbose(f"Copying AI review script: {src_ai_review} -> {dest_ai_review}")
-            shutil.copy2(src_ai_review, dest_ai_review)
-            
-        # Copy src/scripts/review_context_universal.md to project scripts folder
-        src_universal = self.framework_path / "src" / "scripts" / "review_context_universal.md"
-        dest_universal = scripts_dest_dir / "review_context_universal.md"
-        if src_universal.exists():
-            self.log_verbose(f"Copying Universal context layer: {src_universal} -> {dest_universal}")
-            shutil.copy2(src_universal, dest_universal)
+        framework_scripts = [
+            "ai_review.py",
+            "providers.py",
+            "roster_builder.py",
+            "review_context_universal.md",
+            "harness_utils.py",
+            "gate_context.py",
+            "capability_calibration.py",
+            "state_persistence.py",
+            "acceptance_hook.py",
+        ]
+        for script_name in framework_scripts:
+            src_script = self.framework_path / "src" / "scripts" / script_name
+            dest_script = scripts_dest_dir / script_name
+            if src_script.exists():
+                self.log_verbose(f"Copying framework script: {src_script} -> {dest_script}")
+                shutil.copy2(src_script, dest_script)
             
         # Create empty dynamic state directories
         empty_dirs = [
@@ -448,6 +453,7 @@ class Installer:
         for shim_template, shim_dest_rel in [
             ("CLAUDE.md.template",   "CLAUDE.md"),
             ("GEMINI.md.template",   "GEMINI.md"),
+            ("CLINE.md.template",    "CLINE.md"),
             ("cursorrules.template", ".cursorrules"),
         ]:
             shim_dest = self.project_path / shim_dest_rel
@@ -501,6 +507,36 @@ class Installer:
             precommit_dest.write_text(pc_content, encoding="utf-8")
             
         self.log(SYMBOL_SUCCESS, "Configuration and supplementary context templates rendered.")
+        
+        # 7. Install Cline rules
+        self.install_clinerules(replacements)
+
+    def install_clinerules(self, replacements: Dict[str, str]):
+        """Copy .clinerules template files and replace placeholders, skipping if exists."""
+        self.log(SYMBOL_STEP, "Installing Cline rules (.clinerules/)...")
+        src_dir = self.framework_path / "bootstrap" / "templates" / "clinerules"
+        dest_dir = self.project_path / ".clinerules"
+        
+        if not src_dir.exists() or not src_dir.is_dir():
+            self.log(SYMBOL_WARN, f"Cline rules templates directory not found at {src_dir} — skipping.")
+            return
+
+        dest_dir.mkdir(exist_ok=True)
+        
+        for item in src_dir.iterdir():
+            if item.is_file() and item.suffix == ".md":
+                dest_file = dest_dir / item.name
+                if dest_file.exists():
+                    self.log_verbose(f"Cline rule '{item.name}' already exists — skipping (preserve developer customizations)")
+                else:
+                    self.log_verbose(f"Rendering Cline rule: {item} -> {dest_file}")
+                    try:
+                        content = item.read_text(encoding="utf-8")
+                        for k, v in replacements.items():
+                            content = content.replace(k, v)
+                        dest_file.write_text(content, encoding="utf-8")
+                    except Exception as e:
+                        self.log(SYMBOL_WARN, f"Failed to install Cline rule {item.name}: {e}")
 
     def update_gitignore(self):
         """Ensure harness operational state files and user logs are ignored by git."""
@@ -515,6 +551,7 @@ class Installer:
             ".agent/config.yaml.migration_backup",
             ".agent/wiki/",
             ".agent/state/gemini_session_close.json",
+            ".clinerules/hooks/",
         ]
 
         if gitignore_path.exists():

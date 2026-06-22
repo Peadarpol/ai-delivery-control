@@ -104,7 +104,7 @@ rather than a blunt bypass.
 `AGENTS.md` defines how every agent session runs: what to check at startup, which
 workflow applies to the task at hand, and when to stop and ask rather than improvise.
 
-**15 absolute prohibitions (P-01–P-15)** cover the most common ways agent sessions go wrong:
+**16 universal absolute prohibitions (the H/S/C/G series in `AGENTS.md` §4.1)** — Honesty/verification (H), Scope/autonomy (S), Security (C), Version control (G) — cover the most common ways agent sessions go wrong:
 
 - No committing to `main` without explicit instruction
 - No `git add .` — always named files only
@@ -218,7 +218,7 @@ governs because human judgement adds more value than mechanical consistency.
 | Repository identity check (P-14) | Convention — runs at session start |
 | Session startup protocol | Convention — agent compliance |
 | Workflow phases | Convention — agent compliance |
-| Prohibition table (P-01–P-15) | Convention — agent compliance |
+| Prohibition table (H/S/C/G series) | Convention — agent compliance |
 
 ---
 

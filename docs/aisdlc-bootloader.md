@@ -15,7 +15,7 @@
 |---|---|---|
 | Harness directory | `.agent/` | Governance, scripts, skills, workflows, state |
 | Session protocol | `.agent/AGENTS.md` | Mandatory startup and close sequence for all agents |
-| Governance rules | `.agent/governance.md` | Absolute prohibitions (P-01–P-16) and escalation triggers |
+| Governance rules | `.agent/governance.md` | Prohibition rationale and escalation triggers (canonical rule list: `.agent/AGENTS.md` §4) |
 | Project config | `.agent/config.yaml` | Stack commands, paths, and architecture rules |
 | Universal context | `.agent/UNIVERSAL_CONTEXT.md` | Project identity, harness version, key file locations |
 | Universal skills | `.agent/skills/` | 22 language-agnostic skill packages, each with `validate.py` |
@@ -46,7 +46,7 @@ All eight checks must pass:
 ✅ Required CLI Tools
 ✅ Harness Core Directory Layout
 ✅ Harness Core Files
-✅ Repository Guard (P-14)
+✅ Repository Guard (G-01)
 ✅ Universal Context File
 ✅ Harness Configurations Validity
 ✅ Pre-commit Git Hook Layout
@@ -302,27 +302,17 @@ invariants from your first month of use, review dream proposals when they appear
 
 ## Governance Quick Reference
 
-Full rules and rationale: `.agent/governance.md`. These prohibitions are unconditional —
-they apply to every agent in every session without exception.
+**The canonical prohibition list is [`.agent/AGENTS.md`](../.agent/AGENTS.md) §4.** It is
+loaded by every agent tool and is the single source of truth. Rationale, failure modes, and
+the legacy-ID map live in `.agent/governance.md` §3. This document does **not** restate the
+rules — the previous P-series table here is retired to avoid a competing rule list.
 
-| # | Never do this | Reason |
-|---|---|---|
-| P-01 | Merge to `main`/`master` | Requires human review and CI approval |
-| P-02 | Delete migration or schema files | Destroys database version history |
-| P-03 | Disable or weaken test assertions to make tests pass | Masks real failures |
-| P-04 | Skip writing tests for new functionality | Violates TDD Iron Law |
-| P-05 | Install new dependencies without listing them for approval | Supply chain risk |
-| P-06 | Commit secrets, API keys, or credentials | Security violation |
-| P-07 | Use the wrong package installer for the project's stack | Breaks the dependency lock |
-| P-08 | Import infrastructure layer from domain or application layers | Architecture violation |
-| P-09 | Access database sessions directly, bypassing Repository/Unit of Work | Transactional safety |
-| P-10 | Modify `.env` files without documenting the change | Environment drift |
-| P-11 | Create or modify `task.json` outside of the `/pm` workflow | Process consistency |
-| P-12 | Use `--no-verify` on any commit containing source code or agent scripts | Bypasses all harness gates simultaneously; use `SKIP_AI_REVIEW=1` for AI-only false positives |
-| P-13 | Stage agent-generated log files in git commits | `harness_events.jsonl`, `session_ledger.jsonl`, `dream_phase_state.json` — local-only state, not source artefacts |
-| P-14 | Perform any git add, commit, merge, or push without verifying the active repository | Run `check_repo.py` first; stop immediately if it fails — you are in the wrong project |
-| P-15 | Direct commits to `devops` for CI/CD fixes | Create a `fix/` branch; merge to `devops`; merge back to the active feature branch to prevent divergence |
-| P-16 | Direct commits to `main` or improper branch naming for framework work | All framework changes: `feat/framework-{id}-{description}` → PR → `main` |
+Prohibitions are tiered:
+
+- **Tier 1 — Universal** (`AGENTS.md` §4.1): the `H/S/C/G` series — Honesty/verification (H),
+  Scope/autonomy (S), Security (C), and Version control (G) — apply to every project unconditionally.
+- **Tier 2 — Project-Specific** (`AGENTS.md` §4.2) and **Tier 3 — Pattern-Conditional**
+  (`AGENTS.md` §4.3): apply only given a project's stack choices or an active architectural pattern.
 
 When an escalation trigger fires: stop immediately. No commits, no fixes, no compensating
 work of any kind. Report findings and wait for explicit human instruction before proceeding.

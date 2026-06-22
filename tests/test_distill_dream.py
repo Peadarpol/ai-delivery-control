@@ -7,7 +7,16 @@ import json
 import yaml
 import pytest
 from pathlib import Path
+from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
+
+
+def _log_time(days_ago=5):
+    return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _ledger_date(days_ago=10):
+    return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d %H:%M")
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WORKSPACE_ROOT / ".agent" / "scripts"))
@@ -96,7 +105,7 @@ def test_blocking_concern_field_used_for_routing(temp_dream_env):
 
     # 2. Setup a mock FAIL review log containing "blocking_concern"
     log_entry = {
-        "timestamp": "2026-06-02T10:00:00Z",
+        "timestamp": _log_time(5),
         "verdict": "FAIL",
         "blocking_concern": "BRANCH_ISOLATION",
         "comments": "some branch issue",
@@ -111,7 +120,7 @@ def test_blocking_concern_field_used_for_routing(temp_dream_env):
         day = 15 - i
         ledger_content += json.dumps({
             "session_id": f"session-{i}",
-            "date": f"2026-05-{day:02d} 12:00",
+            "date": _ledger_date(day),
             "outcome": "success",
             "action": "mock commit"
         }) + "\n"
@@ -154,7 +163,7 @@ def test_singular_and_plural_keys_supported(temp_dream_env):
 
     # 2. Setup mock FAIL review log containing "blocking_concern" (maps to check_type)
     log_entry = {
-        "timestamp": "2026-06-02T10:00:00Z",
+        "timestamp": _log_time(5),
         "verdict": "FAIL",
         "blocking_concern": "API_CHECK",
         "comments": "some endpoint issue",
@@ -169,7 +178,7 @@ def test_singular_and_plural_keys_supported(temp_dream_env):
         day = 15 - i
         ledger_content += json.dumps({
             "session_id": f"session-{i}",
-            "date": f"2026-05-{day:02d} 12:00",
+            "date": _ledger_date(day),
             "outcome": "success",
             "action": "mock commit"
         }) + "\n"
@@ -210,7 +219,7 @@ def test_hib_dream_01_fields_matching(temp_dream_env):
 
     # Use custom_keyword in summary and concerns, but comments is empty
     log_entry = {
-        "timestamp": "2026-06-02T10:00:00Z",
+        "timestamp": _log_time(5),
         "verdict": "FAIL",
         "blocking_concern": "CODE_QUALITY",
         "summary": "This is a custom_keyword violation",
@@ -226,7 +235,7 @@ def test_hib_dream_01_fields_matching(temp_dream_env):
         day = 15 - i
         ledger_content += json.dumps({
             "session_id": f"session-{i}",
-            "date": f"2026-05-{day:02d} 12:00",
+            "date": _ledger_date(day),
             "outcome": "success",
             "action": "mock commit"
         }) + "\n"
@@ -265,7 +274,7 @@ def test_hib_dream_02_intent_mismatch_routing(temp_dream_env):
     env["skill_ownership_path"].write_text(yaml.dump(ownership_yaml), encoding="utf-8")
 
     log_entry = {
-        "timestamp": "2026-06-02T10:00:00Z",
+        "timestamp": _log_time(5),
         "verdict": "FAIL",
         "blocking_concern": "INTENT_MISMATCH",
         "summary": "spec mismatches",
@@ -279,7 +288,7 @@ def test_hib_dream_02_intent_mismatch_routing(temp_dream_env):
         day = 15 - i
         ledger_content += json.dumps({
             "session_id": f"session-{i}",
-            "date": f"2026-05-{day:02d} 12:00",
+            "date": _ledger_date(day),
             "outcome": "success",
             "action": "mock commit"
         }) + "\n"
@@ -321,7 +330,7 @@ def test_hib_dream_03_threshold_redesign_appearance(temp_dream_env):
     log_content = ""
     for i in range(3):
         log_content += json.dumps({
-            "timestamp": "2026-06-02T10:00:00Z",
+            "timestamp": _log_time(5),
             "verdict": "FAIL",
             "blocking_concern": "CODE_QUALITY",
             "summary": "style check failed",
@@ -335,7 +344,7 @@ def test_hib_dream_03_threshold_redesign_appearance(temp_dream_env):
         day = 15 - i
         ledger_content += json.dumps({
             "session_id": f"session-{i}",
-            "date": f"2026-05-{day:02d} 12:00",
+            "date": _ledger_date(day),
             "outcome": "success", # 0 escalated
             "action": "mock commit"
         }) + "\n"
@@ -372,7 +381,7 @@ def test_hib_dream_03_critical_bypass_unchanged(temp_dream_env):
 
     # 1 fail with CRITICAL severity
     log_entry = {
-        "timestamp": "2026-06-02T10:00:00Z",
+        "timestamp": _log_time(5),
         "verdict": "FAIL",
         "blocking_concern": "CODE_QUALITY",
         "summary": "critical error",
@@ -387,7 +396,7 @@ def test_hib_dream_03_critical_bypass_unchanged(temp_dream_env):
         day = 15 - i
         ledger_content += json.dumps({
             "session_id": f"session-{i}",
-            "date": f"2026-05-{day:02d} 12:00",
+            "date": _ledger_date(day),
             "outcome": "success",
             "action": "mock commit"
         }) + "\n"
@@ -427,7 +436,7 @@ def test_hib_dream_03_count_less_than_three_ignored(temp_dream_env):
     log_content = ""
     for i in range(2):
         log_content += json.dumps({
-            "timestamp": "2026-06-02T10:00:00Z",
+            "timestamp": _log_time(5),
             "verdict": "FAIL",
             "blocking_concern": "CODE_QUALITY",
             "summary": "style check failed",
@@ -441,7 +450,7 @@ def test_hib_dream_03_count_less_than_three_ignored(temp_dream_env):
         day = 5 - i
         ledger_content += json.dumps({
             "session_id": f"session-{i}",
-            "date": f"2026-05-{day:02d} 12:00",
+            "date": _ledger_date(day),
             "outcome": "success",
             "action": "mock commit"
         }) + "\n"

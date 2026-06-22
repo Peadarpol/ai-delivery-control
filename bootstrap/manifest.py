@@ -26,6 +26,7 @@ PROJECT_OWNED = [
     "review_context_project.md",
     "CLAUDE.md",
     "GEMINI.md",
+    "CLINE.md",
     ".cursorrules",
 ]
 

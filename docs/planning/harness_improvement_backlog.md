@@ -1037,4 +1037,19 @@ This systematically undercounts pattern spread (`appearance_rate` = `1 / total_s
 **Suggested changes**:
 1. Exclude `unknown` session IDs from the `appearance_rate` calculation denominator and numerator, or treat each `unknown` session ID log entry as a separate unique session for the purpose of the frequency analysis.
 2. Alternatively, parse the timestamp of `unknown` sessions to group them into separate 1-hour/2-hour windows as an approximation of distinct sessions.
+
+---
+
+## HIB-056 — T1-I-05 status-marker drift (⬜ vs treated-as-delivered)
+
+**Date**: 2026-06-22
+**Source**: Claude (incidental finding while logging T1-D-07)
+**Pillar**: Backlog integrity / marker drift
+**Status**: ✅ Complete (2026-06-22) — Verified that contradiction checking is implemented in `distill_dream.py`; updated T1-I-05 status to ✅ (integrated into T1-D-03) across planning docs.
+
+`FRAMEWORK_BACKLOG.md` marks **T1-I-05 (Memory contradiction detector) as ⬜ undelivered**, but two other places treat its functionality as already shipped: T1-I-05a's dependency line cites "T1-I-05 ✅ (contradiction detection)", and T1-D-03's description states the contradiction check (T1-I-05) "runs before writing each proposal" — and that contradiction-card logic is in fact present in `distill_dream.py` (writes `{skill}__{pattern_key}__contradiction.md`). So the capability appears delivered-as-integrated while its standalone status marker still reads ⬜. Surfaced while citing T1-I-05 as a dependency of the new T1-D-07; cited carefully there rather than stamped ✅, pending resolution here.
+
+This is the same marker-drift class that v1.4.2's backlog-repair pass addressed (HIB-055 vocabulary filtering; the T1-L-13/T1-G-12 marker reconciliation). Left unresolved, it sits until the next capability-inventory-style audit rediscovers it independently.
+
+**Suggested change**: Confirm by inspection whether T1-I-05's contradiction detector is fully delivered inside `distill_dream.py`. If yes, mark T1-I-05 **✅ (integrated into T1-D-03)** in `FRAMEWORK_BACKLOG.md` — consistent with how T1-I-05a and T1-D-03 already reference it — and reconcile any `CAPABILITY_INVENTORY.md` reference. If partial, downgrade the T1-I-05a citation from ✅ to match. Either way, the three references should agree. Low effort; pure status reconciliation, no code.
 

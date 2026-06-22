@@ -497,7 +497,7 @@ class Validator:
         self.run_check("Required CLI Tools", self.validate_tools)
         self.run_check("Harness Core Directory Layout", self.validate_directories)
         self.run_check("Harness Core Files", self.validate_core_files)
-        self.run_check("Repository Guard (P-14)", self.validate_repo_guard)
+        self.run_check("Repository Guard (G-01)", self.validate_repo_guard)
         self.run_check("Universal Context File", self.validate_universal_context)
         self.run_check("Harness Configurations Validity", self.validate_configs)
         self.run_check("Outer Loop Methodology Mode", self.validate_outer_loop_mode)

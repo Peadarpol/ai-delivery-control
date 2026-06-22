@@ -30,7 +30,7 @@ any LLM-based agent (Claude Code, Gemini CLI, Cursor, Windsurf) through
 detects a HALT sentinel file and stops the agent before any work begins — now
 enforced at every commit boundary as a pre-commit hook (BUG-15, v1.3.1) in
 addition to session startup. `check_repo.py` verifies the agent is operating in
-the correct repository (P-14 guard). Four markdown state files carry context
+the correct repository (G-01 guard). Four markdown state files carry context
 across sessions: `active_context.md`, `decisions_log.md`, `last_session_summary.md`,
 `session_ledger.jsonl`. Agents are required to update all four at session close.
 

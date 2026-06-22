@@ -322,7 +322,7 @@ S0-05 must be cut before any beta invitations are sent.
 | T1-C-01 | Retrospective session outcome inference + post-commit heartbeat | Chain B foundation | ✅ (v1.1.5) |
 | T1-I-03 | Outcome-aware session startup orientation | Chain B | ✅ (v1.1.5) |
 | T1-D-03 | Dream phase distillation (distill_dream.py) | Chain B capstone | ✅ (v1.1.5) |
-| T1-I-05 | Memory contradiction detector (integrated into T1-D-03) | Chain B | ⬜ |
+| T1-I-05 | Memory contradiction detector (integrated into T1-D-03) | Chain B | ✅ |
 
 **Memory system & reliability**:
 
@@ -475,6 +475,15 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | T1-K-01 | Malicious package detection gate (guarddog) | Security |
 | T1-M-04 | Minimal team usage guide | Documentation |
 
+#### Governance & Consistency
+
+| ID | Item | Category |
+|----|------|----------|
+| T1-K-08 | Fix architecture_checks.py silent PASS on zero files scanned | Governance & Consistency | ✅ v1.4.3 |
+| T1-K-09 | Add consistency gate: assert cross-references exist and gates actually gate | Governance & Consistency | ✅ v1.4.3 |
+| T1-K-10 | Single-source session startup/close/escalation protocols (same treatment as prohibition fix) | Governance & Consistency | ✅ v1.4.3 |
+| T1-M-14 | Clean up stale P-series references in AGENTS.md §9.1 and positive reframing of H-series (option B) | Governance & Consistency | ✅ v1.4.3 |
+
 ---
 
 ### v1.6.0 — Workflow Engine 📋 FUTURE
@@ -509,6 +518,7 @@ Full item descriptions in backlog section T1-W.
 - T2-A-01: MCP server wrapping SQLite — shared session history, decisions, verdicts queryable across machines
 - T2-A-02: Cross-machine session continuity
 - T2-A-03 through T2-A-06: Hybrid search, shared decisions, RRF search, community detection
+- T2-A-07: Cross-project calibration convergence (deferred — design alongside shared-state work, not standalone)
 - T2-B-01: Distributed HALT sentinel
 - T2-B-02 through T2-B-04: Role-based governance, remote audit trail, team dashboard
 - T2-C-01 through T2-C-03: Team bootstrap, shared skill registry, team dream phase
@@ -520,10 +530,11 @@ Full item descriptions in backlog section T1-W.
 
 **Compliance note**: Formal compliance control mappings (SOCI Act, ISM, PSPF) are planned for this milestone. Until those mappings exist with specific control references, audit trail output formats, and demonstrated compliance answers, the regulated industry claim is aspirational. v3.0.0 makes it concrete.
 
-**Planned items** (Tier 3 — 12 items in backlog T3-A through T3-C):
+**Planned items** (Tier 3 — 13 items in backlog T3-A through T3-C):
 - T3-A-01 through T3-A-03: PostgreSQL backend, migration framework, high availability
 - T3-B-01 through T3-B-05: Row-level security, audit-grade immutability, SSO, data residency, RBAC
 - T3-C-01 through T3-C-04: DORA metrics, Jira/Linear integration, harness-as-a-service API, compliance reporting
+- T3-C-05: Human approval-quality drift detection (parked — pair with compliance work; lowest-evidence comparator)
 
 **Enterprise Edition go-to-market note**: The enterprise product requires a fundamentally different go-to-market than the Developer Edition. The temporal moat (dream phase) that differentiates the Developer Edition is less relevant to enterprise procurement. Enterprise differentiators are compliance control mappings, policy-as-code governance (T1-K-05, HIB-032), audit-grade immutability (T3-B-02), and separation of duties (T2-B-02). The enterprise product should be considered a parallel workstream rather than a future milestone — potentially delivered as a services engagement wrapping the current Tier 1/2 framework before the full v3.0.0 infrastructure is built. The PE distribution channel identified in strategic context is accessible at Developer Edition maturity; it does not require v3.0.0. Source: strategic planning session, June 2026.
 

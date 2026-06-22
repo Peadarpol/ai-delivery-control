@@ -117,7 +117,7 @@ Expected output:
 ✅ Required CLI Tools
 ✅ Harness Core Directory Layout
 ✅ Harness Core Files
-✅ Repository Guard (P-14)
+✅ Repository Guard (G-01)
 ✅ Universal Context File
 ✅ Harness Configurations Validity
 ✅ Pre-commit Git Hook Layout
