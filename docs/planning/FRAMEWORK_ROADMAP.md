@@ -767,15 +767,6 @@ harness governs the delivery process, not the data layer. The labs themselves
 implementation layer, not the model — validating that governance frameworks are the
 defensible territory, not model wrappers.
 
-**Private equity as a distribution channel (strategic signal, Nate B Jones, 2026)**:
-PE firms own thousands of mid-market companies — finance, ops, support, procurement,
-compliance — and are actively seeking AI governance frameworks to deploy across
-portfolios. A framework that installs in under 10 minutes, provides a governed
-delivery structure, and adapts to each project's failure patterns (dream phase) is
-a portfolio-level governance standard, not just a per-developer tool. This
-distribution path is distinct from individual developer adoption and from enterprise
-direct sales. At v2.0.0 (shared state, team features), assess whether PE portfolio
-deployment is a viable go-to-market motion alongside community adoption.
 
 ### What the Research Validates
 

@@ -5,6 +5,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -524,6 +525,125 @@ def report_state_file_sizes():
         print("  Status         : \033[92mHEALTHY\033[0m")
 
 
+def load_config() -> dict:
+    config_path = Path(".agent/config.yaml")
+    if not config_path.exists():
+        return {}
+    try:
+        import yaml
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except:
+        return {}
+
+
+def report_unmerged_branches():
+    section_header("UNMERGED STALE BRANCHES")
+    
+    # 1. Load config settings
+    config = load_config()
+    unmerged_config = config.get("harness_health", {}).get("unmerged_branches", {})
+    check_remote = unmerged_config.get("check_remote", False)
+    threshold_days = int(unmerged_config.get("threshold_days", 14))
+    allowlist = set(unmerged_config.get("allowlist", ["devops", "feat/active-wip"]))
+    
+    # Add main and master to allowlist/exclusions automatically so they aren't parsed
+    allowlist.add("main")
+    allowlist.add("master")
+    allowlist.add("origin/main")
+    allowlist.add("origin/master")
+    
+    # Try importing safe git env
+    try:
+        from src.scripts.harness_utils import _safe_git_env
+    except ImportError:
+        try:
+            from harness_utils import _safe_git_env
+        except ImportError:
+            def _safe_git_env():
+                return None
+                
+    env = _safe_git_env()
+    branches = []
+    
+    # Local branches
+    try:
+        res = subprocess.run(
+            ["git", "branch", "--no-merged", "main"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env
+        )
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                branch_name = line.strip().strip("*").strip()
+                if branch_name and branch_name not in allowlist:
+                    branches.append((branch_name, False))
+    except Exception as e:
+        print(f"  Error checking local unmerged branches: {e}")
+        
+    # Remote branches
+    if check_remote:
+        try:
+            res = subprocess.run(
+                ["git", "branch", "-r", "--no-merged", "main"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env
+            )
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    branch_name = line.strip().strip("*").strip()
+                    simple_name = branch_name
+                    if simple_name.startswith("origin/"):
+                        simple_name = simple_name[7:]
+                    if branch_name and branch_name not in allowlist and simple_name not in allowlist:
+                        if "->" not in branch_name:
+                            branches.append((branch_name, True))
+        except Exception as e:
+            print(f"  Error checking remote unmerged branches: {e}")
+            
+    if not branches:
+        print("  Status         : \033[92mHEALTHY (no unmerged branches)\033[0m")
+        return
+        
+    # 3. Retrieve commit times and filter by threshold
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stale_branches = []
+    
+    for branch_name, is_remote in branches:
+        try:
+            res = subprocess.run(
+                ["git", "log", "-1", "--format=%ct", branch_name],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env
+            )
+            if res.returncode == 0 and res.stdout.strip().isdigit():
+                commit_timestamp = int(res.stdout.strip())
+                commit_dt = datetime.datetime.fromtimestamp(commit_timestamp, datetime.timezone.utc)
+                age_days = (now - commit_dt).days
+                if age_days >= threshold_days:
+                    stale_branches.append((branch_name, age_days, is_remote))
+        except Exception:
+            continue
+            
+    if not stale_branches:
+        print("  Status         : \033[92mHEALTHY (no stale unmerged branches)\033[0m")
+        return
+        
+    print(f"  Status         : \033[91mDEGRADING\033[0m")
+    for name, age, is_remote in sorted(stale_branches, key=lambda x: x[1], reverse=True):
+        remote_tag = " [remote]" if is_remote else ""
+        print(f"  - \033[91m{name}\033[0m{remote_tag}: last commit was {age} days ago (exceeds {threshold_days}d threshold)")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Harness health report")
     parser.add_argument("--all", action="store_true", help="Show all backlog items")
@@ -547,6 +667,7 @@ def main():
     report_schema_hardening()
     report_dream_phase()
     report_token_trends()
+    report_unmerged_branches()
 
     if args.dream_proposals or True:  # run in default report
         report_dream_proposal_staleness()

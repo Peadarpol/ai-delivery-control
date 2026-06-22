@@ -1,5 +1,14 @@
 # Changelog
 
+
+## v1.4.3 — 2026-06-22
+
+### Governance & Consistency
+- Prohibition restructure: universal/project/pattern-conditional three-tier model (T1-K-08, T1-K-09, T1-K-10, T1-M-14)
+- architecture_checks.py fail-loud on zero files scanned
+- Consistency gate: workflow slug resolution, blocked_commands header, H/S/C/G label assertions
+- Session protocol single-sourcing; H-series procedural reframing; stale P-series cleanup
+
 ## v1.4.2 — 2026-06-14
 
 ### Gate Correctness & Backlog Repair
@@ -7,6 +16,8 @@
 - **T1-L-13a**: Implemented the LLM-side ADVISORY rule for ADR decision-block review, evaluating the coherence of named AT tradeoffs and exposed failure modes using the AT/FM vocabulary.
 - **HIB-053b**: Fixed spec-mtime false-success in session close inference by replacing the unreliable filesystem mtime scanning with `git status --porcelain` and capping commitless specification work at `partial` (downgrading from `success`).
 - **Roadmap & Backlog Reconciliation**: Repaired backlog and roadmap drift, re-registered missing HIB items, updated capability dependencies, and re-tiered `T1-K-07` to Medium.
+
+
 
 ## v1.4.1 — 2026-06-14
 
