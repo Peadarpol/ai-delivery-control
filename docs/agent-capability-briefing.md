@@ -1,7 +1,7 @@
 # AI Delivery Control — Agent Capability Briefing
 
-**Framework version**: v1.4.0
-**Last updated**: 2026-06-13
+**Framework version**: v1.4.4
+**Last updated**: 2026-06-22
 **Update trigger**: Update this document when a backlog item moves to ✅ delivered,
 when a capability is materially changed, or when a "not yet built" item ships.
 
@@ -22,7 +22,7 @@ any LLM-based agent (Claude Code, Gemini CLI, Cursor, Windsurf) through
 
 ---
 
-## Currently Delivered Capabilities (v1.0.0–v1.4.0)
+## Currently Delivered Capabilities (v1.0.0–v1.4.4)
 
 ### Session lifecycle management
 
@@ -128,6 +128,52 @@ AST-based checks (`architecture_checks.py`) scan the diff for layer boundary
 violations and forbidden import patterns as defined in `.agent/config.yaml`.
 Config-driven — no hardcoded language assumptions.
 
+**Fail-loud on misconfiguration (T1-K-08, v1.4.3)**: If architecture layers
+are configured but zero Python files are found across all configured paths,
+the check now exits 1 with a diagnostic explaining which paths were missing —
+closing the "silent PASS on an unscanned codebase" failure mode.
+
+**ADR decision block advisory (T1-L-13, v1.4.1)**: `check_adr_decision_blocks()`
+scans ADR files for missing Decision Block scaffolding (AT/FM tradeoff
+documentation). Non-blocking advisory printed alongside the verdict.
+
+**Environment sanitisation (T1-K-05a, v1.4.1)**: All subprocess calls in
+`architecture_checks.py`, `co_change_check.py`, and `repo_map.py` now use
+`_safe_git_env()` — prevents credential exposure via inherited environment
+variables in child processes.
+
+### Governance consistency enforcement
+
+**Framework consistency gate (T1-K-09, v1.4.3)**: `test_framework_consistency.py`
+runs in CI and asserts that governance surfaces stay in sync:
+- Every workflow slug in `AGENTS.md §2` maps to a real file in `.agent/workflows/`
+- `blocked_commands.md` header references current H/S/C/G series labels (not
+  stale P-series)
+- Dead slug regression guards prevent `/perf` and `/qa` dead references
+  returning
+- `AGENTS.md §4.1` contains H/S/C/G series prohibition labels
+
+**Prohibition table restructure (T1-K-10, v1.4.3)**: The flat P-01–P-15
+prohibition table has been replaced with a three-tier structure in
+`AGENTS.md §4`. `AGENTS.md §4.1` is now declared the single canonical source;
+`governance.md §3` is a rationale+pointer document. All tool shim templates and
+governance surfaces regenerated from the canonical table. Four universal series:
+H (Honesty/Verification), S (Scope/Autonomy), C (Security), G (Version Control).
+New universal prohibitions include: prompt injection guard (C-04), irreversibility
+gate (S-03), compensating action prohibition (S-02), high-risk zone human review
+flag (C-02), and sycophancy-in-planning prohibition (H-05).
+
+**Session protocol single-sourcing (T1-K-10, v1.4.3)**: `governance.md §1`
+(session startup) and `§6` (session close) converted to rationale+pointer
+documents deferring to `AGENTS.md §1` and `§6` as canonical. Escalation
+summary in `AGENTS.md §5` explicitly marked as summary-not-complete with
+pointer to full 16-item list in `governance.md §2`.
+
+**Stale branch detection (T1-K-11, v1.4.4)**: `harness_health.py` now surfaces
+local branches with unmerged commits older than a configurable threshold
+(default 14 days) as a DEGRADING signal — preventing silent accumulation of
+unmerged delivery work.
+
 ### High-risk commit classification
 
 When the LLM provider is unavailable, low-risk commits (docs, config) fail open.
@@ -175,8 +221,21 @@ Gherkin BDD scenarios → spec drafting → human approval. Agent drafts; human 
 task backlog via budget-tier LLM. Supports `--offline` fallback. Output:
 `docs/planning/tasks/SPEC-XXX-tasks.md`.
 
-**Spec collision detection (T1-L-01a, v1.3.4)**: computes keyword overlap (Jaccard similarity)
-on acceptance criteria across active specs to warn of overlaps before implementation starts.
+**Spec collision detection (T1-L-01a, v1.3.4)**: computes keyword overlap
+(Jaccard similarity) on acceptance criteria across active specs to warn of
+overlaps before implementation starts.
+
+**Spec grader per-criterion feedback (T1-L-12, v1.4.1)**: `check_spec.py`
+Pass 2 now returns a per-criterion breakdown written to
+`.agent/state/spec_grade_{SPEC_ID}.md` — each acceptance criterion assessed
+individually (testable? specific? measurable?). The `/ba` workflow Phase 3
+reads the grade card before finalising acceptance criteria.
+
+**System archetype classification (T1-L-14, v1.4.1)**: Spec template §5
+(Architectural Constraints) now includes an optional `System Archetype:` field
+(A1–A6 from "The Engineer's Map"). A3 (Marketplace & Transaction) specs
+receive heightened FM4/FM10 scrutiny. Field is optional — absence does not
+block.
 
 ### Dream phase self-improvement loop
 
@@ -311,6 +370,8 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.4.4 | 2026-06-22 | Integration release — five unmerged branches recovered; BUG-04/05 (PASS verdict logging, ADR routing); T1-K-05a (subprocess env sanitisation via `_safe_git_env()`); T1-L-12 (SpecGradeCard per-criterion feedback); T1-L-13 (ADR decision block enforcement); T1-L-14 (system archetype classification A1-A6); T1-K-11 (stale branch detection in harness_health.py); 372 tests; 643 checksum files |
+| v1.4.3 | 2026-06-22 | Prohibition table restructured into H/S/C/G four-series universal tier with project-specific (§4.2) and pattern-conditional (§4.3) sub-tiers (T1-K-10); `AGENTS.md §4` declared canonical single source of truth across all governance surfaces; consistency gate added (T1-K-09): workflow slug resolution, H/S/C/G label assertions, blocked_commands header currency; architecture_checks.py fail-loud on zero files scanned (T1-K-08); H-series procedural reframing + stale P-series cleanup (T1-M-14); nine new universal prohibitions with evidence base from 2025-2026 incident research |
 | v1.4.0 | 2026-06-13 | GateContext shared typed data bus across pre-commit hook chain (T1-G-13); evidence gathering injecting pytest_collect_status and todo_delta into LLM context (T1-G-11); capability calibration per-capability TP/FP weight adjustment (T1-G-14); EXTRACTED/INFERRED/AMBIGUOUS co-change confidence tiers (T1-H-10); SQLite cross-project state persistence write layer (T1-D-01); Claude Code Stop hook acceptance gate (T1-L-05a) |
 | v1.3.4 | 2026-06-12 | Automatic session-start stash checkpoint (T1-J-01) and mid-task checkpointing (T1-J-01a); spec collision detection (T1-L-01a); mid-session observability tool / session health CLI (T1-M-03); blocked_commands.md configuration (T1-K-06); Gemini CLI close protocol checklist (HIB-GEMINI-01); harness health checks for dream proposal staleness (HIB-HEALTH-01) and state file sizes (HIB-HEALTH-02); distill_dream.py wrong field name fix (HIB-DREAM-01), INTENT_MISMATCH routing (HIB-DREAM-02), and escalation_rate threshold redesign (HIB-DREAM-03) |
 | v1.3.3 | 2026-06-07 | Dynamic versioning from harness_version.txt (HIB-FM8-02); severity casing normalization to uppercase (HIB-FM8-01); onboarding baseline relocation to `.agent/baseline/`; rebuttal_pass.json gitignore; docs/state-file-schema.md, docs/architecture/gate-context-design.md (T1-G-13) spec, and archetype domain starter packs |
