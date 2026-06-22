@@ -1,9 +1,9 @@
 # Git Discipline
 
 ## Staging rules
-- **Always stage named files only.** `git add .` and `git add -A` are prohibited (P-12).
+- **Always stage named files only.** `git add .` and `git add -A` are prohibited (G-02).
 - **Never stage files outside the repository root.**
-- **Never stage agent-generated files** (P-13): `AGENTS.md`, brain files, session logs, `active_context.md`, `decisions_log.md`, `last_session_summary.md`, `session_ledger.md`.
+- **Never stage agent-generated files** (§9.1 git discipline): `AGENTS.md`, brain files, session logs, `active_context.md`, `decisions_log.md`, `last_session_summary.md`, `session_ledger.md`.
 - **Documentation commits with code.** All documentation updates (walkthrough, task files, harness logs) must be committed in the same commit as the code they describe — never a follow-up commit. Prepare everything locally first, then commit once.
 
 ## Verification before commit

@@ -13,7 +13,7 @@
 Before anything else, read:
 1. `.agent/UNIVERSAL_CONTEXT.md` — project identity, harness version, key file locations
 2. `.agent/AGENTS.md` — mandatory session startup protocol, workflow-first rules,
-   absolute prohibitions (P-01 through P-15), escalation triggers, and session close requirements
+   absolute prohibitions (the H/S/C/G universal series in §4.1), escalation triggers, and session close requirements
 3. `.clinerules/` — directory containing rules loaded automatically by the Cline Rules panel.
 
 ---

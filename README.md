@@ -97,7 +97,7 @@ rather than a blunt bypass.
 `AGENTS.md` defines how every agent session runs: what to check at startup, which
 workflow applies to the task at hand, and when to stop and ask rather than improvise.
 
-**15 absolute prohibitions (P-01–P-15)** cover the most common ways agent sessions go wrong:
+**16 universal absolute prohibitions (the H/S/C/G series in `AGENTS.md` §4.1)** — Honesty/verification (H), Scope/autonomy (S), Security (C), Version control (G) — cover the most common ways agent sessions go wrong:
 
 - No committing to `main` without explicit instruction
 - No `git add .` — always named files only
@@ -199,11 +199,11 @@ governs everywhere that human judgement adds more value than mechanical consiste
 |---|---|
 | Pre-commit AI review gate | Blocks commit on FAIL |
 | Architecture boundary checks | Blocks commit on violations |
-| Repository identity guard (P-14) | Blocks git operations in wrong repo |
+| Repository identity guard (G-01) | Blocks git operations in wrong repo |
 | Commit traceability gate | Blocks untraced commits |
 | Session startup protocol | Convention — agent compliance |
 | Workflow phases | Convention — agent compliance |
-| Prohibition table (P-01–P-15) | Convention — agent compliance |
+| Prohibition table (H/S/C/G series) | Convention — agent compliance |
 
 ---
 

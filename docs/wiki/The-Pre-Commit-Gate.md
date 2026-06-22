@@ -20,7 +20,7 @@ These run first, before the commit message is written:
 
 | Hook | What it checks |
 |------|---------------|
-| `check-active-repo` | Confirms the commit targets the expected repository (P-14 guard) |
+| `check-active-repo` | Confirms the commit targets the expected repository (G-01 guard) |
 | `trailing-whitespace`, `end-of-file-fixer`, `check-yaml` | Standard file hygiene |
 | `black` | Code formatting |
 | `ruff` | Lint and style |

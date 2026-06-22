@@ -272,6 +272,23 @@ You can copy and paste the following templates into your project's `.agent/AGENT
 > [!NOTE]
 > The `Precondition` column is mandatory. It ensures that subsequent agents understand why the constraint exists and do not treat it as a universal framework rule.
 
+> [!IMPORTANT]
+> **Intentionally demoted from the old universal flat list.** Three rules from the
+> pre-tiered `P-01…P-15` list (P-04 *skip writing tests*, P-05 *install dependencies
+> without approval*, P-07 *use `pip install` instead of `poetry add`*) were **deliberately
+> moved here to Tier 2** — they are not universal. Each depends on a project choice: P-04 on
+> whether the project mandates TDD, P-05 on whether the project pins a dependency manifest,
+> and P-07 on which package manager the project standardises on. A React app, a Rust CLI, and
+> a data pipeline would each phrase or omit them differently, so they fail the universality
+> test in the Classification Decision Table above. If your project makes those choices, copy
+> the matching rows below into your `AGENTS.md` §4.2:
+>
+> ```markdown
+> | PS-T1 | Skip writing tests for new functionality | Project mandates TDD (red-green-refactor) |
+> | PS-T2 | Install a new dependency without listing it for explicit approval | Project pins a dependency manifest (e.g. pyproject.toml, package.json) |
+> | PS-T3 | Use `pip install` (or `npm install`) directly instead of the project package manager | Project standardises on poetry / pnpm / uv |
+> ```
+
 #### Template for §4.3 — Pattern-Conditional Rules
 
 ```markdown
@@ -335,7 +352,7 @@ The following files are framework-owned and overwritten on installer re-runs:
 |---|---|
 | `src/scripts/review_context_universal.md` | Framework-maintained universal review invariants |
 | `.agent/AGENTS.md` | Cross-tool mandatory session protocol |
-| `.agent/governance.md` | Absolute prohibitions and escalation rules |
+| `.agent/governance.md` | Prohibition rationale, legacy-ID map, and escalation rules (canonical rule list is `.agent/AGENTS.md` §4) |
 | `.agent/scripts/*` | Session management and gate scripts |
 | `.agent/workflows/*` | Delivery workflow definitions |
 | `.agent/UNIVERSAL_CONTEXT.md` | Machine-generated; refreshed on every install |

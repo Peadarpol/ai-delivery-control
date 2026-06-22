@@ -8,11 +8,11 @@ Welcome! We are excited to build a premium, highly-portable process guard framew
 
 To maintain absolute quality and high trust across all installations, every contributor must strictly follow these five core rules:
 
-1. **TDD Iron Law (Rule P-04)**: All new features or bug fixes MUST be accompanied by comprehensive tests. Never skip writing tests or weaken assertions.
+1. **TDD Iron Law (H-03 + this repo's Tier 2 test policy)**: All new features or bug fixes MUST be accompanied by comprehensive tests. Never skip writing tests, and never weaken assertions to make tests pass (H-03). TDD is a project-specific rule for this repo; see `.agent/AGENTS.md` §4.
 2. **Absolute Clean State Verification (Rule 8.2)**: Before making any commit or push, you must run the entire verification suite (`pytest` and `python bootstrap/validate.py`) locally on a clean database state.
-3. **No Unnamed Git Staging (Rule P-12)**: Always stage named files explicitly (e.g. `git add src/foo.py`). The commands `git add .` and `git add -A` are strictly prohibited.
+3. **No Unnamed Git Staging (Rule G-02)**: Always stage named files explicitly (e.g. `git add src/foo.py`). The commands `git add .` and `git add -A` are strictly prohibited.
 4. **Pure AST for Compilation**: Roster and metadata extraction sidecar compilations must remain pure static AST parsing tasks with zero LLM/network calls to keep pre-commit times under 50ms.
-5. **Never Stage State or Logs (Rule P-13)**: Never commit agent-generated tracking logs or session state files (e.g. `AGENTS.md`, `.ai-review-log.jsonl`, `session.json`, `harness_events.jsonl`).
+5. **Never Stage State or Logs (`AGENTS.md` §9.1)**: Never commit agent-generated tracking logs or session state files (e.g. `AGENTS.md`, `.ai-review-log.jsonl`, `session.json`, `harness_events.jsonl`).
 
 ---
 

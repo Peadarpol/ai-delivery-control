@@ -39,8 +39,8 @@ AI Delivery Control is a **local-first** governance harness. It runs entirely on
 Every AI agent session in a framework-installed project receives the following injected context, in order:
 
 1. **`CLAUDE.md` / `GEMINI.md` / `.cursorrules`** — Thin shims that direct the agent to read `.agent/UNIVERSAL_CONTEXT.md` and `.agent/AGENTS.md` as the first action of every session.
-2. **`.agent/AGENTS.md`** — The mandatory session protocol: startup checklist, workflow-first discipline, absolute prohibitions (P-01 to P-17), escalation triggers, session close requirements, git discipline rules. This is the primary governance document. **Read this before installing the framework.**
-3. **`.agent/governance.md`** — Absolute prohibitions and escalation rules. Rarely changes; high trust document.
+2. **`.agent/AGENTS.md`** — The mandatory session protocol: startup checklist, workflow-first discipline, absolute prohibitions (the H/S/C/G universal series in §4), escalation triggers, session close requirements, git discipline rules. This is the primary governance document and the canonical source for prohibitions. **Read this before installing the framework.**
+3. **`.agent/governance.md`** — Prohibition rationale, legacy-ID map, and escalation rules (canonical rule list lives in `.agent/AGENTS.md` §4). Rarely changes; high trust document.
 4. **`.agent/config.yaml`** — Architecture constraints, layer boundary rules, domain constraints injected into the AI review gate system prompt via `governance_check.py`.
 5. **`src/scripts/review_context_universal.md`** — Framework-owned universal review invariants injected into every adversarial gate call.
 6. **`src/scripts/review_context_project.md`** — Developer-maintained project-specific review rules injected alongside the universal layer.

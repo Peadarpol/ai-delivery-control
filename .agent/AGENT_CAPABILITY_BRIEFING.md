@@ -41,7 +41,7 @@ escape path. For governance-violation halts, there is no bypass.
 
 `check_repo.py` verifies the agent is operating in the correct repository by
 comparing the git remote URL against the expected project name set at install
-time (P-14 guard, convention-only — no pre-commit hook).
+time (G-01 guard, convention-only — no pre-commit hook).
 
 State files carrying context across sessions: `active_context.md`,
 `decisions_log.md`, `last_session_summary.md`, and `session_ledger.jsonl`
@@ -228,7 +228,7 @@ at `tests/data/false_positive_cases.csv`.
 1. Run `check_halt.py` → `check_repo.py` → `init_session.py` before any work
 2. Read `active_context.md`, `decisions_log.md`, `last_session_summary.md`
 3. Name the governing workflow before writing code (AGENTS.md §2)
-4. Stage named files only — never `git add .` (P-12)
+4. Stage named files only — never `git add .` (G-02)
 5. Update `active_context.md`, `decisions_log.md`, `last_session_summary.md`
    at session close
 6. Stop and escalate if blocked at the same workflow state more than twice

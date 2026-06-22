@@ -47,7 +47,7 @@ git commit -m "docs: document user endpoint & clean up controller imports"
 
 ## Scenario 2: Adversarial Policy Violation (FAIL)
 
-In this scenario, a developer introduces an optimized query inside a repository class, but accidentally bypasses multi-tenant branch isolation (Rule P-17). The gate executes at full intensity, analyzes the AST roster, detects the violation, and blocks the commit with precise line citations and remediation advice.
+In this scenario, a developer introduces an optimized query inside a repository class, but accidentally bypasses multi-tenant branch isolation (Tier 3 rule PC-MT-02 — a query that could return rows across tenant boundaries; multi-tenant isolation is also a C-02 high-risk zone). The gate executes at full intensity, analyzes the AST roster, detects the violation, and blocks the commit with precise line citations and remediation advice.
 
 ### 1. Developer Commits Non-Compliant Code
 ```bash
