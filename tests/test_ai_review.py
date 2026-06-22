@@ -1805,4 +1805,3 @@ class TestCapabilityCalibrationIntegration:
             assert any("treated as WARN-only" in note for note in called_verdict.route_decision.policy_notes)
             assert any("treated as FAIL-escalated" in note for note in called_verdict.route_decision.policy_notes)
 
-
