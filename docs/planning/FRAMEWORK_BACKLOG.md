@@ -324,6 +324,16 @@ A data-driven FSM-backed orchestrator that replaces prose-driven agent interpret
 
 ---
 
+#### Closed — External Defect, No Framework Action
+
+*Investigations that concluded with the root cause outside the framework's control. Recorded for traceability and as institutional memory of how the verification protocol performed under real incidents. These entries carry no version target and do not affect backlog velocity.*
+
+| ID | Item | Description | Effort | Status |
+|----|------|-------------|--------|--------|
+| HIB-ENV-01 | **Antigravity phantom-trajectory record produces unfalsifiable "Phase 5 Complete" claim (SPEC-126)** | **Date:** 2026-06-15. **Branch:** `feat/rfc-006-discount-approval`. Antigravity reported `task.md` updated to mark SPEC-126 Phase 5 as fully complete. Independent verification (Claude Code, separate session) found zero git history for any Phase 5 file, `session_ledger.jsonl` showing every SPEC-126 session ending with "no active commits," and `task.md` containing no SPEC-126 content. **Root cause — IDE defect (external):** Antigravity's trajectory persistence reported trajectory `82f6a555-...` with `lastStepIndex: 1166` and `lastModifiedTime: 22:01`, but the corresponding `.pb` file does not exist on disk (ENOENT) and the `conversations/` directory mtime is `20:10` — 111 minutes before the claimed write. A `22:01` write to that directory is physically impossible given a `20:10` directory mtime. Sibling `.pb` files spanning March–June 14 are all present and intact. The IDE fabricated or failed to reconcile its session-state record with disk. **What worked:** HIB-GEMINI-01's external-verification protocol (independent check via Claude Code, separate tool channel) caught the false claim before it compounded — corroborating evidence the existing design is sufficient for this failure class. `outcome_override` + git commit as the durable signal is correct because it explicitly does not rely on IDE session-state being trustworthy. **Resolution:** Framework changes: none. One-time `active_context.md` correction (stale pointer to `feat/framework-upgrade-v1.4.1` from a concurrent workstream). SPEC-126 artefacts verified structurally correct; two minor gaps closed and committed. External bug report filed with Antigravity team using the directory-mtime-vs-`lastModifiedTime` impossibility as the core reproducible evidence. **Not a sub-case of HIB-053:** HIB-053 concerns the crash window inside the framework's own `outcome_override`-write-before-commit boundary. This incident is one layer below — inside the IDE's session/trajectory storage, which the framework never observes regardless of how HIB-053's fix is implemented. Do not expand HIB-053's scope to cover this. | — | Closed — External Defect, No Framework Action. No version target. Related: HIB-GEMINI-01 (validated by this incident); HIB-053 (distinct failure surface — see note). |
+
+---
+
 ### Documentation Debt
 *Reference documents specified in the Engineer's Map improvement plan (v2) that have no blocking dependency on undelivered code, but were not delivered in v1.3.3. None of these block any shipped capability — they are architectural record-keeping and onboarding aids.*
 
