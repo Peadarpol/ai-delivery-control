@@ -1,5 +1,14 @@
 # Changelog
 
+
+## v1.4.3 — 2026-06-22
+
+### Governance & Consistency
+- Prohibition restructure: universal/project/pattern-conditional three-tier model (T1-K-08, T1-K-09, T1-K-10, T1-M-14)
+- architecture_checks.py fail-loud on zero files scanned
+- Consistency gate: workflow slug resolution, blocked_commands header, H/S/C/G label assertions
+- Session protocol single-sourcing; H-series procedural reframing; stale P-series cleanup
+
 ## v1.4.2 — 2026-06-14
 
 ### Gate Correctness & Backlog Repair
