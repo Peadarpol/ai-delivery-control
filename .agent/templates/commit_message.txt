@@ -1,0 +1,7 @@
+[type]([scope]): [subject]
+
+[body]
+
+AI-Assisted: true
+Harness-Version: <current harness version from harness_version.txt>
+Session-ID: <current session_id from session.json>

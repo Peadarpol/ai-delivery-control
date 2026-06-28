@@ -56,3 +56,33 @@ These are deliberate design boundaries, not implementation gaps waiting to be fi
 ---
 
 *For the full design philosophy behind these choices, see [Architecture Decisions](Architecture-Decisions.md).*
+
+---
+
+## Industry Validation
+
+The harness implements a governance loop that was independently articulated by two
+major industry sources in early 2026:
+
+**Sonar AC/DC framework (March 3, 2026)**: Sonar — the global leader in code
+verification — introduced the Agent Centric Development Cycle (AC/DC) at Sonar
+Summit Austin, defining the same four-stage loop: Guide → Generate → Verify → Solve.
+Sonar's positioning: *"At the core of AC/DC is the recognition that agents generating
+code need to be supported by strong Guide, Verify, and Solve practices."* The harness's
+`UNIVERSAL_CONTEXT.md` + skills injection (Guide), Gemini session (Generate),
+`ai_review.py` + `architecture_checks.py` (Verify), and rebuttal protocol + dream phase
+(Solve) map directly to these four stages. Sonar's framework was announced after the
+harness had been in production use for over a year.
+
+**GitLab AI Accountability Report (June 2026)**: A 1,528-person survey across six
+countries found that 92% of respondents report governance challenges with AI-generated
+code, and 85% agree the next phase of AI in software will focus less on governing it.
+The report defines AI accountability as the ability to answer three questions about any
+AI-generated commit: where did it come from, what was it meant to do, and who is responsible
+for it in production. The harness answers all three:
+session traceability via `session_ledger.jsonl`, spec-to-commit linkage via SPEC-ID
+tokens, and the HARD STOP PROTOCOL that keeps the human architect as the responsible
+party at every merge gate.
+
+These sources do not change the harness's design — they confirm it.
+
