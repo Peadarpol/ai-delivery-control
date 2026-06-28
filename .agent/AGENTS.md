@@ -80,6 +80,8 @@ Before any task involving code changes across more than one file or layer:
 
 > Example: if a seeding task fails because a migration contains an error, the migration is out of scope — stop and report, do not fix the migration to unblock the seeding task.
 
+**Commit granularity for complex SPECs.** For any SPEC with more than three acceptance criteria, implement and commit one acceptance criterion at a time. Each commit must pass the gate before proceeding to the next criterion. Do not bundle multiple acceptance criteria into a single commit unless they are logically inseparable — if bundled, document the reason explicitly in the commit message. This discipline makes gate feedback attributable to a specific piece of scope and prevents compound failures that are harder to diagnose and reverse.
+
 ---
 
 ## 4. Absolute Prohibitions (never without explicit user instruction)
@@ -102,6 +104,8 @@ cross-reference table lives. The agent-facing table below carries only the curre
 | H-03 | Manipulate, exit, or short-circuit the verification mechanism itself to produce a passing result. This includes `sys.exit(0)` in test hooks, deleting failing tests, commenting out assertions, or suppressing error output to make a check pass. | Test-harness cheating |
 | H-04 | Omit findings from a verification tool's output when writing a handoff summary or session close. All findings — including non-blocking WARN and MEDIUM-severity items — must be reported. | Selective summary |
 | H-05 | Agree with a plan, design, or decision when evidence available in the current session supports a contrary position. Flag the disagreement explicitly. Comfortable agreement at planning time is more expensive than an uncomfortable flag caught early. | Sycophancy in planning |
+| H-06 | Proceed to the next commit attempt after a gate FAIL without first producing a brief written correction summary in the active session notes. The summary must state: (1) which rule was violated, (2) why the implementation triggered it, (3) what will be done differently in the next attempt. This summary is not a commit message — it is a session-internal reflection step that makes the gate feedback actionable rather than merely logged. | Feedback without learning |
+| H-07 | Retry the same implementation approach after it has failed the gate twice with the same finding. Two identical-class failures on the same code path is a local optima signal, not a transient error. Escalate to the human operator with: the finding, both attempt summaries, and a specific question about the architectural constraint being violated. Do not attempt a third retry autonomously. | Local optima recurrence |
 
 #### Scope and Autonomy (S-series)
 
@@ -220,12 +224,19 @@ following fields to `.agent/state/session.json`:
 
 Guidance for selecting `outcome_override`:
 - `success` — all planned work for this session committed, tests passing, no open
-  blockers.
+  blockers. **Do not write `success` if any of the following are true:**
+  - A gate FAIL occurred in this session and no subsequent PASS has been recorded.
+  - The SPEC contains acceptance criteria not yet verified by a passing gate run.
+  - The same implementation approach failed the gate twice with the same finding class
+    (this is a local optima signal — write `escalated` and report to the human operator).
 - `partial` — some work committed, but planned scope not fully delivered; `active_context.md`
   must list the remaining items.
 - `abandoned` — session is ending without committing planned work (e.g. blocked,
   ran out of context). `active_context.md` must explain why.
-- `escalated` — a HALT condition or escalation trigger was hit during this session.
+- `escalated` — a HALT condition or escalation trigger was hit during this session,
+  OR two identical-class gate failures occurred on the same code path (H-07). In the
+  latter case, `outcome_override_note` must name the finding, both attempt summaries,
+  and the specific architectural constraint the human operator needs to clarify.
 
 `init_session.py`'s `infer_and_close_previous_session()` reads `outcome_override` first
 and uses it verbatim (`outcome_source: "agent_override"`) before falling back to git-state
@@ -317,6 +328,16 @@ Full gap analysis and rationale: `.agent/state/harness_improvement_backlog.md`.
 - **Never stage agent-generated files** (see §4.1 staging discipline): `AGENTS.md`, brain files, session logs, `active_context.md`, `decisions_log.md`, `last_session_summary.md`, `session_ledger.md`.
 - **Documentation commits with code.** All documentation updates (walkthrough, task files, harness logs) must be committed in the same commit as the code they describe — never a follow-up commit. Prepare everything locally first, then commit once.
 
+- **AI-provenance trailer (mandatory on all harness-governed commits).** Every commit made under harness governance must include the following git trailer lines at the end of the commit message body, after a blank line separating them from the subject and body:
+
+  ```
+  AI-Assisted: true
+  Harness-Version: <current harness version from harness_version.txt>
+  Session-ID: <current session_id from session.json>
+  ```
+
+  These trailers answer the GitLab AI accountability questions (where did this code come from, what was it meant to do) at the git-object level. They are machine-readable and support incident traceability. Read `harness_version.txt` and `session.json` at commit time to populate the values. Do not hardcode or guess the values.
+
 ### 9.2 Verification before commit
 
 > [!IMPORTANT]
@@ -389,6 +410,23 @@ From v1.3.3, FAIL and qualifying WARN findings use the decision block format:
 When contesting a finding via the rebuttal protocol, address the **Exposes** line
 specifically. A rebuttal that does not explain why the named FM does not apply to
 this specific file and context will be rejected.
+
+### Failure Mode Classification Before Retry
+
+Before writing a rebuttal or staging a retry after any gate FAIL, classify the finding
+into one of the four categories below. The classification determines the correct retry
+strategy — applying a wrong-class fix will fail again for the same underlying reason.
+
+| Class | Description | Correct retry strategy |
+|---|---|---|
+| **Structural violation** | Code structure broke an invariant (UoW, multi-tenancy, RBAC, MASS-ASSIGNMENT). The architecture itself is wrong. | Architectural change required. Re-read the relevant `review_context.md` rule before touching code. |
+| **Missing guard** | Correct structure but missing a required check (timeout, branch filter, permission, explicit commit). Additive fix. | Low risk — add the guard, re-run gate. |
+| **Scope error** | Implemented something not in the SPEC, or missed something that is. | Remove or add scope as needed. Re-read SPEC acceptance criteria before retrying. |
+| **Test gap** | Implementation may be correct but no test covers the acceptance criterion. | Add the test, re-run gate. Do not change production code unless the test reveals a genuine defect. |
+
+Write the classification (e.g. `FAIL CLASS: Missing guard`) in the H-06 correction summary
+before proceeding. A Structural violation that is retried as if it were a Missing guard will
+fail again — this is the most common source of the two-failure local optima pattern (H-07).
 
 ### 9 Environment Progression (mandatory gate sequence)
 

@@ -455,3 +455,26 @@ Software engineering best practices (Scrum, XP, RUP) all standardize on workflow
 ---
 
 *These decisions emerged from 1000+ hours of real-world usage with AI agents. They're not arbitrary—they're optimized for the specific challenge of keeping AI agents accountable while preserving their speed advantage.*
+
+---
+
+## Design Decision 14: AI-Provenance Git Trailers
+
+**Status**: Accepted  
+**Context**: The GitLab AI Accountability Report (June 2026, n=1,528) identified that
+34% of organisations that experienced a production incident involving AI-generated code
+could not trace which commits were AI-assisted, despite 87% expressing confidence that
+they could. The harness already tracks session traceability in `session_ledger.jsonl`,
+but this data is not present at the git-object level where incident responders first look.
+
+**Decision**: All commits made under harness governance must include three standardised
+git trailer lines: `AI-Assisted: true`, `Harness-Version: <version>`, and
+`Session-ID: <id>`. These trailers are machine-readable, survive `git log --format`,
+and answer the accountability question at the commit level without requiring access to
+harness state files.
+
+**Consequences**: Commit messages become slightly longer. The trailer values must be
+populated at commit time from live files (`harness_version.txt`, `session.json`) — they
+cannot be hardcoded. This is enforced by the §9.1 staging instruction in `AGENTS.md`.
+No changes to existing tooling are required; git trailers are parsed by standard
+`git log --format='%(trailers)'`.
