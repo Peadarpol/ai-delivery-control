@@ -458,7 +458,7 @@ Software engineering best practices (Scrum, XP, RUP) all standardize on workflow
 
 ---
 
-## ADR-XXX: AI-Provenance Git Trailers (2026-06-28)
+## Design Decision 14: AI-Provenance Git Trailers
 
 **Status**: Accepted  
 **Context**: The GitLab AI Accountability Report (June 2026, n=1,528) identified that
