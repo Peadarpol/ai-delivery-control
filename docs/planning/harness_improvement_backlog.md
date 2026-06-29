@@ -210,7 +210,7 @@ All 4 GymBase gate verdicts are FAIL with none WARN or PASS. Gate is too aggress
 **Date**: 2026-05-22
 **Source**: Silent bypass
 **Pillar**: T1-G hardening
-**Status**: 📅 Backlog — BUG-related
+**Status**: ✅ Complete (v1.4.5) — `GATE_SKIPPED` logs and events written to `.ai-review-log.jsonl` and `.agent/state/harness_events.jsonl` when the gate exits early.
 
 RFC-003 session completed with gate never firing. No log entry, no warning, no visible signal. Gate absence was invisible to both agent and developer. When gate is skipped/disabled, must write a `GATE_SKIPPED` entry to `.ai-review-log.jsonl` and print a visible warning. Silent gate absence is worse than a loud failure.
 
@@ -247,7 +247,7 @@ AI review gate configured at `commit-msg` stage but `commit-msg` hook not instal
 **Date**: 2026-05-22
 **Source**: Fail-open log
 **Pillar**: T1-G hardening
-**Status**: 📅 Backlog — BUG-related
+**Status**: ✅ Complete (v1.4.5) — Handled by the `_log_gate_skipped` mechanism, writing to the JSONL log when fail-open or bypass occurs before a verdict.
 
 When gate doesn't fire (wrong stage, missing hook, API key absent), no `GATE_SKIPPED` entry is written to `.ai-review-log.jsonl`. Silent absence is worse than loud failure. Session health check (T1-C proposed) should detect gate absence and warn.
 
@@ -291,7 +291,7 @@ PASS and PASS_FAST verdicts not written to `.ai-review-log.jsonl`. Only FAIL ver
 **Date**: 2026-05-23
 **Source**: Commit msg
 **Pillar**: T1-G-01 fix
-**Status**: 📅 Backlog — BUG-09
+**Status**: ✅ Complete (v1.4.5) — `get_commit_message` updated to prioritize reading from `sys.argv[1]` file path passed by Git at hook execution.
 
 When the gate runs at the `commit-msg` stage, it fails to read the commit message and reports "no commit message provided" even when a message exists. The current implementation looks for the commit message in a hardcoded path (e.g., `.ai-review-temp.md`), but Git actually creates the temporary commit message at a path under `.git/COMMIT_EDITMSG` and passes that path as an argument to the `commit-msg` hook.
 

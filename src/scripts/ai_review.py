@@ -764,9 +764,10 @@ def classify_commit_risk(changed_files: List[str], adr_domains: List[str]) -> Tu
 # log_harness_event definition moved to top of file
 
 
-def _handle_api_unavailable(reason: str, changed_files: List[str], active_domains: List[str]) -> int:
+def _handle_api_unavailable(reason: str, changed_files: List[str], active_domains: List[str], diff_text: str = "none") -> int:
     """Handle API/provider unavailability with high-risk fail-closed enforcement (T1-L-08)."""
     is_high_risk, matched_patterns = classify_commit_risk(changed_files, active_domains)
+    _log_gate_skipped("PROVIDER_ERROR", diff_text)
     _persist_verdict(fail_open_reason=reason)
     
     if is_high_risk:
@@ -1815,19 +1816,31 @@ def get_commit_message() -> str:
     """
     hook_stage = os.environ.get("PRE_COMMIT_HOOK_STAGE", "pre-commit")
 
-    # 1. CLI argument — in commit-msg stage pre-commit passes the COMMIT_EDITMSG
-    #    file path; read the file rather than returning the path string.
+    # 1. CLI argument — check sys.argv[1] directly
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        arg_path = Path(sys.argv[1])
+        if arg_path.exists() and arg_path.is_file():
+            try:
+                content = arg_path.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
+            except OSError:
+                pass
+
+    # 2. CLI argument fallback — loop through all other arguments
     for arg in sys.argv[1:]:
         if arg.startswith("-"):
             continue
         arg_path = Path(arg)
         if arg_path.exists() and arg_path.is_file():
             try:
-                return arg_path.read_text(encoding="utf-8").strip()
+                content = arg_path.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
             except OSError:
                 pass
 
-    # 2. Fallback direct read — only valid outside pre-commit stage
+    # 3. Fallback direct read — only valid outside pre-commit stage
     if hook_stage != "pre-commit":
         for msg_name in ("COMMIT_EDITMSG", "MERGE_MSG"):
             msg_file = PROJECT_ROOT / ".git" / msg_name
@@ -2050,6 +2063,49 @@ def render_review(review: Dict[str, Any], churn_info: str) -> None:
 
     print(f"  Summary: {summary}")
     print("─" * 60 + "\n")
+def _log_gate_skipped(skip_reason: str, diff_text: str = "none") -> None:
+    """Log a gate skipped event to audit logs and event logs."""
+    try:
+        session_id = _get_active_session_id() or "unknown"
+        diff_hash = "none"
+        if diff_text and diff_text != "none":
+            import hashlib
+            diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+
+        harness_version = "unknown"
+        version_file = PROJECT_ROOT / "harness_version.txt"
+        if version_file.exists():
+            try:
+                harness_version = version_file.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+        record = {
+            "timestamp": now_utc,
+            "session_id": session_id,
+            "verdict": "GATE_SKIPPED",
+            "skip_reason": skip_reason,
+            "diff_hash": diff_hash,
+            "harness_version": harness_version
+        }
+        log_path = PROJECT_ROOT / ".ai-review-log.jsonl"
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+
+        if _sync_review_event_to_db is not None:
+            _sync_review_event_to_db(record)
+
+        log_harness_event({
+            "event_type": "gate_skipped",
+            "severity": "INFO",
+            "payload": {
+                "skip_reason": skip_reason,
+                "diff_hash": diff_hash
+            }
+        })
+    except Exception:
+        pass
 
 
 def _persist_verdict(
@@ -2483,15 +2539,16 @@ def main() -> int:
         if args.rebuttal:
             return _run_rebuttal(args)
 
-        return _run_review()
+        return _run_review(args.commit_msg_file)
     except Exception as e:
         # FAIL-OPEN: a reviewer crash must never block a commit
+        _log_gate_skipped("EXCEPTION", "none")
         _persist_verdict(fail_open_reason=str(e))
-        print(f"\u26a0\ufe0f  AI review crashed (fail-open): {e}")
+        print(f"⚠️  AI review crashed (fail-open): {e}")
         return 0
 
 
-def _run_review() -> int:
+def _run_review(commit_msg_file: str | None = None) -> int:
     """Internal review logic. Exceptions propagate to main() for fail-open."""
     # Resolve changed files and active ADR domains early for risk assessment & session traceability
     try:
@@ -2669,6 +2726,7 @@ def _run_review() -> int:
     # Get the staged diff
     diff = get_staged_diff()
     if not diff.strip():
+        _log_gate_skipped("EMPTY_DIFF", diff)
         return 0
 
     current_diff_hash = _get_normalized_diff_hash(diff)
@@ -2858,7 +2916,8 @@ def _run_review() -> int:
     # Filter out skipped paths
     diff = filter_diff_by_skip_paths(diff, skip_paths)
     if not diff.strip():
-        print("\u26a1 AI review skipped: all changed files are in skip_paths.")
+        print("⚡ AI review skipped: all changed files are in skip_paths.")
+        _log_gate_skipped("EMPTY_DIFF", diff)
         return 0
 
     # Diff size guards — skip rather than truncate (partial diffs cause hallucination)
@@ -2866,18 +2925,20 @@ def _run_review() -> int:
     max_lines = config.get("max_diff_lines", MAX_DIFF_LINES)
     if diff_lines > max_lines:
         print(
-            f"\u26a0\ufe0f  AI review skipped: diff too large ({diff_lines} lines > {max_lines} max)."
+            f"⚠️  AI review skipped: diff too large ({diff_lines} lines > {max_lines} max)."
         )
         print("   Review this commit manually.")
+        _log_gate_skipped("DIFF_TOO_LARGE_FAILOPEN", diff)
         return 0
 
     diff_chars = len(diff)
     max_chars = config.get("max_diff_chars", MAX_DIFF_CHARS)
     if diff_chars > max_chars:
         print(
-            f"\u26a0\ufe0f  AI review skipped: diff too large ({diff_chars:,} chars > {max_chars:,} max)."
+            f"⚠️  AI review skipped: diff too large ({diff_chars:,} chars > {max_chars:,} max)."
         )
         print("   Review this commit manually.")
+        _log_gate_skipped("DIFF_TOO_LARGE_FAILOPEN", diff)
         return 0
 
     # Get commit message, PageRank repo map, and ADR context
@@ -2947,7 +3008,7 @@ def _run_review() -> int:
         provider = get_provider()
     except RuntimeError as e:
         reason = f"Provider setup failed: {e}"
-        return _handle_api_unavailable(reason, changed_files, active_domains)
+        return _handle_api_unavailable(reason, changed_files, active_domains, diff)
 
     # 5. Run co-change estimator (T1-H-03)
     co_change_warnings = []
