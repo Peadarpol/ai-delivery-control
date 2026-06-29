@@ -207,16 +207,61 @@ Review that any code touching these domains correctly implements them.
 ## Pass 9 — Correctness & Logic
 
 9.1) Does the code do what it claims?
+9.0) **Architectural technical debt check (AI hallucination risk)**: AI-generated
+   code is frequently *locally correct* but *globally inconsistent* — the
+   implementation solves the immediate task but violates the established
+   architecture of the surrounding system. Before reviewing correctness,
+   confirm:
+   - Does the new code follow the same patterns as adjacent code in the same
+     layer? (e.g. if all other services use `self.uow.members.get_by_id()`,
+     a new service calling the repository directly is a red flag)
+   - Does it use the project's established abstractions (UoW, HardenedBaseModel,
+     require_permission, BranchAwareRepository) or bypass them with local
+     alternatives?
+   - Does it introduce a new pattern that duplicates existing infrastructure
+     (e.g. a custom auth check that reimplements what `require_permission()` does)?
+   - Is the naming consistent with the codebase conventions (snake_case
+     services, `*Create`/`*Update` schemas, `*Repository` persistence classes)?
+   AI models optimise for local plausibility — they produce code that looks
+   reasonable in isolation but contradicts decisions made elsewhere in the
+   project. This check must be done with the full architectural context in mind,
+   not just the diff.
 9.2) Are edge cases handled?
    - Empty inputs, None values, zero quantities
    - Boundary dates (today, past, future)
    - Empty collections (list, queryset)
+9.2a) **API hallucination check (AI hallucination risk)**: AI models generate
+   calls to methods, functions, library APIs, and class attributes that do not
+   exist — bearing plausible names but lacking any real implementation. This is
+   the most common and hardest-to-spot AI failure mode because the code is
+   syntactically valid and reads naturally. For every method call that was
+   introduced or modified in this diff, verify:
+   - The method actually exists on the object being called (check the class
+     definition or imported module — do not rely on the name looking right)
+   - Library functions exist in the version specified in `pyproject.toml`
+     (AI models frequently call methods from future or past library versions)
+   - Internal service/repository methods being called from a new call site
+     exist with the exact signature used (parameter names, types, return type)
+   - SQLAlchemy relationship attributes referenced in queries are declared on
+     the model (AI frequently generates `.relationship_name` accesses on models
+     that don't define that relationship)
+   This check cannot be done by reading the diff alone — it requires verifying
+   against the actual class/module source.
 9.3) Are domain state transitions correct?  Check against BR-MEM-04,
    BR-CON-04, BR-SCH-11, BR-SCH-21.
 9.4) Is concurrency handled correctly?
    - Entitlement credit deduction uses `SELECT FOR UPDATE` (BR-ACC-05)
    - Booking capacity check uses "first-to-commit-wins" pattern
    - No race condition between read and write in the same service method
+   - **Latent race condition check (AI hallucination risk)**: AI-generated code
+     frequently appears correct under synchronous execution but introduces
+     non-deterministic bugs in concurrent contexts. Flag any sequence where a
+     value is read, a decision is made based on it, and a write occurs without
+     a lock between read and write (classic check-then-act without atomicity).
+     Pay particular attention to: capacity checks before bookings, balance checks
+     before debits, status checks before state transitions, and entitlement
+     balance reads before consumption. These are the patterns where AI models
+     generate plausible-looking but unsafe read-modify-write sequences.
 
 ---
 
@@ -226,6 +271,20 @@ Review that any code touching these domains correctly implements them.
    reaching the service layer.
 10.2) SQL injection: SQLAlchemy ORM or parameterized queries only — never
    f-string SQL.
+10.2a) **Implicit security vulnerability check (AI hallucination risk)**: AI
+   models embed known-vulnerable patterns without flagging them. Specifically
+   check for:
+   - Unparameterised query fragments (f-string or `.format()` used in any DB
+     call, even partial)
+   - Auth token handling: tokens passed in URL query parameters (logged by
+     proxies), stored in `localStorage`, or logged in plaintext in any
+     debug/info log statement
+   - Unsafe deserialisation: `pickle.loads()`, `yaml.load()` without
+     `Loader=yaml.SafeLoader`, `eval()` on any user-supplied or
+     externally-sourced string
+   - JWT `alg: none` acceptance or missing signature verification
+   - These patterns are insidious in AI output because the surrounding code
+     is correct — the vulnerability is localised to a single call.
 10.3) Rate limiting declared on auth and financial endpoints (BR-AUD-03,
    BR-SEC-08).
 10.4) No secrets, API keys, or credentials in code, logs, or error messages.
@@ -297,3 +356,7 @@ Before approving any PR, confirm:
 - [ ] Events published after `uow.commit()`
 - [ ] New functionality has tests
 - [ ] `uow.committed` asserted in service unit tests
+- [ ] All new method calls verified to exist on the target class/module (API hallucination check)
+- [ ] Read-modify-write sequences on shared state are atomic or lock-protected (latent race condition check)
+- [ ] No f-string SQL, plaintext token logging, unsafe deserialisation, or unverified JWT alg (implicit security vulnerability check)
+- [ ] New code follows established project patterns, not locally-invented alternatives (architectural coherence check)
