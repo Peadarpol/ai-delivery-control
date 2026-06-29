@@ -902,7 +902,7 @@ be forged.
 **Date**: 2026-05-31
 **Source**: Sprint 1 implementation plan review — T1-L-04 traceability hook wiring
 **Pillar**: Bootstrap / cross-platform portability
-**Status**: 📅 Backlog — portability fix, medium priority
+**Status**: ✅ Complete (v1.4.5) — Removed `cmd /c` prefix from all local hook entries in the template for cross-platform portability.
 
 **Problem**: Every local hook in `bootstrap/templates/pre-commit-config.yaml.template` uses `cmd /c [PROJECT_PACKAGE_MANAGER] run python ...` as its `entry`. `cmd /c` is Windows shell syntax. On Linux and macOS, pre-commit's `language: system` invokes the entry string directly — `cmd` is not present and the hook fails to execute entirely. This affects all custom local hooks: mypy, architecture-checks, skills-hygiene, behaviour-checks, regression-check, governance-audit, session-heartbeat, and the AI adversarial review gate.
 

@@ -33,7 +33,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run mypy [PROJECT_SRC_PATH]/
+        entry: [PROJECT_PACKAGE_MANAGER] run mypy [PROJECT_SRC_PATH]/
         language: system
         types: [python]
         pass_filenames: false
@@ -66,20 +66,20 @@ repos:
     hooks:
       - id: architecture-quality
         name: Exception Standards
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run pytest --noconftest tests/quality/test_exception_standards.py
+        entry: [PROJECT_PACKAGE_MANAGER] run pytest --noconftest tests/quality/test_exception_standards.py
         language: system
         pass_filenames: false
         always_run: true
       - id: architecture-checks
         name: Clean Architecture Checks
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/skills/senior-architect/scripts/architecture_checks.py
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/skills/senior-architect/scripts/architecture_checks.py
         language: system
         pass_filenames: false
         always_run: true
         types: [python]
       - id: skills-hygiene
         name: "Agent Skills Hygiene Scan"
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_skills_hygiene.py
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_skills_hygiene.py
         language: system
         pass_filenames: false
         always_run: true
@@ -89,7 +89,7 @@ repos:
     hooks:
       - id: behaviour-checks
         name: "Agent Behaviour Audit"
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/evals/behaviour_checks.py
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/evals/behaviour_checks.py
         language: system
         pass_filenames: false
         always_run: true
@@ -98,7 +98,7 @@ repos:
 
       - id: regression-check
         name: "Golden Dataset Regression"
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/evals/regression_runner.py --verify-only
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/evals/regression_runner.py --verify-only
         language: system
         pass_filenames: false
         always_run: true
@@ -109,7 +109,7 @@ repos:
     hooks:
       - id: governance-audit
         name: "Governance Audit Log"
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/governance_check.py
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/governance_check.py
         language: system
         pass_filenames: false
         always_run: true
@@ -118,7 +118,7 @@ repos:
 
       - id: session-heartbeat
         name: "Record commit to session"
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/init_session.py --post-commit
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/init_session.py --post-commit
         language: system
         pass_filenames: false
         always_run: true
@@ -129,7 +129,7 @@ repos:
     hooks:
       - id: ai-adversarial-review
         name: "AI Adversarial Review (Claude Sonnet)"
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python [PROJECT_SRC_PATH]/scripts/ai_review.py
+        entry: [PROJECT_PACKAGE_MANAGER] run python [PROJECT_SRC_PATH]/scripts/ai_review.py
         language: system
         pass_filenames: false
         always_run: true
@@ -138,7 +138,7 @@ repos:
 
       - id: commit-traceability
         name: Requirement Traceability Hook
-        entry: cmd /c [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_traceability.py
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_traceability.py
         language: system
         stages: [commit-msg]
         always_run: true
