@@ -352,7 +352,7 @@ This is the init_session.py equivalent of Shokunin's `verify_file_path` MCP tool
 **Date**: 2026-05-24
 **Source**: Shokunin author observation (real operational experience with 62+ skills)
 **Pillar**: T1-B governance
-**Status**: 📅 Quick win — documentation only
+**Status**: ✅ Complete (v1.4.5) — Imperative language audit applied to AGENTS.md.
 
 Shokunin author found through real operational use that "MANDATORY" and
 imperative language produces materially better agent compliance than polite
@@ -927,7 +927,7 @@ Since `[PROJECT_PACKAGE_MANAGER]` is already a template placeholder, the install
 **Date**: 2026-05-31
 **Source**: Multi-agent monoculture research / gap analysis
 **Pillar**: T1-G / Gate trust & calibration
-**Status**: 📅 Backlog — documentation only, low effort
+**Status**: ✅ Complete (v1.4.5) — Model diversification section added to configuration.md.
 
 **Problem**: The adversarial gate correctly separates writer context from reviewer context, but same-model review creates correlated blind spots. A hallucination the writing agent produces may not be caught by a reviewer using identical weights and priors — both models share the same training-time failure modes and are susceptible to the same class of coherent-but-wrong reasoning. This is confirmed by multi-agent monoculture research: diversity of model family (not just model instance) is required to achieve genuinely independent review.
 

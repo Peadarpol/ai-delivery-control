@@ -489,8 +489,8 @@ def verify_and_suppress_roster_issues(typed_verdict: ReviewVerdict, route_decisi
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-MODEL = os.environ.get("AI_REVIEW_MODEL", "claude-sonnet-4-20250514")
-TIMEOUT_SECONDS = int(os.environ.get("AI_REVIEW_TIMEOUT", "45"))
+MODEL = os.environ.get("AI_REVIEW_MODEL", "claude-sonnet-4-6")
+TIMEOUT_SECONDS = int(os.environ.get("AI_REVIEW_TIMEOUT", "60"))
 MAX_DIFF_CHARS = (
     200_000  # Skip review above this threshold (Sonnet 4.6 has 200K context)
 )
@@ -2261,7 +2261,19 @@ def _run_rebuttal(args) -> int:
     try:
         if get_provider is None:
             raise RuntimeError("providers module is unavailable")
-        provider = get_provider(provider_name="anthropic")
+        
+        config = load_config()
+        if "timeout_seconds" in config:
+            try:
+                import providers
+                providers.DEFAULT_TIMEOUT = int(config["timeout_seconds"])
+            except Exception:
+                pass
+                
+        provider = get_provider(
+            provider_name=config.get("provider", "anthropic"),
+            model=config.get("model")
+        )
     except RuntimeError as e:
         print(f"❌ [REBUTTAL] Rebuttal auditor provider setup failed: {e}")
         return 1
@@ -2778,6 +2790,12 @@ def _run_review(commit_msg_file: str | None = None) -> int:
 
     # Load config
     config = load_config()
+    if "timeout_seconds" in config:
+        try:
+            import providers
+            providers.DEFAULT_TIMEOUT = int(config["timeout_seconds"])
+        except Exception:
+            pass
     
     # ── T1-G-02: Pre-flight shortcut ──────────────────────────────────────────
     # Evaluate before any LLM call. If all changes are doc/whitespace/comments,
@@ -3005,7 +3023,10 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         if get_provider is None:
             raise RuntimeError("providers module is unavailable")
 
-        provider = get_provider()
+        provider = get_provider(
+            provider_name=config.get("provider"),
+            model=config.get("model")
+        )
     except RuntimeError as e:
         reason = f"Provider setup failed: {e}"
         return _handle_api_unavailable(reason, changed_files, active_domains, diff)
