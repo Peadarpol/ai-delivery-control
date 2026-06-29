@@ -137,9 +137,13 @@ def run_co_change_estimator(changed_files: list[str]) -> list[str]:
         return co_change_check.run_co_change_estimator(changed_files)
     return []
 
-def get_provider(provider_name: str | None = None) -> Any:
+def get_provider(
+    provider_name: str | None = None,
+    model: str | None = None,
+    tier: str | None = None,
+) -> Any:
     if providers is not None and hasattr(providers, "get_provider"):
-        return providers.get_provider(provider_name)
+        return providers.get_provider(provider_name, model, tier)
     return None
 
 def generate_repo_map(changed_files: list[str]) -> str:

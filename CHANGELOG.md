@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.4.5 — 2026-06-30
+
+### Gate Reliability, Cross-Platform Portability & Polish
+
+- **HIB-014/017**: Write `GATE_SKIPPED` to audit log (`.ai-review-log.jsonl`) and harness events (`.agent/state/harness_events.jsonl`) on all early exits (empty diff, provider setup error, exception, large diff failopen) to prevent uninstrumented gate bypasses.
+- **HIB-021/BUG-09**: Read the commit message from `sys.argv[1]` at the `commit-msg` stage to prevent false 'no commit message provided' errors.
+- **HIB-042**: Remove Windows-only `cmd /c` prefixes from the local pre-commit hook template to support cross-platform execution on Linux and macOS.
+- **HIB-025**: Audit `AGENTS.md` to tighten all governance-critical rules to strictly imperative language (`must`/`always`/`never`).
+- **HIB-043**: Add model diversification recommendations to configuration documentation to eliminate correlated model blind spots via cross-family review.
+- **T1-B-08**: Fix `validate.py` check runner to display `⚠️` instead of `✅` for checks that generate warnings but pass overall.
+- **S0-13**: Add GitHub discoverability topics to the README.
+- **Skill Quality**: Add precise AI hallucination detection rules to the code-review skill.
+- Automated checksum verification updated for 644 framework files.
+
 ## v1.4.4 — 2026-06-22
 
 ### Integration Release — five unmerged feature branches folded into main
