@@ -210,7 +210,7 @@ All 4 GymBase gate verdicts are FAIL with none WARN or PASS. Gate is too aggress
 **Date**: 2026-05-22
 **Source**: Silent bypass
 **Pillar**: T1-G hardening
-**Status**: 📅 Backlog — BUG-related
+**Status**: ✅ Complete (v1.4.5) — `GATE_SKIPPED` logs and events written to `.ai-review-log.jsonl` and `.agent/state/harness_events.jsonl` when the gate exits early.
 
 RFC-003 session completed with gate never firing. No log entry, no warning, no visible signal. Gate absence was invisible to both agent and developer. When gate is skipped/disabled, must write a `GATE_SKIPPED` entry to `.ai-review-log.jsonl` and print a visible warning. Silent gate absence is worse than a loud failure.
 
@@ -247,7 +247,7 @@ AI review gate configured at `commit-msg` stage but `commit-msg` hook not instal
 **Date**: 2026-05-22
 **Source**: Fail-open log
 **Pillar**: T1-G hardening
-**Status**: 📅 Backlog — BUG-related
+**Status**: ✅ Complete (v1.4.5) — Handled by the `_log_gate_skipped` mechanism, writing to the JSONL log when fail-open or bypass occurs before a verdict.
 
 When gate doesn't fire (wrong stage, missing hook, API key absent), no `GATE_SKIPPED` entry is written to `.ai-review-log.jsonl`. Silent absence is worse than loud failure. Session health check (T1-C proposed) should detect gate absence and warn.
 
@@ -291,7 +291,7 @@ PASS and PASS_FAST verdicts not written to `.ai-review-log.jsonl`. Only FAIL ver
 **Date**: 2026-05-23
 **Source**: Commit msg
 **Pillar**: T1-G-01 fix
-**Status**: 📅 Backlog — BUG-09
+**Status**: ✅ Complete (v1.4.5) — `get_commit_message` updated to prioritize reading from `sys.argv[1]` file path passed by Git at hook execution.
 
 When the gate runs at the `commit-msg` stage, it fails to read the commit message and reports "no commit message provided" even when a message exists. The current implementation looks for the commit message in a hardcoded path (e.g., `.ai-review-temp.md`), but Git actually creates the temporary commit message at a path under `.git/COMMIT_EDITMSG` and passes that path as an argument to the `commit-msg` hook.
 
@@ -352,7 +352,7 @@ This is the init_session.py equivalent of Shokunin's `verify_file_path` MCP tool
 **Date**: 2026-05-24
 **Source**: Shokunin author observation (real operational experience with 62+ skills)
 **Pillar**: T1-B governance
-**Status**: 📅 Quick win — documentation only
+**Status**: ✅ Complete (v1.4.5) — Imperative language audit applied to AGENTS.md.
 
 Shokunin author found through real operational use that "MANDATORY" and
 imperative language produces materially better agent compliance than polite
@@ -902,7 +902,7 @@ be forged.
 **Date**: 2026-05-31
 **Source**: Sprint 1 implementation plan review — T1-L-04 traceability hook wiring
 **Pillar**: Bootstrap / cross-platform portability
-**Status**: 📅 Backlog — portability fix, medium priority
+**Status**: ✅ Complete (v1.4.5) — Removed `cmd /c` prefix from all local hook entries in the template for cross-platform portability.
 
 **Problem**: Every local hook in `bootstrap/templates/pre-commit-config.yaml.template` uses `cmd /c [PROJECT_PACKAGE_MANAGER] run python ...` as its `entry`. `cmd /c` is Windows shell syntax. On Linux and macOS, pre-commit's `language: system` invokes the entry string directly — `cmd` is not present and the hook fails to execute entirely. This affects all custom local hooks: mypy, architecture-checks, skills-hygiene, behaviour-checks, regression-check, governance-audit, session-heartbeat, and the AI adversarial review gate.
 
@@ -927,7 +927,7 @@ Since `[PROJECT_PACKAGE_MANAGER]` is already a template placeholder, the install
 **Date**: 2026-05-31
 **Source**: Multi-agent monoculture research / gap analysis
 **Pillar**: T1-G / Gate trust & calibration
-**Status**: 📅 Backlog — documentation only, low effort
+**Status**: ✅ Complete (v1.4.5) — Model diversification section added to configuration.md.
 
 **Problem**: The adversarial gate correctly separates writer context from reviewer context, but same-model review creates correlated blind spots. A hallucination the writing agent produces may not be caught by a reviewer using identical weights and priors — both models share the same training-time failure modes and are susceptible to the same class of coherent-but-wrong reasoning. This is confirmed by multi-agent monoculture research: diversity of model family (not just model instance) is required to achieve genuinely independent review.
 

@@ -111,9 +111,13 @@ class Validator:
 
     def run_check(self, name: str, check_fn) -> bool:
         try:
+            warnings_before = self.warnings
             passed, details = check_fn()
             if passed:
-                self.print_result(SYMBOL_PASS, name, details)
+                if self.warnings > warnings_before:
+                    self.print_result(SYMBOL_WARN, name, details)
+                else:
+                    self.print_result(SYMBOL_PASS, name, details)
                 return True
             else:
                 self.errors += 1

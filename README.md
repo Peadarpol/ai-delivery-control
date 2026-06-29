@@ -12,6 +12,8 @@ It works with any LLM-based coding agent that respects its hooks and conventions
 with the fullest integration today for Claude Code and Gemini CLI. It is free, runs
 entirely on your machine, and requires no server infrastructure.
 
+**GitHub topics**: `ai-delivery-control` · `agent-harness` · `harness-engineering` · `agentic-sdlc` · `governance` · `llm-governance`
+
 ---
 
 ## Why this exists

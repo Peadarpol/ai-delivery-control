@@ -90,13 +90,31 @@ Controls which AI provider and model handles each task category, structured into
 | Field | Type | Default | Example | Description |
 |---|---|---|---|---|
 | `model_routing.review_provider` | string | `"anthropic"` | `"anthropic"` | Cloud/heavy provider for the AI review gate |
-| `model_routing.review_model` | string | `"claude-sonnet-4-20250514"` | `"claude-opus-4-7"` | Heavy model for the AI review gate |
+| `model_routing.review_model` | string | `"claude-sonnet-4-6"` | `"claude-opus-4-7"` | Heavy model for the AI review gate |
 | `model_routing.wiki_compile_provider` | string | `"ollama"` | `"ollama"` | Default provider for local wiki compilation |
 | `model_routing.budget_provider` | string | `"ollama"` | `"anthropic"` | Provider for low-cost tasks (Ollama, Anthropic, etc.) |
 | `model_routing.budget_model` | string | `"gemma4"` | `"claude-haiku-4-5"` | Model for lower-cost or local tasks |
 | `model_routing.budget_provider_timeout_seconds` | integer | `3` | `3` | Timeout in seconds for budget provider calls |
 | `model_routing.budget_base_url` | string | `"http://localhost:11434"` | `"http://localhost:11434"` | Base URL for the budget model API (e.g. Ollama) |
 | `model_routing.budget_tasks` | list | `[wiki_compile, ...]` | — | Task types routed to the budget model tier |
+
+### 3.1 AI Review Overrides (`.ai-review-config.json`)
+
+To support model diversification and fail-secure risk mitigation, the AI Adversarial Review Gate reads project-specific model and timeout overrides from `.ai-review-config.json` at the project root. This configuration overrides default settings in `providers.py` and `ai_review.py`:
+
+```json
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "model_high_risk": "claude-opus-4-8",
+  "timeout_seconds": 60
+}
+```
+
+- **`provider`** (string): The LLM provider (e.g. `"anthropic"`, `"google"`, `"openai"`).
+- **`model`** (string): The default model to run standard commits through (e.g. `"claude-sonnet-4-6"`).
+- **`model_high_risk`** (string): The high-performance model to run high-risk commits through (e.g. `"claude-opus-4-8"`). High-risk commits include those containing migrations, database schemas, authentication, authorization, permissions, or transactional integrity layers.
+- **`timeout_seconds`** (integer): The request timeout in seconds (default `60`). Recommend setting to `60` or higher when utilizing heavier models like Opus 4.8.
 
 ---
 

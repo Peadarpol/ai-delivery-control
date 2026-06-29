@@ -30,17 +30,16 @@ or taking any actions. If the check fails, stop the session immediately
 and switch to the correct project in your IDE.
 
 **Note**: If running in Claude Code, `init_session.py` is invoked automatically via
-a SessionStart hook (`.claude/settings.json`). For other agents (Gemini CLI, Cursor,
-etc.), Step 0 below remains a manual convention.
+a SessionStart hook (`.claude/settings.json`). For other agents, you must perform Step 0 manually.
 
-0. Run: `python .agent/scripts/check_halt.py`. If exit code 2: STOP. Do not proceed. Read the `.agent/state/HALT` file contents and report to the user.
-   Run: `python .agent/scripts/init_session.py` to establish session traceability.
-1. Run `git log --oneline -5` and `git branch` — establish ground truth on branch and recent work.
-2. Read `.agent/state/active_context.md` — verify against git log; the file is often stale.
-3. Read `.agent/state/decisions_log.md` — understand architectural/business decisions for the project.
-4. Read `.agent/state/last_session_summary.md` — treat as hints, not facts if stale.
-5. State in one sentence: current branch, what the last session did, what the current task is.
-6. Identify the governing workflow (§2) before writing a single line of code.
+0. You must run: `python .agent/scripts/check_halt.py`. If exit code 2: STOP. Do not proceed. Read the `.agent/state/HALT` file contents and report to the user.
+   You must run: `python .agent/scripts/init_session.py` to establish session traceability.
+1. You must run `git log --oneline -5` and `git branch` to establish ground truth on branch and recent work.
+2. You must read `.agent/state/active_context.md` and verify against git log; the file is often stale.
+3. You must read `.agent/state/decisions_log.md` to understand architectural/business decisions for the project.
+4. You must read `.agent/state/last_session_summary.md` (treat as hints, not facts if stale).
+5. You must state in one sentence: current branch, what the last session did, what the current task is.
+6. You must identify the governing workflow (§2) before writing a single line of code.
 
 ---
 
@@ -193,7 +192,7 @@ because a fresh session operates in the smart zone from the first token. A compa
 continuation carries sediment — prior reasoning, explored paths, discarded options —
 that consumes context budget without contributing governance value.
 
-When in doubt: close cleanly, write good state files, start fresh.
+When in doubt: you must close cleanly, write good state files, and start fresh.
 
 1. **MUST review the task magnitude auto-classification** in `session.json`. You **NEVER downgrade** a session from `major` to `micro` without explicit, documented justification in `session.json` (`task_magnitude_override_reason`).
 2. **MUST run context compaction** (`python .agent/skills/meta/validate.py`) whenever the rolling spent has passed 80% of its budget ceiling.
@@ -211,7 +210,7 @@ completed Gemini session is structurally indistinguishable from mid-task
 abandonment until the next session's retrospective inference runs against git state,
 which is a weaker signal.
 
-**Before ending any Gemini CLI session**, in addition to steps 1–7 above, write the
+**Before ending any Gemini CLI session**, in addition to steps 1–7 above, you must write the
 following fields to `.agent/state/session.json`:
 
 ```json
@@ -242,13 +241,13 @@ Guidance for selecting `outcome_override`:
 and uses it verbatim (`outcome_source: "agent_override"`) before falling back to git-state
 inference. Writing this field is the only way a Gemini session gets the same close-out
 fidelity as a Claude Code session with the Stop hook.
-Run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
+You must run `python .agent/scripts/session_health.py` after each major workflow phase if you notice you are re-reading the same files repeatedly or encountering the same error more than once.
 
 ### Cline — explicit outcome write (HIB-CLINE-01)
 
 Cline has no native Stop hook on Windows. Without this step, a completed Cline session is structurally indistinguishable from mid-task abandonment until the next session's retrospective inference runs against git state, which is a weaker signal.
 
-**Before ending any Cline session**, in addition to steps 1–7 above, write the following fields to `.agent/state/session.json`:
+**Before ending any Cline session**, in addition to steps 1–7 above, you must write the following fields to `.agent/state/session.json`:
 
 ```json
 {
@@ -269,19 +268,19 @@ Guidance for selecting `outcome_override` matches the Gemini CLI guidance (succe
 > referenced in branch commits carry `status: ACCEPTED` before the session closes.
 >
 > **This hook does NOT fire for Gemini CLI sessions** — Gemini has no equivalent Stop
-> event. On Gemini-driven feature branches, spec acceptance must be verified manually
-> before raising a PR, or enforced in CI.  This is by design, not an omission.
-> Do not attempt to call `acceptance_hook.py` from the Gemini `outcome_override` write
-> step; the hook targets the Claude Code event model.  If you add a future Gemini
+> event. On Gemini-driven feature branches, you must verify spec acceptance manually
+> before raising a PR, or enforce it in CI. This is by design, not an omission.
+> You must not attempt to call `acceptance_hook.py` from the Gemini `outcome_override` write
+> step; the hook targets the Claude Code event model. If you add a future Gemini
 > close-hook equivalent, wire it there explicitly.
 >
 > **Known sharp edge in the Gemini mitigation (HIB-053):** The `outcome_override`
 > convention used by Gemini sessions is written to `session.json` *before* the
-> `git commit` that makes the session's work permanent.  If the session crashes or
+> `git commit` that makes the session's work permanent. If the session crashes or
 > is killed between those two steps, `infer_and_close_previous_session()` reads the
 > override verbatim and records `outcome: success` for work that was never committed —
 > git-state inference is never reached because `outcome_override` short-circuits it.
-> Mitigation until HIB-053 is fixed: commit each phase immediately after its tests
+> Mitigation until HIB-053 is fixed: you must commit each phase immediately after its tests
 > pass (do not bundle phases into a single end-of-session commit).
 > See `docs/planning/FRAMEWORK_BACKLOG.md` — HIB-053 for the planned fix to
 > `infer_and_close_previous_session()`.
@@ -348,11 +347,11 @@ Full gap analysis and rationale: `.agent/state/harness_improvement_backlog.md`.
 
 ### 9.3 Push timing
 
-Before any `git push` to the devops/main branch, check if the deployment pipeline is already in progress from another push. Stage your changes locally and coordinate to prevent conflicts.
+Before any `git push` to the devops/main branch, you must check if the deployment pipeline is already in progress from another push. You must stage your changes locally and coordinate to prevent conflicts.
 
 ### 9.4 Branch Strategy for CI Fixes
 
-When a CI/CD pipeline fails after a push:
+When a CI/CD pipeline fails after a push, you must:
 
 1. Create a short-lived fix branch: `git checkout -b fix/ci-description`
 2. Implement the fix
@@ -360,7 +359,7 @@ When a CI/CD pipeline fails after a push:
 4. Merge back to the active feature branch to prevent divergence
 5. Delete the fix branch
 
-**Exception**: Trivial one-line typo fixes may be made directly with a warning acknowledged in the commit message: `[direct-devops: trivial]`
+**Exception**: You may make trivial one-line typo fixes directly with a warning acknowledged in the commit message: `[direct-devops: trivial]`
 
 ### 9.5 Branching Conventions
 
@@ -372,7 +371,7 @@ All framework work must develop on dedicated feature branches before merging via
 When the AI review gate returns a `FAIL` verdict, agents and developers MUST adhere to the following escalation hierarchy:
 
 1. **Fix the actual problem** (First Priority): Always attempt to resolve the underlying code quality, security, or architectural issue directly.
-2. **Structured Rebuttal** (Governed Contest): If a finding is believed to be a false positive or is specifically required, create `.agent/state/gate_rebuttal.json`. 
+2. **Structured Rebuttal** (Governed Contest): If you believe a finding is a false positive or is specifically required, you must create `.agent/state/gate_rebuttal.json`. 
    - **Agent Mandate**: **Agents MUST NOT self-execute the `--rebuttal` command.** Writing the rebuttal file and presenting the argument to the human operator is the agent's sole action. The human reviews the argument and explicitly runs: `python src/scripts/ai_review.py --rebuttal`.
    - **Rebuttal Evidence Checklist**: Assertions without verifiable facts will be rejected. Every rebuttal entry must satisfy this checklist:
      1. **Quote the actual commit message verbatim**.
@@ -396,7 +395,7 @@ When the AI review gate returns a `FAIL` verdict, agents and developers MUST adh
        "evidence": "Commit message verbatim: 'feat: add local seed helper script'. Spec ID: SPEC-456 (Status: APPROVED). Implements Acceptance Criteria 3.1: 'Provide a standalone local CLI helper to seed test user profiles'. Diff details: New file 'src/infrastructure/database/seed_helper.py' (42 lines) containing utility functions only. This code resides entirely in the infrastructure layer, and is not imported by nor affects the domain or business layer core rules (ref: ARCH-02)."
      }
      ```
-3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
+3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, you may use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
 
 ### Reading Gate Findings
 
@@ -407,15 +406,11 @@ From v1.3.3, FAIL and qualifying WARN findings use the decision block format:
 - **Exposes** — which FM failure mode this creates, with file:line for FM4/FM10
 - **Remediation** — the specific change that resolves the FM
 
-When contesting a finding via the rebuttal protocol, address the **Exposes** line
-specifically. A rebuttal that does not explain why the named FM does not apply to
-this specific file and context will be rejected.
+When contesting a finding via the rebuttal protocol, you must address the **Exposes** line specifically. Any rebuttal that does not explain why the named FM does not apply to this specific file and context must be rejected.
 
 ### Failure Mode Classification Before Retry
 
-Before writing a rebuttal or staging a retry after any gate FAIL, classify the finding
-into one of the four categories below. The classification determines the correct retry
-strategy — applying a wrong-class fix will fail again for the same underlying reason.
+Before writing a rebuttal or staging a retry after any gate FAIL, you must classify the finding into one of the four categories below. The classification determines the correct retry strategy — applying a wrong-class fix will fail again for the same underlying reason.
 
 | Class | Description | Correct retry strategy |
 |---|---|---|
@@ -424,15 +419,13 @@ strategy — applying a wrong-class fix will fail again for the same underlying 
 | **Scope error** | Implemented something not in the SPEC, or missed something that is. | Remove or add scope as needed. Re-read SPEC acceptance criteria before retrying. |
 | **Test gap** | Implementation may be correct but no test covers the acceptance criterion. | Add the test, re-run gate. Do not change production code unless the test reveals a genuine defect. |
 
-Write the classification (e.g. `FAIL CLASS: Missing guard`) in the H-06 correction summary
-before proceeding. A Structural violation that is retried as if it were a Missing guard will
-fail again — this is the most common source of the two-failure local optima pattern (H-07).
+You must write the classification (e.g. `FAIL CLASS: Missing guard`) in the H-06 correction summary before proceeding. A Structural violation that is retried as if it were a Missing guard will fail again — this is the most common source of the two-failure local optima pattern (H-07).
 
 ### 9 Environment Progression (mandatory gate sequence)
 
 Before raising any PR, the agent must confirm which environment gates apply to this project. The project's environment progression is defined in .agent/config.yaml under environments: or in the governing workflow file.
 
-No gate may be skipped. The sequence is always:
+No gate must be skipped. The sequence is always:
   Local verification → Local staging gate → CI →   Staging → UAT → Production
 
 The specific commands, URLs, and UAT criteria for each gate are project-specific and live in the project's workflow files and config.

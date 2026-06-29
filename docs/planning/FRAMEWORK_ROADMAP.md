@@ -454,6 +454,29 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ---
 
+### v1.4.5 — Gate Reliability, Cross-Platform Portability & Polish ✅ SHIPPED (2026-06-30)
+
+**Goal**: Close a cluster of low-effort, high-value reliability and portability gaps that have been open since v1.0.0. Keeps v1.5.0 scoped to its Quality Signal Maturity theme without bundling unrelated polish work into it.
+
+**The gap this addresses**: Three categories of day-one friction for new users and existing installations: (1) silent gate bypasses leaving no audit trail, (2) pre-commit hooks that appear wired but never execute on Linux/macOS, and (3) AGENTS.md governance language that was advisory rather than imperative — violating the Osmani "curse of instructions" principle the framework itself cites.
+
+**Delivered**:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| HIB-014/017 | GATE_SKIPPED audit event on all early-exit paths | Gate reliability | ✅ |
+| HIB-021/BUG-09 | Commit message read from sys.argv[1] at commit-msg stage | Gate reliability | ✅ |
+| HIB-042 | Remove Windows-only cmd /c from pre-commit hook template | Cross-platform portability | ✅ |
+| HIB-025 | AGENTS.md governance language audit (must/always/never) | Governance compliance | ✅ |
+| HIB-043 | Cross-family review model recommendation in docs/configuration.md | Documentation | ✅ |
+| T1-B-08 | validate.py warning states display ⚠️ not ✅ | UX polish | ✅ |
+| S0-13 | GitHub topics named in README | Discoverability | ✅ |
+| (skill) | AI hallucination detection checks added to code-review SKILL.md | Skill quality | ✅ |
+
+**Migration**: `bootstrap/migrations/v1_4_4_to_v1_4_5.py` — patch migration, no config schema changes. Copies updated framework-owned files to the target installation.
+
+---
+
 ### v1.5.0 — Quality Signal Maturity 📋 PLANNED (Q3 2026)
 
 **Goal**: The harness gets smarter about what signals it emits and when.
@@ -676,10 +699,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.5.0 (v1.4.4 shipped 2026-06-22)
+**Active milestone**: v1.5.0 (v1.4.5 shipped 2026-06-30)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
@@ -812,9 +835,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.2
+**Active milestone**: v1.4.5
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 
 ---

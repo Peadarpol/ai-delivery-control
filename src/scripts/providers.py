@@ -38,8 +38,8 @@ from typing import Any, Dict, Optional
 
 # ── Config defaults ───────────────────────────────────────────────────────────
 
-DEFAULT_TIMEOUT = int(os.environ.get("AI_REVIEW_TIMEOUT", "45"))
-DEFAULT_MODEL = os.environ.get("AI_REVIEW_MODEL", "claude-sonnet-4-20250514")
+DEFAULT_TIMEOUT = int(os.environ.get("AI_REVIEW_TIMEOUT", "60"))
+DEFAULT_MODEL = os.environ.get("AI_REVIEW_MODEL", "claude-sonnet-4-6")
 MAX_DIFF_CHARS = 200_000
 
 

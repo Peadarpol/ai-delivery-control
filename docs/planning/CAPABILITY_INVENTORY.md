@@ -11,7 +11,7 @@
 
 ---
 ## AI Adversarial Review Gate (`ai_review.py`)
-**Delivered**: v1.0.0 (2026-05-21); significantly enhanced through v1.1.5.2
+**Delivered**: v1.0.0 (2026-05-21); significantly enhanced through v1.4.5
 **Primary files**:
 - `src/scripts/ai_review.py` — gate entry point and orchestrator (framework source, copied to `src/scripts/` of target project on install)
 - `src/scripts/providers.py` — LLM provider abstraction (T1-E-02)
@@ -32,7 +32,7 @@
 - Called by: `.pre-commit-config.yaml` as the final hook at `commit-msg` stage
 - Calls: `providers.py::get_provider()`, `repo_map.py::generate_repo_map()` / `get_pagerank_scores()`, `wiki_compile.py::DOMAIN_REGISTRY`, `architecture_checks.py::extract_adr_annotations()`, `co_change_check.py::run_co_change_estimator()`, `gate_context.py::load_gate_context()` / `write_gate_context()` (T1-G-13), `capability_calibration.py::get_calibrated_weight()` / `update_calibration_rebuttal()` (T1-G-14)
 - Reads: `review_context_universal.md`, `review_context_project.md`, `.agent/config.yaml` (ADR mappings, high-risk patterns, large diff threshold), `.agent/wiki/` domain pages, `.agent/state/session.json` (for session_id in audit records), `.agent/state/gate_context_current.json` (if present — T1-G-13), `.agent/state/capability_calibration.json` (T1-G-14)
-- Writes: `.ai-review-log.jsonl` (typed verdict log), `.agent/state/harness_events.jsonl` (high-risk gate events), `.agent/state/gate_rebuttal.json` (rebuttal input, when `--rebuttal` mode used), `rebuttal_pass.json` (one-time bypass token on accepted rebuttal), `.agent/state/gate_context_current.json` (updated with verdict and evidence — T1-G-13), `.agent/state/capability_calibration.json` (rebuttal counter updates — T1-G-14), `~/.aisdlc/harness.db` (review event row, best-effort — T1-D-01)
+- Writes: `.ai-review-log.jsonl` (typed verdict log and `GATE_SKIPPED` logs), `.agent/state/harness_events.jsonl` (high-risk gate events and `gate_skipped` events), `.agent/state/gate_rebuttal.json` (rebuttal input, when `--rebuttal` mode used), `rebuttal_pass.json` (one-time bypass token on accepted rebuttal), `.agent/state/gate_context_current.json` (updated with verdict and evidence — T1-G-13), `.agent/state/capability_calibration.json` (rebuttal counter updates — T1-G-14), `~/.aisdlc/harness.db` (review event row, best-effort — T1-D-01)
 
 **Current limitations**:
 - `RouteDecision` class has a docstring "Stub for T1-G-01 capability routing — forward-compatibility only" despite `build_route_decision()` being fully implemented — misleading comment surviving from an earlier draft

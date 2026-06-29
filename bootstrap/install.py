@@ -508,7 +508,23 @@ class Installer:
             
         self.log(SYMBOL_SUCCESS, "Configuration and supplementary context templates rendered.")
         
-        # 7. Install Cline rules
+        # 7. Scaffold .ai-review-config.json if not present
+        review_config_path = self.project_path / ".ai-review-config.json"
+        if not review_config_path.exists():
+            import json
+            default_config = {
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-6",
+                "model_high_risk": "claude-opus-4-8",
+                "timeout_seconds": 60
+            }
+            try:
+                review_config_path.write_text(json.dumps(default_config, indent=2) + "\n", encoding="utf-8")
+                self.log(SYMBOL_SUCCESS, "Generated default .ai-review-config.json overrides file.")
+            except Exception as e:
+                self.log(SYMBOL_WARN, f"Failed to write default .ai-review-config.json: {e}")
+
+        # 8. Install Cline rules
         self.install_clinerules(replacements)
 
     def install_clinerules(self, replacements: Dict[str, str]):
