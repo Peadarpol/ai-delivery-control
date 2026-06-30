@@ -11,8 +11,22 @@ from __future__ import annotations
 import ast
 import glob
 import json
+import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
+
+
+def _find_project_root() -> Path:
+    """Traverse upwards to locate the workspace root (directory containing .git)."""
+    curr = Path(__file__).resolve().parent
+    for _ in range(10):
+        if (curr / ".git").exists():
+            return curr
+        curr = curr.parent
+    return Path(__file__).resolve().parent.parent # fallback
+
+
+PROJECT_ROOT = _find_project_root()
 
 
 def log_harness_event(event_dict: Dict[str, Any], project_root: Path) -> None:
@@ -201,3 +215,151 @@ def build_branch_isolation_roster(
                 }
 
     return roster
+
+
+def _load_branch_isolation_config() -> Tuple[List[str], List[str]]:
+    """Load model_file_patterns and base_classes from .agent/config.yaml."""
+    patterns = []
+    base_classes = []
+    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+    if not config_path.exists():
+        return ["src/**/models.py", "src/**/model.py"], ["BranchAwareMixin", "BranchIsolatedMixin"]
+
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        in_branch_isolation = False
+        
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if stripped == "branch_isolation:":
+                in_branch_isolation = True
+                continue
+
+            if in_branch_isolation:
+                indent = len(line) - len(line.lstrip())
+                if indent == 0:
+                    in_branch_isolation = False
+                    continue
+
+                if stripped.startswith("model_file_patterns:"):
+                    if "[" in stripped:
+                        lst_str = stripped.split("[", 1)[1].split("]", 1)[0]
+                        patterns = [p.strip().strip("\"'") for p in lst_str.split(",") if p.strip()]
+                elif stripped.startswith("base_classes:"):
+                    if "[" in stripped:
+                        lst_str = stripped.split("[", 1)[1].split("]", 1)[0]
+                        base_classes = [b.strip().strip("\"'") for b in lst_str.split(",") if b.strip()]
+    except Exception:
+        pass
+
+    if not patterns:
+        patterns = ["src/**/models.py", "src/**/model.py"]
+    if not base_classes:
+        base_classes = ["BranchAwareMixin", "BranchIsolatedMixin"]
+
+    return patterns, base_classes
+
+
+def _ensure_and_load_model_roster() -> Dict[str, Any]:
+    """Verify roster cache and compile/regenerate if model files changed or if missing."""
+    roster_path = PROJECT_ROOT / ".agent" / "wiki" / "branch_isolation_roster.json"
+    patterns, base_classes = _load_branch_isolation_config()
+
+    recompile = False
+    if not roster_path.exists():
+        recompile = True
+    else:
+        try:
+            roster_mtime = roster_path.stat().st_mtime
+            for pat in patterns:
+                search_pat = str(PROJECT_ROOT / pat)
+                for match in glob.glob(search_pat, recursive=True):
+                    if os.path.isfile(match) and os.path.getmtime(match) > roster_mtime:
+                        recompile = True
+                        break
+                if recompile:
+                    break
+        except Exception:
+            recompile = True
+
+    if recompile:
+        try:
+            from harness_utils import _setup_sys_path
+            _setup_sys_path()
+            roster = build_branch_isolation_roster(patterns, base_classes, PROJECT_ROOT)
+            roster_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(roster_path, "w", encoding="utf-8") as f:
+                json.dump(roster, f, indent=4)
+        except Exception as e:
+            print(f"⚠️  [ROSTER] Roster recompilation failed: {e}")
+            if roster_path.exists():
+                try:
+                    with open(roster_path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    pass
+            return {}
+    else:
+        try:
+            with open(roster_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    if roster_path.exists():
+        try:
+            with open(roster_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def verify_and_suppress_roster_issues(typed_verdict: Any, route_decision: Any) -> None:
+    """Read roster and suppress false-positive BRANCH_ISOLATION warnings if confirmed in roster."""
+    if not typed_verdict.issues:
+        return
+
+    roster = _ensure_and_load_model_roster()
+    if not roster:
+        return
+
+    new_issues = []
+    suppressed_any = False
+
+    for issue in typed_verdict.issues:
+        concern = issue.get("concern")
+        desc = issue.get("description", "")
+        
+        suppressed = False
+        if concern == "BRANCH_ISOLATION":
+            for model_name, info in roster.items():
+                if model_name in desc or model_name in issue.get("location", ""):
+                    col = info.get("column", "branch_id")
+                    fk = info.get("fk", "branches.id")
+                    nullable = info.get("nullable", True)
+                    
+                    note = f"BRANCH_ISOLATION: {model_name} confirmed branch-isolated ({col}: FK\u2192{fk}, nullable={nullable} — compiled YYYY-MM-DD)"
+                    print(f"✅ [ROSTER] Suppressed false-positive: {note}")
+                    route_decision.policy_notes.append(f"✅ Suppressed: {note}")
+                    suppressed = True
+                    suppressed_any = True
+                    break
+
+        if not suppressed:
+            new_issues.append(issue)
+
+    if suppressed_any:
+        typed_verdict.issues = new_issues
+        high_issues = [i for i in new_issues if i.get("severity") == "HIGH"]
+        med_issues = [i for i in new_issues if i.get("severity") == "MEDIUM"]
+        
+        if not high_issues:
+            typed_verdict.blocking_concern = None
+            if med_issues:
+                typed_verdict.verdict = "WARN"
+            else:
+                typed_verdict.verdict = "PASS"
