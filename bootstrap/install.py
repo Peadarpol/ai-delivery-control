@@ -320,6 +320,9 @@ class Installer:
             "capability_calibration.py",
             "state_persistence.py",
             "acceptance_hook.py",
+            "context_loader.py",
+            "route_decision.py",
+            "rebuttal.py",
         ]
         for script_name in framework_scripts:
             src_script = self.framework_path / "src" / "scripts" / script_name

@@ -473,7 +473,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 | S0-13 | GitHub topics named in README | Discoverability | ✅ |
 | (skill) | AI hallucination detection checks added to code-review SKILL.md | Skill quality | ✅ |
 
-**Migration**: `bootstrap/migrations/v1_4_4_to_v1_4_5.py` — patch migration, no config schema changes. Copies updated framework-owned files to the target installation.
+**Migration**: `bootstrap/migrations/v1_4_4_to_v1_4_5.py` — patch migration, no config schema changes. Copies updated framework-owned files to the target installation. Note: `ai_review.py` was decomposed into smaller single-responsibility modules (`roster_builder.py`, `context_loader.py`, `route_decision.py`, `rebuttal.py`, and `gate_context.py`), resulting in a maintenance-only refactoring bump with no external API changes.
 
 ---
 
@@ -838,6 +838,7 @@ Scope:
 **Active milestone**: v1.4.5
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
 **v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅
+*v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 
 ---
