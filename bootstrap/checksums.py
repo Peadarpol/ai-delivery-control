@@ -9045,7 +9045,7 @@ V1_4_5 = {
     '.agent/skills/universal/test-driven-development/testing-anti-patterns.md': 'bde453bc258f06543987477c837939afaa774ea2acbd9f308d702fc452bc4283',
     '.agent/skills/universal/test-writing/SKILL.md': 'bc7873b2ee088bdbf6ec814439a88134a03a29ad291f23f40476c1fa28205fe8',
     '.agent/skills/universal/testing-patterns/SKILL.md': 'bbc494fdf415406a36a571fdad524ee8584ac09255f0777fc592754f3dd43e65',
-    '.agent/skills/universal/verification-before-completion/SKILL.md': 'be61628e9695f56f56123d52c888a50f93870a16dd9639b8dd8aead2d24ad55c',
+    '.agent/skills/universal/verification-before-completion/SKILL.md': 'e734c09dd9ae11a34cc984de88967355e113f70762353cee967db4e67ebfe519',
     '.agent/templates/commit_message.txt': '865d5fee605c0f8e0a6a1547d2f633c132ee11cc4219a42f1bd5a52d12e460b1',
     '.agent/templates/feature_spec.md': 'fcbecff78a08cc958f792aeb13d9a1fe56565ed6496e72b180f67e6ff2ccab64',
     '.agent/templates/gate_rebuttal_template.json': 'fa24a6cc591cfa9f2266a5d4028f0144bade9577de47684ebb734d20a18ea846',
