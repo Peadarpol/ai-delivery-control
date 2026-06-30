@@ -19,6 +19,9 @@ FRAMEWORK_OWNED = [
     "src/scripts/capability_calibration.py",
     "src/scripts/state_persistence.py",
     "src/scripts/acceptance_hook.py",
+    "src/scripts/context_loader.py",
+    "src/scripts/route_decision.py",
+    "src/scripts/rebuttal.py",
 ]
 
 PROJECT_OWNED = [

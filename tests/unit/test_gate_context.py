@@ -9,12 +9,12 @@ from src.scripts.gate_context import (
     CoChangeWarning,
     load_gate_context,
     write_gate_context,
-    get_context_path
+    get_context_path,
+    calculate_todo_delta,
+    gather_pytest_evidence
 )
 from src.scripts.ai_review import (
-    calculate_todo_delta,
     build_deterministic_findings_section,
-    gather_pytest_evidence
 )
 
 def test_gate_context_defaults():

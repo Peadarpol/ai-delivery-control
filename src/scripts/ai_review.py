@@ -123,6 +123,145 @@ except ImportError:
     roster_builder = None
 
 try:
+    import context_loader
+except ImportError:
+    context_loader = None
+
+def get_adr_context(changed_files):
+    if context_loader is not None and hasattr(context_loader, "get_adr_context"):
+        return context_loader.get_adr_context(changed_files)
+    return "", [], []
+
+def load_review_context(diff=""):
+    if context_loader is not None and hasattr(context_loader, "load_review_context"):
+        return context_loader.load_review_context(diff)
+    return ""
+
+def _get_active_context_sections(diff):
+    if context_loader is not None and hasattr(context_loader, "_get_active_context_sections"):
+        return context_loader._get_active_context_sections(diff)
+    return ""
+
+UNIVERSAL_CONTEXT_FILE = context_loader.UNIVERSAL_CONTEXT_FILE if context_loader is not None else Path("review_context_universal.md")
+PROJECT_CONTEXT_FILE = context_loader.PROJECT_CONTEXT_FILE if context_loader is not None else Path("review_context_project.md")
+
+try:
+    import route_decision
+    RouteDecision = route_decision.RouteDecision
+except ImportError:
+    route_decision = None
+    class RouteDecision(BaseModel):
+        selected_tools: List[str] = Field(default_factory=list)
+        review_intensity: Literal["standard", "elevated", "critical"] = "standard"
+        rationale: str = ""
+        policy_notes: List[str] = Field(default_factory=list)
+
+try:
+    import rebuttal
+    RebuttedFinding = rebuttal.RebuttedFinding
+    RebuttedVerdict = rebuttal.RebuttedVerdict
+    DeveloperRebuttalFinding = rebuttal.DeveloperRebuttalFinding
+    DeveloperRebuttal = rebuttal.DeveloperRebuttal
+    VALID_REBUTTAL_TYPES = rebuttal.VALID_REBUTTAL_TYPES
+except ImportError:
+    rebuttal = None
+    VALID_REBUTTAL_TYPES = ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE")
+    class RebuttedFinding(BaseModel):
+        finding_id: str
+        rebuttal_type: str
+        verdict: str
+        rationale: str
+
+    class RebuttedVerdict(BaseModel):
+        verdict: str
+        original_fail_session_id: str
+        original_fail_timestamp: str
+        normalized_diff_hash: str
+        findings: List[RebuttedFinding]
+        model: str
+        token_usage: Dict[str, int] = Field(default_factory=dict)
+        session_id: Optional[str] = None
+        strategy: str = "rebuttal"
+        rebuttal_actor: str = "human"
+
+    class DeveloperRebuttalFinding(BaseModel):
+        finding_id: str
+        rebuttal_type: str
+        spec_reference: Optional[str] = None
+        evidence: str
+
+    class DeveloperRebuttal(BaseModel):
+        original_fail_session_id: str
+        original_fail_timestamp: str
+        normalized_diff_hash: str
+        findings: List[DeveloperRebuttalFinding]
+
+def _scan_logs_for_rebuttal(diff_hash):
+    if rebuttal is not None and hasattr(rebuttal, "_scan_logs_for_rebuttal"):
+        return rebuttal._scan_logs_for_rebuttal(diff_hash)
+    return None, []
+
+def _load_rebuttal_timeout():
+    if rebuttal is not None and hasattr(rebuttal, "_load_rebuttal_timeout"):
+        return rebuttal._load_rebuttal_timeout()
+    return 15
+
+def _run_rebuttal(args):
+    if rebuttal is not None and hasattr(rebuttal, "_run_rebuttal"):
+        return rebuttal._run_rebuttal(args)
+    return 1
+
+try:
+    import gate_context
+except ImportError:
+    gate_context = None
+
+def gather_pytest_evidence(changed_files):
+    if gate_context is not None and hasattr(gate_context, "gather_pytest_evidence"):
+        return gate_context.gather_pytest_evidence(changed_files)
+    return {}
+
+def calculate_todo_delta(diff):
+    if gate_context is not None and hasattr(gate_context, "calculate_todo_delta"):
+        return gate_context.calculate_todo_delta(diff)
+    return 0
+
+def get_recent_file_churn(diff):
+    if gate_context is not None and hasattr(gate_context, "get_recent_file_churn"):
+        return gate_context.get_recent_file_churn(diff)
+    return ""
+
+def classify_commit_risk(changed_files, adr_domains):
+    if route_decision is not None and hasattr(route_decision, "classify_commit_risk"):
+        return route_decision.classify_commit_risk(changed_files, adr_domains)
+    return False, []
+
+def get_high_risk_files(changed_files):
+    if route_decision is not None and hasattr(route_decision, "get_high_risk_files"):
+        return route_decision.get_high_risk_files(changed_files)
+    return []
+
+def build_route_decision(changed_files, diff_text, pagerank_scores):
+    if route_decision is not None and hasattr(route_decision, "build_route_decision"):
+        return route_decision.build_route_decision(changed_files, diff_text, pagerank_scores)
+    return RouteDecision()
+
+def _load_layer_paths_from_config():
+    if route_decision is not None and hasattr(route_decision, "_load_layer_paths_from_config"):
+        return route_decision._load_layer_paths_from_config()
+    return {}
+
+def _load_high_risk_patterns():
+    if route_decision is not None and hasattr(route_decision, "_load_high_risk_patterns"):
+        return route_decision._load_high_risk_patterns()
+    return {"paths": [], "filenames": [], "adr_domains": []}
+
+def _load_adr_capability_mappings():
+    if route_decision is not None and hasattr(route_decision, "_load_adr_capability_mappings"):
+        return route_decision._load_adr_capability_mappings()
+    return {}
+
+try:
     from wiki_compile import DOMAIN_REGISTRY
 except ImportError:
     DOMAIN_REGISTRY = {}
@@ -201,63 +340,6 @@ def _get_active_session_id() -> str | None:
     return None
 
 
-def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
-    """Gather pytest collect evidence.
-    For each changed python file, look for a corresponding test file and collect its tests.
-    """
-    evidence = {}
-    for f in changed_files:
-        if not f.endswith(".py") or f.startswith("tests/"):
-            continue
-        path = Path(f)
-        basename = path.name
-        test_name = f"test_{basename}"
-        found_tests = list(PROJECT_ROOT.glob(f"**/tests/**/{test_name}")) + list(PROJECT_ROOT.glob(f"**/tests/{test_name}"))
-        if found_tests:
-            test_file = found_tests[0]
-            try:
-                res = subprocess.run(
-                    ["pytest", "--collect-only", "-q", str(test_file)],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    cwd=str(PROJECT_ROOT)
-                )
-                if res.returncode == 0:
-                    tests = [line.strip() for line in res.stdout.splitlines() if line.strip() and "::" in line]
-                    evidence[f] = {
-                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-                        "collected_tests": tests
-                    }
-                else:
-                    evidence[f] = {
-                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-                        "error": f"pytest returned {res.returncode}"
-                    }
-            except Exception as e:
-                evidence[f] = {
-                    "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-                    "error": str(e)
-                }
-        else:
-            evidence[f] = {
-                "test_file": None,
-                "collected_tests": []
-            }
-    return evidence
-
-
-def calculate_todo_delta(diff: str) -> int:
-    added_todos = 0
-    removed_todos = 0
-    for line in diff.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
-            if "TODO" in line.upper() or "FIXME" in line.upper():
-                added_todos += 1
-        elif line.startswith("-") and not line.startswith("---"):
-            if "TODO" in line.upper() or "FIXME" in line.upper():
-                removed_todos += 1
-    return added_todos - removed_todos
 
 
 def build_deterministic_findings_section(gate_context: Any) -> str:
@@ -343,152 +425,20 @@ def _load_token_ratios() -> Dict[str, float]:
 
 
 def _load_branch_isolation_config() -> Tuple[List[str], List[str]]:
-    """Load model_file_patterns and base_classes from .agent/config.yaml."""
-    patterns = []
-    base_classes = []
-    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return ["src/**/models.py", "src/**/model.py"], ["BranchAwareMixin", "BranchIsolatedMixin"]
-
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        in_branch_isolation = False
-        
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-
-            if stripped == "branch_isolation:":
-                in_branch_isolation = True
-                continue
-
-            if in_branch_isolation:
-                indent = len(line) - len(line.lstrip())
-                if indent == 0:
-                    in_branch_isolation = False
-                    continue
-
-                if stripped.startswith("model_file_patterns:"):
-                    if "[" in stripped:
-                        lst_str = stripped.split("[", 1)[1].split("]", 1)[0]
-                        patterns = [p.strip().strip("\"'") for p in lst_str.split(",") if p.strip()]
-                elif stripped.startswith("base_classes:"):
-                    if "[" in stripped:
-                        lst_str = stripped.split("[", 1)[1].split("]", 1)[0]
-                        base_classes = [b.strip().strip("\"'") for b in lst_str.split(",") if b.strip()]
-    except Exception:
-        pass
-
-    if not patterns:
-        patterns = ["src/**/models.py", "src/**/model.py"]
-    if not base_classes:
-        base_classes = ["BranchAwareMixin", "BranchIsolatedMixin"]
-
-    return patterns, base_classes
+    if roster_builder is not None and hasattr(roster_builder, "_load_branch_isolation_config"):
+        return roster_builder._load_branch_isolation_config()
+    return ["src/**/models.py", "src/**/model.py"], ["BranchAwareMixin", "BranchIsolatedMixin"]
 
 
 def _ensure_and_load_model_roster() -> Dict[str, Any]:
-    """Verify roster cache and compile/regenerate if model files changed or if missing."""
-    roster_path = PROJECT_ROOT / ".agent" / "wiki" / "branch_isolation_roster.json"
-    patterns, base_classes = _load_branch_isolation_config()
-
-    recompile = False
-    if not roster_path.exists():
-        recompile = True
-    else:
-        try:
-            roster_mtime = roster_path.stat().st_mtime
-            for pat in patterns:
-                search_pat = str(PROJECT_ROOT / pat)
-                for match in glob.glob(search_pat, recursive=True):
-                    if os.path.isfile(match) and os.path.getmtime(match) > roster_mtime:
-                        recompile = True
-                        break
-                if recompile:
-                    break
-        except Exception:
-            recompile = True
-
-    if recompile:
-        try:
-            _setup_sys_path()
-            if build_branch_isolation_roster is None:
-                raise RuntimeError("roster_builder module is unavailable")
-            roster = build_branch_isolation_roster(patterns, base_classes, PROJECT_ROOT)
-            roster_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(roster_path, "w", encoding="utf-8") as f:
-                json.dump(roster, f, indent=4)
-        except Exception as e:
-            print(f"⚠️  [ROSTER] Roster recompilation failed: {e}")
-            if roster_path.exists():
-                try:
-                    with open(roster_path, "r", encoding="utf-8") as f:
-                        return json.load(f)
-                except Exception:
-                    pass
-            return {}
-    else:
-        try:
-            with open(roster_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-
-    if roster_path.exists():
-        try:
-            with open(roster_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    if roster_builder is not None and hasattr(roster_builder, "_ensure_and_load_model_roster"):
+        return roster_builder._ensure_and_load_model_roster()
     return {}
 
 
 def verify_and_suppress_roster_issues(typed_verdict: ReviewVerdict, route_decision: RouteDecision) -> None:
-    """Read roster and suppress false-positive BRANCH_ISOLATION warnings if confirmed in roster."""
-    if not typed_verdict.issues:
-        return
-
-    roster = _ensure_and_load_model_roster()
-    if not roster:
-        return
-
-    new_issues = []
-    suppressed_any = False
-
-    for issue in typed_verdict.issues:
-        concern = issue.get("concern")
-        desc = issue.get("description", "")
-        
-        suppressed = False
-        if concern == "BRANCH_ISOLATION":
-            for model_name, info in roster.items():
-                if model_name in desc or model_name in issue.get("location", ""):
-                    col = info.get("column", "branch_id")
-                    fk = info.get("fk", "branches.id")
-                    nullable = info.get("nullable", True)
-                    
-                    note = f"BRANCH_ISOLATION: {model_name} confirmed branch-isolated ({col}: FK\u2192{fk}, nullable={nullable} — compiled YYYY-MM-DD)"
-                    print(f"✅ [ROSTER] Suppressed false-positive: {note}")
-                    route_decision.policy_notes.append(f"✅ Suppressed: {note}")
-                    suppressed = True
-                    suppressed_any = True
-                    break
-
-        if not suppressed:
-            new_issues.append(issue)
-
-    if suppressed_any:
-        typed_verdict.issues = new_issues
-        high_issues = [i for i in new_issues if i.get("severity") == "HIGH"]
-        med_issues = [i for i in new_issues if i.get("severity") == "MEDIUM"]
-        
-        if not high_issues:
-            typed_verdict.blocking_concern = None
-            if med_issues:
-                typed_verdict.verdict = "WARN"
-            else:
-                typed_verdict.verdict = "PASS"
+    if roster_builder is not None and hasattr(roster_builder, "verify_and_suppress_roster_issues"):
+        roster_builder.verify_and_suppress_roster_issues(typed_verdict, route_decision)
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -508,461 +458,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 # ── Pydantic Models (T1-G-03) ─────────────────────────────────────────────────
 
 
-class RouteDecision(BaseModel):
-    """Stub for T1-G-01 capability routing — forward-compatibility only."""
 
-    selected_tools: List[str] = Field(default_factory=list)
-    review_intensity: Literal["standard", "elevated", "critical"] = "standard"
-    rationale: str = ""
-    policy_notes: List[str] = Field(default_factory=list)
-
-
-# ── ADR Domain Mapping (BUG-05) ───────────────────────────────────────────────
-
-UNIVERSAL_ADR_DOMAIN_TO_CAPABILITY = {
-    "branch_isolation": "BRANCH_ISOLATION",
-    "remove_uow_autocommit": "TRANSACTIONAL_INTEGRITY",
-    "clean_architecture": "CLEAN_ARCH",
-    "authentication": "RBAC",
-    "schema_hardening": "MASS_ASSIGNMENT",
-    "uow_pattern": "TRANSACTIONAL_INTEGRITY",
-}
-
-
-def _load_adr_capability_mappings() -> Dict[str, str]:
-    """Read adr_capability_mappings from .agent/config.yaml.
-
-    Uses simple indentation and prefix matching to avoid a YAML dependency.
-    """
-    mappings = {}
-    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return mappings
-
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        in_arch_checks = False
-        in_mappings = False
-        
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-                
-            # Detect section transitions
-            if stripped == "architecture_checks:":
-                in_arch_checks = True
-                in_mappings = False
-                continue
-                
-            if in_arch_checks:
-                indent = len(line) - len(line.lstrip())
-                
-                if stripped == "adr_capability_mappings:":
-                    in_mappings = True
-                    continue
-                    
-                if in_mappings:
-                    if ":" in stripped:
-                        key_part, val_part = stripped.split(":", 1)
-                        # Remove comment if any (e.g. key: value # comment)
-                        val_part = val_part.split("#", 1)[0]
-                        key = key_part.strip().strip("\"'")
-                        val = val_part.strip().strip("\"'")
-                        if key and val:
-                            mappings[key] = val
-                    else:
-                        if indent == 0:
-                            in_arch_checks = False
-                            in_mappings = False
-                else:
-                    if indent == 0:
-                        in_arch_checks = False
-    except Exception:
-        pass
-        
-    return mappings
-
-
-# ── High-Risk Commit Classification (T1-L-08) ─────────────────────────────────
-
-HIGH_RISK_PATTERNS = {
-    "paths": [
-        "*/migrations/*",
-        "*/auth/*",
-        "*/rbac/*", 
-        "*/permissions/*",
-        "*/security/*",
-    ],
-    "filenames": [
-        "unit_of_work.py",
-        "base_repository.py",
-        "models.py",
-    ],
-    "adr_domains": [
-        "branch_isolation",
-        "authentication",
-        "schema_hardening",
-    ],
-}
-
-
-def _load_layer_paths_from_config() -> Dict[str, str]:
-    """Load layer name → path from architecture.layers in .agent/config.yaml.
-
-    Returns a dict mapping each layer name to its path prefix, e.g.
-    {"domain": "src/domain", "application": "src/application", ...}.
-    Returns an empty dict when the config is absent, the architecture.layers
-    section is missing, or all paths are unresolved install-time placeholders.
-    """
-    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return {}
-
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        layers: Dict[str, str] = {}
-        in_architecture = False
-        in_layers = False
-        current_name: Optional[str] = None
-
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-
-            indent = len(line) - len(line.lstrip())
-
-            if stripped == "architecture:":
-                in_architecture = True
-                in_layers = False
-                current_name = None
-                continue
-
-            if in_architecture:
-                if indent == 0:
-                    break  # Exited architecture: section
-
-                if stripped == "layers:":
-                    in_layers = True
-                    current_name = None
-                    continue
-
-                if in_layers:
-                    if indent <= 2 and not stripped.startswith("-"):
-                        in_layers = False
-                        continue
-
-                    if stripped.startswith("- name:"):
-                        current_name = stripped.split(":", 1)[1].strip().strip("\"'")
-                    elif stripped.startswith("path:") and current_name is not None:
-                        path_val = stripped.split(":", 1)[1].strip().strip("\"'")
-                        # Skip unresolved install-time placeholders like "[PROJECT_SRC_PATH]/domain"
-                        if path_val and not path_val.startswith("["):
-                            layers[current_name] = path_val
-
-        return layers
-    except Exception:
-        return {}
-
-
-def _load_high_risk_patterns() -> Dict[str, List[str]]:
-    """Load high_risk_patterns from .agent/config.yaml.
-
-    Uses simple line parsing to avoid PyYAML dependency.
-    """
-    config_patterns = {"paths": [], "filenames": [], "adr_domains": []}
-    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return config_patterns
-
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        in_arch_checks = False
-        in_patterns = False
-        current_list = None
-        
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-                
-            # Transition triggers
-            if stripped == "architecture_checks:":
-                in_arch_checks = True
-                in_patterns = False
-                continue
-                
-            if in_arch_checks:
-                indent = len(line) - len(line.lstrip())
-                if indent == 0:
-                    in_arch_checks = False
-                    in_patterns = False
-                    continue
-                    
-                if stripped == "high_risk_patterns:":
-                    in_patterns = True
-                    continue
-                    
-                if in_patterns:
-                    if indent <= 2:  # Exited high_risk_patterns block
-                        if stripped != "high_risk_patterns:":
-                            in_patterns = False
-                            continue
-                            
-                    # Let's detect lists: paths:, filenames:, adr_domains:
-                    if stripped in ("paths:", "filenames:", "adr_domains:"):
-                        current_list = stripped[:-1]  # "paths", "filenames", or "adr_domains"
-                        continue
-                        
-                    # Parse list items like `- "item"` or `- item`
-                    if stripped.startswith("-") and current_list:
-                        item = stripped[1:].strip().strip("\"'")
-                        if item:
-                            config_patterns[current_list].append(item)
-    except Exception:
-        pass
-        
-    return config_patterns
-
-
-def classify_commit_risk(changed_files: List[str], adr_domains: List[str]) -> Tuple[bool, List[str]]:
-    """Classify commit risk based on modified paths, filenames, and active ADR domains.
-
-    Returns:
-        (is_high_risk, matched_patterns)
-    """
-    cfg = _load_high_risk_patterns()
-    
-    paths = list(HIGH_RISK_PATTERNS["paths"]) + cfg.get("paths", [])
-    filenames = list(HIGH_RISK_PATTERNS["filenames"]) + cfg.get("filenames", [])
-    adr_domains_list = list(HIGH_RISK_PATTERNS["adr_domains"]) + cfg.get("adr_domains", [])
-    
-    matched = []
-    
-    # Normalize changed_files to forward slashes for path pattern matching
-    normalized_files = [f.replace("\\", "/") for f in changed_files]
-    
-    for f in normalized_files:
-        # Match paths
-        for pat in paths:
-            if fnmatch.fnmatch(f, pat):
-                matched.append(f"path:{pat} (matches {f})")
-                
-        # Match filenames
-        name = Path(f).name
-        for fn in filenames:
-            if name == fn:
-                matched.append(f"filename:{fn} (matches {f})")
-                
-    # Match ADR domains
-    normalized_adr = [d.strip().lower() for d in adr_domains]
-    for adr in adr_domains_list:
-        norm_adr = adr.strip().lower()
-        if norm_adr in normalized_adr:
-            matched.append(f"adr_domain:{adr}")
-            
-    return len(matched) > 0, matched
-
-
-# log_harness_event definition moved to top of file
-
-
-def _handle_api_unavailable(reason: str, changed_files: List[str], active_domains: List[str], diff_text: str = "none") -> int:
-    """Handle API/provider unavailability with high-risk fail-closed enforcement (T1-L-08)."""
-    is_high_risk, matched_patterns = classify_commit_risk(changed_files, active_domains)
-    _log_gate_skipped("PROVIDER_ERROR", diff_text)
-    _persist_verdict(fail_open_reason=reason)
-    
-    if is_high_risk:
-        print("[REVIEW] API unavailable + high-risk commit → FAIL CLOSED")
-        print("[REVIEW] High-risk files detected — manual review required")
-        print("[REVIEW] Override: SKIP_AI_REVIEW=1 SKIP_REASON='...'")
-        
-        log_harness_event({
-            "event_type": "high_risk_gate_closed",
-            "severity": "HIGH",
-            "payload": {
-                "reason": f"API unavailable on high-risk commit ({reason})",
-                "high_risk_matches": matched_patterns,
-                "override_available": "SKIP_AI_REVIEW=1 SKIP_REASON=..."
-            }
-        })
-        sys.exit(1)  # Block the commit
-    else:
-        # Fail open — low-risk commit, proceed
-        print(f"⚠️  AI review skipped (fail-open): {reason}")
-        print("   Allowing commit. Review manually if this persists.")
-        return 0
-
-
-def build_route_decision(
-    changed_files: List[str], diff_text: str, pagerank_scores: Dict[str, float]
-) -> RouteDecision:
-    """Populates the RouteDecision model based on path matching, ADRs, and PageRank."""
-    selected_tools = []
-    policy_notes = []
-
-    # 1. Determine active capability tools by path and content matching
-    changed_normalized = [f.replace("\\", "/") for f in changed_files]
-
-    # Config-driven layer path routing (replaces GymBase hardcoded paths).
-    # Reads architecture.layers from .agent/config.yaml; falls back to
-    # ADR-annotation-only activation when no layers are configured.
-    _layer_paths = _load_layer_paths_from_config()
-
-    if _layer_paths:
-        _app_paths = [p for n, p in _layer_paths.items()
-                      if any(k in n.lower() for k in ("application", "service"))]
-        _infra_paths = [p for n, p in _layer_paths.items()
-                        if any(k in n.lower() for k in ("infrastructure", "repository"))]
-        _domain_paths = [p for n, p in _layer_paths.items()
-                         if any(k in n.lower() for k in ("domain", "model"))]
-        _api_paths = [p for n, p in _layer_paths.items()
-                      if any(k in n.lower() for k in ("presentation", "api"))]
-
-        def _touches(paths: List[str]) -> bool:
-            return any(
-                f.startswith(lp.rstrip("/") + "/")
-                for f in changed_normalized
-                for lp in paths
-            )
-
-        has_db_or_srv = _touches(_app_paths) or _touches(_infra_paths)
-        has_domain_or_models = _touches(_domain_paths)
-        has_api = _touches(_api_paths)
-        has_clean_arch = _touches(list(_layer_paths.values()))
-    else:
-        # No layers configured — path-based routing disabled.
-        # TRANSACTIONAL_INTEGRITY and BRANCH_ISOLATION activate only via
-        # ADR annotations or content-based pattern matching.
-        has_db_or_srv = False
-        has_domain_or_models = False
-        has_api = False
-        has_clean_arch = False
-
-    has_migrations = any("migrations/versions/" in f for f in changed_normalized)
-
-    # Content-based checks
-    is_tx = has_db_or_srv or any(
-        p in diff_text for p in ["UnitOfWork", "uow.", "self.uow", ".commit()"]
-    )
-    is_bi = has_db_or_srv or any(
-        p in diff_text for p in ["_apply_branch_filter", "branch_id"]
-    )
-    is_ma = has_domain_or_models or any(
-        p in diff_text for p in ["BaseModel", "model_config"]
-    )
-    is_rbac = has_api or any(
-        p in diff_text for p in ["require_permission", "Role", "permission"]
-    )
-    is_mig = has_migrations or any(p in diff_text for p in ["alembic", "op.add_column"])
-    is_ca = has_clean_arch
-
-    # Scan for ADR domain triggers (from active_domains matching DOMAIN_REGISTRY keys)
-    active_adr_domains = []
-    try:
-        from architecture_checks import extract_adr_annotations
-
-        for f in changed_files:
-            if Path(f).exists():
-                for domain in extract_adr_annotations(f):
-                    active_adr_domains.append(domain.lower())
-    except Exception:
-        pass
-
-    if "branch_isolation" in active_adr_domains:
-        is_bi = True
-    if "multi_branch_schema" in active_adr_domains:
-        is_bi = True
-    if "transactional_integrity" in active_adr_domains:
-        is_tx = True
-
-    # Map triggers to selected_tools
-    capabilities = {
-        "TRANSACTIONAL_INTEGRITY": is_tx,
-        "BRANCH_ISOLATION": is_bi,
-        "MASS_ASSIGNMENT": is_ma,
-        "RBAC": is_rbac,
-        "MIGRATIONS": is_mig,
-        "CLEAN_ARCH": is_ca,
-    }
-
-    # Enable capabilities based on ADR domains (BUG-05 - revised two-layer design)
-    # Layer 1: Universal seeds
-    adr_mappings = dict(UNIVERSAL_ADR_DOMAIN_TO_CAPABILITY)
-    
-    # Layer 2: Merge project-specific config mappings (wins on conflicts)
-    try:
-        project_mappings = _load_adr_capability_mappings()
-        adr_mappings.update(project_mappings)
-    except Exception:
-        pass
-        
-    # Normalize keys/values and apply
-    normalized_mappings = {k.strip().lower(): v.strip().upper() for k, v in adr_mappings.items()}
-    
-    for domain in active_adr_domains:
-        norm = domain.strip().lower()
-        if norm in normalized_mappings:
-            cap_name = normalized_mappings[norm]
-            if cap_name in capabilities:
-                capabilities[cap_name] = True
-
-    for cap_name, active in capabilities.items():
-        if active:
-            selected_tools.append(cap_name)
-            policy_notes.append(f"{SYMBOL_ACTIVE} Enabled check: {cap_name}")
-        else:
-            policy_notes.append(
-                f"{SYMBOL_SHIELD} Skipped check: {cap_name} (no matching path or ADR)"
-            )
-
-    # 2. Determine review intensity based on PageRank
-    review_intensity = "standard"
-    top_3_hits = []
-    top_10_hits = []
-
-    if pagerank_scores:
-        sorted_files = sorted(
-            pagerank_scores.keys(), key=lambda f: pagerank_scores[f], reverse=True
-        )
-        top_3 = sorted_files[:3]
-        top_10 = sorted_files[:10]
-
-        top_3_hits = [f for f in changed_normalized if f in top_3]
-        top_10_hits = [f for f in changed_normalized if f in top_10]
-
-        if top_3_hits:
-            review_intensity = "critical"
-        elif top_10_hits:
-            review_intensity = "elevated"
-
-    policy_notes.append(
-        f"{SYMBOL_REVIEW} Review intensity: {review_intensity.upper()} "
-        f"(PageRank metrics: critical hits = {len(top_3_hits)}, elevated hits = {len(top_10_hits)})"
-    )
-
-    # 3. Construct rationale
-    rationale_parts = [f"Intensity set to {review_intensity}."]
-    if top_3_hits:
-        rationale_parts.append(
-            f"Staged changes modify core Top 3 PageRank files: {', '.join(top_3_hits)}."
-        )
-    elif top_10_hits:
-        rationale_parts.append(
-            f"Staged changes modify high-priority Top 10 PageRank files: {', '.join(top_10_hits)}."
-        )
-    rationale_parts.append(
-        f"Active capabilities: {', '.join(selected_tools) if selected_tools else 'None'}."
-    )
-
-    return RouteDecision(
-        selected_tools=selected_tools,
-        review_intensity=review_intensity,
-        rationale=" ".join(rationale_parts),
-        policy_notes=policy_notes,
-    )
 
 
 class ReviewVerdict(BaseModel):
@@ -1002,44 +498,7 @@ class PlanOutput(BaseModel):
     planner_note: str
 
 
-# ── Structured Rebuttal Models (T1-G-06) ──────────────────────────────────────
 
-RebuttalType = Literal["FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE"]
-VALID_REBUTTAL_TYPES = get_args(RebuttalType)
-
-
-class RebuttedFinding(BaseModel):
-    finding_id: str
-    rebuttal_type: RebuttalType
-    verdict: Literal["REBUTTAL_ACCEPTED", "REBUTTAL_REJECTED"]
-    rationale: str
-
-
-class RebuttedVerdict(BaseModel):
-    verdict: Literal["PASS", "FAIL"]
-    original_fail_session_id: str
-    original_fail_timestamp: str
-    normalized_diff_hash: str
-    findings: List[RebuttedFinding]
-    model: str
-    token_usage: Dict[str, int] = Field(default_factory=dict)
-    session_id: Optional[str] = None
-    strategy: Literal["rebuttal"] = "rebuttal"
-    rebuttal_actor: Literal["agent", "human"] = "human"
-
-
-class DeveloperRebuttalFinding(BaseModel):
-    finding_id: str
-    rebuttal_type: RebuttalType
-    spec_reference: Optional[str] = None
-    evidence: str
-
-
-class DeveloperRebuttal(BaseModel):
-    original_fail_session_id: str
-    original_fail_timestamp: str
-    normalized_diff_hash: str
-    findings: List[DeveloperRebuttalFinding]
 
 
 # _find_project_root and PROJECT_ROOT defined at top of file
@@ -1058,119 +517,7 @@ def _get_normalized_diff_hash(diff: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _scan_logs_for_rebuttal(diff_hash: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Scan .ai-review-log.jsonl backwards in chunks to find:
-    1. The last standard FAIL verdict (to serve as original_fail).
-    2. Any prior rebuttal attempts matching the active diff_hash (to check for rate-limiting).
-    """
-    log_path = PROJECT_ROOT / ".ai-review-log.jsonl"
-    if not log_path.exists():
-        return None, []
 
-    max_lines = 500
-    config = load_config()
-    if "review" in config and isinstance(config["review"], dict):
-        max_lines = config["review"].get("rebuttal_scan_max_lines", 500)
-    
-    records = []
-    remainder = ""
-    chunk_size = 4096
-    
-    with open(log_path, "rb") as f:
-        f.seek(0, os.SEEK_END)
-        file_size = f.tell()
-        position = file_size
-        
-        line_count = 0
-        while position > 0 and line_count < max_lines:
-            to_read = min(chunk_size, position)
-            position -= to_read
-            f.seek(position, os.SEEK_SET)
-            chunk = f.read(to_read).decode("utf-8", errors="replace")
-            
-            data = chunk + remainder
-            lines = data.splitlines()
-            
-            if position > 0 and len(lines) > 1:
-                remainder = lines[0]
-                lines_to_process = lines[1:]
-            else:
-                remainder = ""
-                lines_to_process = lines
-            
-            for line in reversed(lines_to_process):
-                if not line.strip():
-                    continue
-                try:
-                    rec = json.loads(line)
-                    records.append(rec)
-                    line_count += 1
-                    if line_count >= max_lines:
-                        break
-                except json.JSONDecodeError:
-                    continue
-                    
-        if remainder.strip() and line_count < max_lines:
-            try:
-                rec = json.loads(remainder)
-                records.append(rec)
-            except json.JSONDecodeError:
-                pass
-
-    last_fail = None
-    prior_rebuttals = []
-    
-    for rec in records:
-        if last_fail is None and rec.get("verdict") == "FAIL" and rec.get("strategy") != "rebuttal":
-            last_fail = rec
-        
-        if rec.get("strategy") == "rebuttal" and rec.get("normalized_diff_hash") == diff_hash:
-            prior_rebuttals.append(rec)
-            
-    return last_fail, prior_rebuttals
-
-
-def _load_rebuttal_timeout() -> int:
-    """Load rebuttal_pass_timeout_minutes from .agent/config.yaml.
-    Defaults to 15 minutes.
-    """
-    timeout = 15
-    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return timeout
-
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        in_review = False
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-
-            if stripped == "review:":
-                in_review = True
-                continue
-
-            if in_review:
-                indent = len(line) - len(line.lstrip())
-                if indent == 0:
-                    in_review = False
-                    continue
-
-                if ":" in stripped:
-                    key_part, val_part = stripped.split(":", 1)
-                    key = key_part.strip().strip("\"'")
-                    val = val_part.split("#", 1)[0].strip()
-                    if key == "rebuttal_pass_timeout_minutes":
-                        try:
-                            return int(val)
-                        except ValueError:
-                            pass
-    except Exception:
-        pass
-    return timeout
-UNIVERSAL_CONTEXT_FILE = SCRIPT_DIR / "review_context_universal.md"
-PROJECT_CONTEXT_FILE = SCRIPT_DIR / "review_context_project.md"
 CONFIG_FILE = PROJECT_ROOT / ".ai-review-config.json"
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
@@ -1242,31 +589,7 @@ Respond ONLY with valid JSON. No preamble, no markdown fences, no explanation ou
   "summary": "2-3 sentence overall assessment"
 }"""
 
-# ── Rebuttal System Prompt (T1-G-06) ──────────────────────────────────────────
 
-REBUTTAL_SYSTEM_PROMPT = """You are a principal engineer performing an independent, highly critical audit of a developer's rebuttal to a failed review gate finding.
-
-Your mindset must be ADVERSARIAL TOWARD THE REBUTTAL. Assume the original review finding was correct, and that developer bias and self-interest are high. Treat all rebuttal arguments with extreme skepticism.
-
-You should ACCEPT a rebuttal (REBUTTAL_ACCEPTED) ONLY when presented with indisputable, objective technical facts, explicit specification requirements, or verified architectural patterns showing that the flagged issue is indeed a false positive or is physically impossible in the codebase.
-
-Reject the rebuttal (REBUTTAL_REJECTED) if:
-- The argument is speculative, stylistic, or a matter of personal preference.
-- The developer is trying to defer fixing a real bug, error path, or security issue.
-- The evidence is weak or does not directly address the citation.
-- For SPEC_REQUIREMENT or ARCHITECTURAL_INVARIANT categories, if the spec_reference is missing, incomplete, or invalid.
-
-Respond ONLY with a valid JSON object. No preamble, no markdown fences, no explanation outside the JSON.
-{
-  "rebuttal_verdict": "PASS or FAIL",
-  "findings": [
-    {
-      "finding_id": "FID-1",
-      "verdict": "REBUTTAL_ACCEPTED or REBUTTAL_REJECTED",
-      "rationale": "one-sentence highly critical engineering justification of your decision"
-    }
-  ]
-}"""
 
 # ── Pre-flight Shortcut (T1-G-02) ────────────────────────────────────────────
 
@@ -1463,30 +786,32 @@ def _write_halt_file(msg: str):
     os.replace(tmp_path, halt_path)
 
 
-def get_high_risk_files(changed_files: List[str]) -> List[str]:
-    """Identify high-risk files from changed_files using high-risk patterns."""
-    print(f"[DEBUG] get_high_risk_files input changed_files: {changed_files}")
-    cfg = _load_high_risk_patterns()
-    paths = list(HIGH_RISK_PATTERNS["paths"]) + cfg.get("paths", [])
-    filenames = list(HIGH_RISK_PATTERNS["filenames"]) + cfg.get("filenames", [])
+def _handle_api_unavailable(reason: str, changed_files: List[str], active_domains: List[str], diff_text: str = "none") -> int:
+    """Handle API/provider unavailability with high-risk fail-closed enforcement (T1-L-08)."""
+    is_high_risk, matched_patterns = classify_commit_risk(changed_files, active_domains)
+    _log_gate_skipped("PROVIDER_ERROR", diff_text)
+    _persist_verdict(fail_open_reason=reason)
     
-    high_risk = []
-    for f in changed_files:
-        normalized_f = f.replace("\\", "/")
-        name = Path(f).name
-        matched = False
-        for pat in paths:
-            if fnmatch.fnmatch(normalized_f, pat):
-                matched = True
-                break
-        if not matched:
-            for fn in filenames:
-                if name == fn:
-                    matched = True
-                    break
-        if matched:
-            high_risk.append(f)
-    return high_risk
+    if is_high_risk:
+        print("[REVIEW] API unavailable + high-risk commit → FAIL CLOSED")
+        print("[REVIEW] High-risk files detected — manual review required")
+        print("[REVIEW] Override: SKIP_AI_REVIEW=1 SKIP_REASON='...'")
+        
+        log_harness_event({
+            "event_type": "high_risk_gate_closed",
+            "severity": "HIGH",
+            "payload": {
+                "reason": f"API unavailable on high-risk commit ({reason})",
+                "high_risk_matches": matched_patterns,
+                "override_available": "SKIP_AI_REVIEW=1 SKIP_REASON=..."
+            }
+        })
+        sys.exit(1)  # Block the commit
+    else:
+        # Fail open — low-risk commit, proceed
+        print(f"⚠️  AI review skipped (fail-open): {reason}")
+        print("   Allowing commit. Review manually if this persists.")
+        return 0
 
 
 def load_config() -> Dict[str, Any]:
@@ -1501,225 +826,7 @@ def load_config() -> Dict[str, Any]:
     return {}
 
 
-def get_adr_context(changed_files: list[str]) -> tuple[str, list[str], list[str]]:
-    """
-    Extracts, prioritizes, whitelists, and synthesizes active ADR wiki pages
-    into a budget-compliant context (≤400 tokens) using the three-step token squeeze.
 
-    Returns:
-        tuple (adr_context_string, active_domains, policy_notes)
-    """
-    _setup_sys_path()
-
-    # 1. Compute PageRank scores
-    try:
-        pagerank_scores = get_pagerank_scores(changed_files)
-    except Exception:
-        pagerank_scores = {}
-
-    # 2. Extract and whitelist annotations across all files
-    domain_to_max_score = {}
-
-    for path in Path("src").rglob("*.py"):
-        filepath_str = str(path).replace("\\", "/")
-        domains = extract_adr_annotations(str(path))
-        for domain in domains:
-            if domain not in DOMAIN_REGISTRY:
-                continue
-
-            score = pagerank_scores.get(filepath_str, 0.0)
-            if domain not in domain_to_max_score or score > domain_to_max_score[domain]:
-                domain_to_max_score[domain] = score
-
-    if not domain_to_max_score:
-        return "", [], []
-
-    # Sort domains by priority score (highest first)
-    sorted_domains = sorted(
-        domain_to_max_score.keys(), key=lambda d: domain_to_max_score[d], reverse=True
-    )
-
-    # 3. Budget-Based Token Squeeze
-    adr_parts = []
-    active_domains = []
-    suppressed_count = 0
-    token_budget = 400
-    current_tokens = 0
-
-    for domain in sorted_domains:
-        wiki_path = PROJECT_ROOT / ".agent" / "wiki" / f"{domain}.md"
-        if not wiki_path.exists():
-            continue
-
-        try:
-            content = wiki_path.read_text(encoding="utf-8")
-        except Exception:
-            continue
-
-        # Step 1: Strip headers/scaffolding
-        clean_content = _strip_wiki_headers(content)
-
-        est_tokens = len(clean_content) // 4
-
-        # Step 2: Inject in priority order
-        if current_tokens + est_tokens <= token_budget:
-            adr_parts.append(f"### Domain: {domain}\n{clean_content}")
-            current_tokens += est_tokens
-            active_domains.append(domain)
-        else:
-            # Step 3: Track suppressed domain
-            suppressed_count += 1
-
-    policy_notes = []
-    if suppressed_count > 0:
-        note = f"{suppressed_count} ADR domain{'s' if suppressed_count > 1 else ''} suppressed (token budget) — see .agent/wiki/ for full context."
-        policy_notes.append(note)
-
-    adr_context_str = ""
-    if adr_parts:
-        adr_context_str = "\n\n".join(adr_parts)
-        if policy_notes:
-            adr_context_str += "\n\n**Policy Notes**:\n" + "\n".join(
-                f"- {n}" for n in policy_notes
-            )
-
-    return adr_context_str, active_domains, policy_notes
-
-
-def _strip_wiki_headers(content: str) -> str:
-    """Strips wiki page scaffolding before injection."""
-    lines = content.splitlines()
-    clean_lines = []
-    in_skipped_section = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("## Related Domains") or stripped.startswith(
-            "**Related Domains**"
-        ):
-            in_skipped_section = True
-            continue
-        if stripped.startswith("## ") and in_skipped_section:
-            in_skipped_section = False
-        if in_skipped_section:
-            continue
-        if (
-            stripped.startswith("# ")
-            or stripped.startswith("**Compiled**")
-            or stripped.startswith("**Sources**")
-            or "→ Full source:" in stripped
-        ):
-            continue
-        clean_lines.append(line)
-    return "\n".join(clean_lines).strip()
-
-
-_ADR_TRIGGERS = ["# ADR:", "Decision /", "Exposes: FM", "AT[", "docs/adr/"]
-
-
-def load_review_context(diff: str = "") -> str:
-    """
-    Load project architecture guidelines for the review prompt.
-    Loads universal context always, and project context if present.
-    If a diff is provided, selectively injects relevant sections (PA-02).
-    """
-    if not UNIVERSAL_CONTEXT_FILE.exists():
-        print(f"Error: Universal review context file is missing at {UNIVERSAL_CONTEXT_FILE}. Installation may be corrupt.", file=sys.stderr)
-        sys.exit(1)
-
-    # 1. Load Universal Context
-    try:
-        universal_content = UNIVERSAL_CONTEXT_FILE.read_text(encoding="utf-8")
-        print(f"[REVIEW] Loaded universal context from {UNIVERSAL_CONTEXT_FILE.name}")
-    except Exception as e:
-        print(f"Error: Failed to read universal context file: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # 2. Load Project Context
-    project_content = ""
-    if PROJECT_CONTEXT_FILE.exists() and PROJECT_CONTEXT_FILE.is_file():
-        try:
-            project_content = PROJECT_CONTEXT_FILE.read_text(encoding="utf-8")
-            print(f"[REVIEW] Loaded project context from {PROJECT_CONTEXT_FILE.name}")
-        except Exception as e:
-            print(f"Warning: Failed to read project context file: {e}", file=sys.stderr)
-            pass
-    else:
-        print("[REVIEW] Project context absent — proceeding with universal guidelines only")
-
-    # 3. Concatenate layers (project content after universal content)
-    combined = universal_content
-    if project_content.strip():
-        combined += "\n\n" + project_content
-
-    if not diff:
-        return combined
-
-    # Extract all universal section IDs via regex and identify always-include ones
-    universal_ids = set(re.findall(r"<!-- SECTION:([\w_]+) -->", universal_content))
-    trigger_gated_universal = {"vocabulary", "adr_decision_block"}
-    always_include = universal_ids - trigger_gated_universal
-
-    return _select_context_sections(diff, combined, always_include=always_include)
-
-
-def _select_context_sections(diff: str, context_text: str, always_include: Optional[set[str]] = None) -> str:
-    """
-    Parses context_text for <!-- SECTION:id --> markers and returns only sections
-    relevant to the staged diff (PA-02).
-    """
-    # 1. Map diff patterns to section IDs
-    trigger_map = {
-        "transactional_integrity": [
-            "src/application/services/",
-            "UnitOfWork",
-            "uow.",
-            "self.uow",
-            ".commit()",
-        ],
-        "branch_isolation": [
-            "src/infrastructure/database/",
-            "Repository",
-            "_apply_branch_filter",
-            "branch_id",
-        ],
-        "mass_assignment": ["src/domain/schemas/", "BaseModel", "model_config"],
-        "rbac": ["require_permission", "Role", "permission", "src/presentation/api/"],
-        "migrations": ["migrations/versions/", "alembic", "op.add_column"],
-        "clean_arch": ["src/domain/", "src/application/", "src/infrastructure/"],
-        "vocabulary": _ADR_TRIGGERS,
-        "adr_decision_block": _ADR_TRIGGERS,
-    }
-
-    # 2. Identify active sections
-    if always_include is None:
-        active_sections = {"micro_checks"}  # Fallback if always_include is not provided
-    else:
-        active_sections = set(always_include)
-        active_sections.add("micro_checks")
-
-    for section_id, patterns in trigger_map.items():
-        if any(p in diff for p in patterns):
-            active_sections.add(section_id)
-
-    # 3. Parse and filter the context document
-    # Sections are delimited by <!-- SECTION:id --> ... ---
-    # We keep the header (everything before the first ---) and active sections.
-    parts = context_text.split("\n---\n")
-    header = parts[0]
-    filtered_sections = [header]
-
-    for part in parts[1:]:
-        # Extract section ID from marker
-        match = re.search(r"<!-- SECTION:([\w_]+) -->", part)
-        if match:
-            section_id = match.group(1)
-            if section_id in active_sections:
-                filtered_sections.append(part)
-        else:
-            # If no marker, include it (e.g. general rules)
-            filtered_sections.append(part)
-
-    return "\n---\n".join(filtered_sections)
 
 
 def get_staged_diff() -> str:
@@ -1857,37 +964,6 @@ def get_commit_message() -> str:
     return "(commit message not available)"
 
 
-def get_recent_file_churn(diff: str) -> str:
-    """Check if any changed files have been modified >3 times in the last week."""
-    # Extract filenames from diff headers
-    files = re.findall(r"^\+\+\+ b/(.+)$", diff, re.MULTILINE)
-    churn_warnings = []
-    for filepath in files[:20]:  # Limit to avoid slowness
-        try:
-            result = subprocess.run(
-                [
-                    "git",
-                    "log",
-                    "--oneline",
-                    "--since=7 days ago",
-                    "--follow",
-                    "--",
-                    filepath,
-                ],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=str(PROJECT_ROOT),
-            )
-            commit_count = len(result.stdout.strip().splitlines())
-            if commit_count >= 3:
-                churn_warnings.append(
-                    f"  {filepath} has been modified {commit_count} times in the last 7 days"
-                )
-        except Exception:
-            pass
-    return "\n".join(churn_warnings) if churn_warnings else ""
 
 
 def filter_diff_by_skip_paths(diff: str, skip_paths: list[str]) -> str:
@@ -2170,374 +1246,6 @@ def _persist_verdict(
         pass  # Never block a commit due to logging failure
 
 
-def _run_rebuttal(args) -> int:
-    """Evaluate a structured rebuttal from .agent/state/gate_rebuttal.json.
-    Adheres strictly to the structural rate limiter, non-empty spec references,
-    adversarial auditor prompt framing, atomic session budget locking/expenditure,
-    iterative retention of the rebuttal JSON, and async evaluative logging.
-    """
-    rebuttal_actor = "agent" if args.rebutted_by_agent else "human"
-    
-    rebuttal_file = PROJECT_ROOT / ".agent" / "state" / "gate_rebuttal.json"
-    if not rebuttal_file.exists():
-        print("❌ [REBUTTAL] Rebuttal file not found: .agent/state/gate_rebuttal.json")
-        return 1
-        
-    try:
-        with open(rebuttal_file, "r", encoding="utf-8") as f:
-            rebuttal_data = json.load(f)
-        dev_rebuttal = DeveloperRebuttal.model_validate(rebuttal_data)
-    except ValidationError as exc:
-        print(f"❌ [REBUTTAL] Validation failed for gate_rebuttal.json: {exc}")
-        return 1
-    except json.JSONDecodeError as exc:
-        print(f"❌ [REBUTTAL] Malformed JSON in gate_rebuttal.json: {exc}")
-        return 1
-    except Exception as exc:
-        print(f"❌ [REBUTTAL] Error reading gate_rebuttal.json: {exc}")
-        return 1
-        
-    # Enforce non-empty spec_reference for all architectural/spec-related rebuttals
-    for finding in dev_rebuttal.findings:
-        if finding.rebuttal_type in ("SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT"):
-            if not finding.spec_reference or not finding.spec_reference.strip():
-                print(f"❌ [REBUTTAL] spec_reference must be a non-empty string for rebuttal type '{finding.rebuttal_type}' (finding {finding.finding_id})")
-                return 1
-
-    # Get the active staged diff
-    staged_diff = get_staged_diff()
-    if not staged_diff.strip():
-        print("❌ [REBUTTAL] No staged changes found to rebut.")
-        return 1
-    diff_hash = _get_normalized_diff_hash(staged_diff)
-    
-    # Verify diff hash matches rebuttal file
-    if dev_rebuttal.normalized_diff_hash != diff_hash:
-        print("❌ [REBUTTAL] Diff hash mismatch!")
-        print(f"   Rebuttal file specifies: {dev_rebuttal.normalized_diff_hash}")
-        print(f"   Active staged diff hash: {diff_hash}")
-        print("   Please update gate_rebuttal.json with the active staged diff hash.")
-        return 1
-
-    # Scan logs backwards for last FAIL and prior rebuttals
-    last_fail, prior_rebuttals = _scan_logs_for_rebuttal(diff_hash)
-    if not last_fail:
-        print("❌ [REBUTTAL] No prior failed review found in logs.")
-        return 1
-        
-    # Recency check: Warn if older than 24 hours
-    try:
-        fail_time_str = last_fail.get("timestamp")
-        if fail_time_str:
-            fail_dt = datetime.datetime.fromisoformat(fail_time_str)
-            if fail_dt.tzinfo is None:
-                fail_dt = fail_dt.replace(tzinfo=datetime.timezone.utc)
-            now = datetime.datetime.now(datetime.timezone.utc)
-            if (now - fail_dt).total_seconds() > 24 * 3600:
-                print("⚠️  [REBUTTAL] Warning: The last failed review is older than 24 hours.")
-    except Exception:
-        pass
-        
-    # Verify original fail session ID matches
-    if last_fail.get("session_id") != dev_rebuttal.original_fail_session_id:
-        print("❌ [REBUTTAL] Session ID mismatch!")
-        print(f"   Rebuttal file: {dev_rebuttal.original_fail_session_id}")
-        print(f"   Last failed review: {last_fail.get('session_id')}")
-        return 1
-        
-    # Legacy check
-    original_issues = last_fail.get("issues", [])
-    has_finding_ids = any("finding_id" in issue for issue in original_issues)
-    if not has_finding_ids:
-        print("❌ [REBUTTAL] This FAIL predates the structured rebuttal protocol. Use SKIP_AI_REVIEW=1 with SKIP_REASON instead.")
-        return 1
-        
-    # Diff-Hash Rate Limiter: check if a prior rebuttal attempt for this diff_hash was rejected
-    for rebuttal in prior_rebuttals:
-        for rejected_finding in rebuttal.get("findings", []):
-            if rejected_finding.get("verdict") == "REBUTTAL_REJECTED":
-                for target in dev_rebuttal.findings:
-                    if target.finding_id == rejected_finding.get("finding_id"):
-                        print("\033[91;1m❌ [LIMITER] Rebuttal already rejected for this finding and diff hash. You must fix the code violation directly; second attempts on the same diff are blocked.\033[0m")
-                        return 1
-
-    # Select high-performance review tier provider (Sonnet)
-    try:
-        if get_provider is None:
-            raise RuntimeError("providers module is unavailable")
-        
-        config = load_config()
-        if "timeout_seconds" in config:
-            try:
-                import providers
-                providers.DEFAULT_TIMEOUT = int(config["timeout_seconds"])
-            except Exception:
-                pass
-                
-        provider = get_provider(
-            provider_name=config.get("provider", "anthropic"),
-            model=config.get("model")
-        )
-    except RuntimeError as e:
-        print(f"❌ [REBUTTAL] Rebuttal auditor provider setup failed: {e}")
-        return 1
-
-    # Check budget before execution
-    session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
-    budget = _load_session_token_budget()
-    spent = 0
-    if session_file.exists():
-        with _lock_session(session_file):
-            try:
-                with open(session_file, "r", encoding="utf-8") as f:
-                    sdata = json.load(f)
-                    usage = sdata.get("token_usage", {})
-                    spent = (
-                        usage.get("input_tokens", 0)
-                        + usage.get("output_tokens", 0)
-                        + usage.get("reasoning_tokens", 0)
-                        + usage.get("cache_read_input_tokens", 0)
-                    )
-            except Exception:
-                pass
-                
-    if budget is not None and spent >= budget:
-        msg = f"Your session has passed 100% of its token budget ({spent} / {budget} tokens). Run context compaction before starting your next session."
-        _write_halt_file(msg)
-        print("\n\033[91m" + "=" * 60 + "\033[0m")
-        print("\033[91;1m  ❌ [GATE BLOCKED] SESSION TOKEN BUDGET EXHAUSTED  \033[0m")
-        print(f"  Spent: {spent} tokens | Budget Limit: {budget} tokens")
-        print("\033[91m" + "=" * 60 + "\033[0m\n")
-        return 1
-
-    # Format adversarial audit query
-    user_parts = []
-    user_parts.append(f"## Active Staged Diff\n```diff\n{staged_diff}\n```")
-    user_parts.append(f"## Original Failed Review Session ID\n{last_fail.get('session_id')}")
-    user_parts.append("## Flagged Issues Under Contest:")
-    for issue in original_issues:
-        fid = issue.get("finding_id")
-        contested = any(f.finding_id == fid for f in dev_rebuttal.findings)
-        status = "[CONTESTED]" if contested else "[UNCONTESTED]"
-        user_parts.append(
-            f"- {status} ID: {fid}\n"
-            f"  Severity: {issue.get('severity')}\n"
-            f"  Concern: {issue.get('concern')}\n"
-            f"  Location: {issue.get('location')}\n"
-            f"  Description: {issue.get('description')}\n"
-            f"  Remediation: {issue.get('remediation')}\n"
-        )
-    user_parts.append("## Developer Rebuttal Arguments:")
-    for finding in dev_rebuttal.findings:
-        spec_ref_str = f"\n  Spec Reference: {finding.spec_reference}" if finding.spec_reference else ""
-        user_parts.append(
-            f"- Contesting ID: {finding.finding_id}\n"
-            f"  Rebuttal Type: {finding.rebuttal_type}{spec_ref_str}\n"
-            f"  Evidence: {finding.evidence}\n"
-        )
-    user_content = "\n\n".join(user_parts)
-
-    print("\n🔍 Evaluating structured rebuttal with adversarial principal engineer auditor...")
-    
-    start_time = time.time()
-    try:
-        # Call provider raw completion (returns raw string)
-        raw_response = provider.raw_completion(REBUTTAL_SYSTEM_PROMPT, user_content)
-        
-        # Load and validate auditor's JSON response
-        audit_data = json.loads(raw_response)
-        
-        # Parse into Pydantic models
-        rebutted_findings = []
-        for finding in audit_data.get("findings", []):
-            rebutted_findings.append(RebuttedFinding(
-                finding_id=finding["finding_id"],
-                rebuttal_type=next((df.rebuttal_type for df in dev_rebuttal.findings if df.finding_id == finding["finding_id"]), "FALSE_POSITIVE"),
-                verdict=finding["verdict"],
-                rationale=finding["rationale"]
-            ))
-            
-        # Determine overall verdict
-        original_issues_map = {issue["finding_id"]: issue for issue in original_issues if "finding_id" in issue}
-        rejected_any_high = False
-        for rf in rebutted_findings:
-            orig_issue = original_issues_map.get(rf.finding_id)
-            if orig_issue and orig_issue.get("severity") == "HIGH" and rf.verdict == "REBUTTAL_REJECTED":
-                rejected_any_high = True
-                
-        overall_verdict = "FAIL" if rejected_any_high else "PASS"
-        
-        actual_tokens = provider.last_token_usage
-        in_tokens = actual_tokens.get("input_tokens", 0)
-        out_tokens = actual_tokens.get("output_tokens", 0)
-        reas_tokens = actual_tokens.get("reasoning_tokens", 0)
-        cache_tokens = actual_tokens.get("cache_read_input_tokens", 0)
-        
-        token_usage_dict = {
-            "input_tokens": in_tokens,
-            "output_tokens": out_tokens,
-            "reasoning_tokens": reas_tokens,
-            "cache_read_input_tokens": cache_tokens,
-        }
-        
-        # Create RebuttedVerdict delta record
-        session_id = _get_active_session_id()
-        rebutted_verdict = RebuttedVerdict(
-            verdict=overall_verdict,
-            original_fail_session_id=dev_rebuttal.original_fail_session_id,
-            original_fail_timestamp=dev_rebuttal.original_fail_timestamp,
-            normalized_diff_hash=diff_hash,
-            findings=rebutted_findings,
-            model=provider.model,
-            token_usage=token_usage_dict,
-            session_id=session_id,
-            strategy="rebuttal",
-            rebuttal_actor=rebuttal_actor
-        )
-        
-        # Update session.json token spending atomically
-        if session_file.exists():
-            with _lock_session(session_file):
-                try:
-                    with open(session_file, "r", encoding="utf-8") as f:
-                        sdata = json.load(f)
-                    
-                    usage = sdata.setdefault("token_usage", {})
-                    usage["input_tokens"] = usage.get("input_tokens", 0) + in_tokens
-                    usage["output_tokens"] = usage.get("output_tokens", 0) + out_tokens
-                    usage["reasoning_tokens"] = usage.get("reasoning_tokens", 0) + reas_tokens
-                    usage["cache_read_input_tokens"] = usage.get("cache_read_input_tokens", 0) + cache_tokens
-                    usage["call_count"] = usage.get("call_count", 0) + 1
-                    
-                    with open(session_file, "w", encoding="utf-8") as f:
-                        json.dump(sdata, f, indent=4)
-                        
-                    new_spent = (
-                        usage["input_tokens"]
-                        + usage["output_tokens"]
-                        + usage["reasoning_tokens"]
-                        + usage.get("cache_read_input_tokens", 0)
-                    )
-                    
-                    if budget is not None:
-                        if new_spent >= budget:
-                            msg = f"Your session has passed 100% of its token budget ({new_spent} / {budget} tokens). Run context compaction before starting your next session."
-                            _write_halt_file(msg)
-                            print("\n\033[91m" + "=" * 60 + "\033[0m")
-                            print("\033[91;1m  ⚠️ [GATE WARNING] SESSION TOKEN BUDGET EXHAUSTED  \033[0m")
-                            print(f"  Total Spent: {new_spent} tokens | Budget: {budget} tokens")
-                            print("\033[91m" + "=" * 60 + "\033[0m\n")
-                        elif new_spent >= 0.8 * budget:
-                            print("\n\033[93m" + "=" * 60 + "\033[0m")
-                            print("\033[93;1m  ⚠️  [GATE] BUDGET WARNING: SESSION NEAR CEILING  \033[0m")
-                            print(f"  Spent: {new_spent} tokens | Budget: {budget} tokens (>= 80% limit)")
-                            print("\033[93m" + "=" * 60 + "\033[0m\n")
-                except Exception:
-                    pass
-
-    except Exception as e:
-        print(f"❌ [REBUTTAL] Auditor failed or response malformed: {e}")
-        return 1
-        
-    elapsed = time.time() - start_time
-    
-    # Persist the verdict to .ai-review-log.jsonl
-    try:
-        log_path = PROJECT_ROOT / ".ai-review-log.jsonl"
-        record = rebutted_verdict.model_dump()
-        record["timestamp"] = datetime.datetime.now().isoformat()
-        record["provider"] = provider.name
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record) + "\n")
-    except Exception:
-        pass
-
-    # Update capability calibration counts on rebuttal outcomes (T1-G-14)
-    try:
-        import capability_calibration
-        original_issues_map = {issue.get("finding_id"): issue for issue in original_issues if issue.get("finding_id")}
-        contested_fids = {f.finding_id for f in dev_rebuttal.findings}
-        
-        # Contested findings
-        for rf in rebutted_findings:
-            issue = original_issues_map.get(rf.finding_id)
-            if issue:
-                cap = issue.get("concern")
-                if cap:
-                    capability_calibration.update_calibration_rebuttal(cap, rf.verdict, PROJECT_ROOT)
-                    
-        # Uncontested findings
-        for fid, issue in original_issues_map.items():
-            if fid not in contested_fids:
-                cap = issue.get("concern")
-                if cap:
-                    capability_calibration.update_calibration_rebuttal(cap, "UNCONTESTED", PROJECT_ROOT)
-    except Exception as e:
-        print(f"⚠️  [REBUTTAL] Failed to update capability calibration: {e}")
-        
-    # Console presentation
-    print("\n" + "─" * 60)
-    print("📋 REBUTTAL AUDIT RESULTS")
-    print("─" * 60)
-    for rf in rebutted_findings:
-        color = "\033[92m" if rf.verdict == "REBUTTAL_ACCEPTED" else "\033[91m"
-        symbol = "✅" if rf.verdict == "REBUTTAL_ACCEPTED" else "❌"
-        print(f"  {color}{symbol} [{rf.verdict}] ID: {rf.finding_id}\033[0m")
-        print(f"     Rationale: {rf.rationale}")
-        print()
-    print("─" * 60)
-    print(f"  Audit completed in {elapsed:.1f}s\n")
-    
-    # Spawn FP evaluation logger asynchronously
-    accepted_fps = []
-    for rf in rebutted_findings:
-        if rf.verdict == "REBUTTAL_ACCEPTED":
-            dev_finding = next((df for df in dev_rebuttal.findings if df.finding_id == rf.finding_id), None)
-            if dev_finding and dev_finding.rebuttal_type == "FALSE_POSITIVE":
-                if re.match(r"^FID-\d+$", rf.finding_id):
-                    accepted_fps.append(rf.finding_id)
-                    
-    if accepted_fps:
-        try:
-            eval_script = PROJECT_ROOT / ".agent" / "scripts" / "false_positive_to_eval.py"
-            if eval_script.exists():
-                fids_arg = ",".join(accepted_fps)
-                subprocess.Popen([
-                    sys.executable,
-                    str(eval_script),
-                    "--finding-id", fids_arg,
-                    "--rebuttal-type", "FALSE_POSITIVE",
-                    "--evidence", "Structured Rebuttal accepted by LLM Auditor"
-                ])
-                print("⚡ [REBUTTAL] Triggered false positive logging asynchronously.")
-        except Exception as e:
-            print(f"⚠️  [REBUTTAL] Failed to spawn false_positive_to_eval.py: {e}")
-
-    # Retention controls
-    if overall_verdict == "PASS":
-        try:
-            rebuttal_file.unlink()
-        except Exception:
-            pass
-            
-        rebuttal_pass_file = PROJECT_ROOT / ".agent" / "state" / "rebuttal_pass.json"
-        rebuttal_pass_file.parent.mkdir(parents=True, exist_ok=True)
-        pass_data = {
-            "diff_hash": diff_hash,
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        }
-        try:
-            with open(rebuttal_pass_file, "w", encoding="utf-8") as f:
-                json.dump(pass_data, f, indent=4)
-        except Exception as e:
-            print(f"⚠️  [REBUTTAL] Failed to write rebuttal pass file: {e}")
-            
-        print("\033[92;1m✅ [REBUTTAL] Rebuttal Accepted — commit is unblocked!\033[0m")
-        print("   Run standard git commit again to complete your action.")
-        return 0
-    else:
-        print("\033[91;1m❌ [REBUTTAL] Your rebuttal was rejected — update gate_rebuttal.json with stronger evidence and run --rebuttal again.\033[0m")
-        return 1
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -3422,34 +2130,6 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         print("\u2705 AI review passed.\n")
         return 0
 
-
-def _get_active_context_sections(diff: str) -> str:
-    """Return a compact string of active review_context section IDs for a diff.
-
-    Used to populate ``context_snapshot`` on FAIL/WARN verdicts (T1-G-03).
-    Mirrors the trigger_map in ``_select_context_sections`` without re-parsing
-    the full context document.
-    """
-    trigger_map = {
-        "transactional_integrity": [
-            "src/application/services/",
-            "UnitOfWork",
-            "uow.",
-            ".commit()",
-        ],
-        "branch_isolation": ["src/infrastructure/database/", "Repository", "branch_id"],
-        "mass_assignment": ["src/domain/schemas/", "BaseModel", "model_config"],
-        "rbac": ["require_permission", "Role", "permission", "src/presentation/api/"],
-        "migrations": ["migrations/versions/", "alembic", "op.add_column"],
-        "clean_arch": ["src/domain/", "src/application/", "src/infrastructure/"],
-        "vocabulary": _ADR_TRIGGERS,
-        "adr_decision_block": _ADR_TRIGGERS,
-    }
-    active = {"micro_checks"}
-    for section_id, patterns in trigger_map.items():
-        if any(p in diff for p in patterns):
-            active.add(section_id)
-    return ",".join(sorted(active))
 
 
 if __name__ == "__main__":

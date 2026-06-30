@@ -5,7 +5,7 @@ skill_type: universal
 version: 1.0.0
 ---
 
-# Verification Before Completion — Gym App Edition
+# Verification Before Completion
 
 Claiming work is complete without verification is not efficiency — it is
 dishonesty.  **Evidence before assertions, always.**
@@ -45,11 +45,13 @@ Never summarise from memory.  Never skip because "it passed last time".
 
 ---
 
-## Gym App Verification Commands
+## Verification Commands
 
-Run the appropriate command(s) for the work being completed.
+Run the appropriate command(s) for the work being completed. The examples below use common Python tooling (pytest, ruff, mypy, alembic) — substitute your project's actual toolchain (npm test, go test, cargo test, etc.) where it differs.
 
 ### After any source code change
+
+Example (Python/Poetry — adapt to your project's toolchain):
 ```powershell
 # Lint — must be clean
 poetry run ruff check src/
@@ -62,20 +64,25 @@ poetry run pytest tests/ --tb=short -q
 ```
 
 ### After any service or repository change
+
+Example (Python/Poetry — adapt to your project's toolchain):
 ```powershell
 # Unit + integration focused on changed area
 poetry run pytest tests/unit/ tests/integration/ --tb=short -q
 
-# Confirm UoW committed assertion present in new tests
-# (manual check — grep for "uow.committed" in the new test file)
+# Confirm any project-specific state-commit assertions are present in new tests
+# (e.g. transaction committed, event published — check your project's testing
+# conventions for the equivalent pattern)
 ```
 
 ### After any RBAC / auth change
+
+Example (Python/Poetry — adapt to your project's toolchain):
 ```powershell
 # Security-specific test suite
-poetry run pytest tests/security/ tests/integration/test_security.py -v --tb=short
+poetry run pytest tests/security/ -v --tb=short
 
-# Bandit — no HIGH findings allowed (BR-DEV-02)
+# Static security scan — no HIGH findings allowed
 poetry run bandit -r src/ -ll -q
 ```
 

@@ -693,3 +693,12 @@ This archive section provides a single-view summary of what shipped.*
 - T1-K-10: `governance.md` §1 and §6 converted to rationale + pointer (AGENTS.md §1 and §6 are canonical); AGENTS.md §5 escalation summary explicitly labelled as summary with named omissions
 - T1-M-14: P-xx parentheticals removed from §4.1 agent-facing tables; H-01, H-02, S-02 reframed as procedural; §9.1 updated (P-12)→(G-02), (P-13)→(§4.1 staging discipline)
 - Also delivered in this branch: prohibition restructure (AGENTS.md §4 H/S/C/G tiers), blocked_commands.md C-02/C-04 sections, docs/customisation.md prohibition tiers guide, Cline compatibility templates and installer support
+
+### v1.4.6 Delivered (2026-06-30)
+- refactor(ai-review): completed 5-commit decomposition of `ai_review.py` (roster management to `roster_builder.py`, context loading to `context_loader.py`, routing and classification to `route_decision.py`, rebuttal subsystem to `rebuttal.py`, and evidence-gathering helpers to `gate_context.py`)
+- security: genericised `security-audit/SKILL.md` (removed Gym App references) and deleted leaked `Gym_Security_Baseline.md` checklist file
+- audit: audited remaining universal skills and identified subsequent Gym-term cleanup targets:
+  - `verification-before-completion/SKILL.md` (carries "Gym App Edition" title and "Gym App Verification Commands" header)
+  - `code-review/SKILL.md` (carries "Gym App Edition" title and "X-Gym-Branch-ID" header validation references)
+  - Stale `GymBase Codes Community` rule source links across 13 other universal skill files
+
