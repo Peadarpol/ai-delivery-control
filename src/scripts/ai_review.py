@@ -211,6 +211,26 @@ def _run_rebuttal(args):
         return rebuttal._run_rebuttal(args)
     return 1
 
+try:
+    import gate_context
+except ImportError:
+    gate_context = None
+
+def gather_pytest_evidence(changed_files):
+    if gate_context is not None and hasattr(gate_context, "gather_pytest_evidence"):
+        return gate_context.gather_pytest_evidence(changed_files)
+    return {}
+
+def calculate_todo_delta(diff):
+    if gate_context is not None and hasattr(gate_context, "calculate_todo_delta"):
+        return gate_context.calculate_todo_delta(diff)
+    return 0
+
+def get_recent_file_churn(diff):
+    if gate_context is not None and hasattr(gate_context, "get_recent_file_churn"):
+        return gate_context.get_recent_file_churn(diff)
+    return ""
+
 def classify_commit_risk(changed_files, adr_domains):
     if route_decision is not None and hasattr(route_decision, "classify_commit_risk"):
         return route_decision.classify_commit_risk(changed_files, adr_domains)
@@ -320,63 +340,6 @@ def _get_active_session_id() -> str | None:
     return None
 
 
-def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
-    """Gather pytest collect evidence.
-    For each changed python file, look for a corresponding test file and collect its tests.
-    """
-    evidence = {}
-    for f in changed_files:
-        if not f.endswith(".py") or f.startswith("tests/"):
-            continue
-        path = Path(f)
-        basename = path.name
-        test_name = f"test_{basename}"
-        found_tests = list(PROJECT_ROOT.glob(f"**/tests/**/{test_name}")) + list(PROJECT_ROOT.glob(f"**/tests/{test_name}"))
-        if found_tests:
-            test_file = found_tests[0]
-            try:
-                res = subprocess.run(
-                    ["pytest", "--collect-only", "-q", str(test_file)],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    cwd=str(PROJECT_ROOT)
-                )
-                if res.returncode == 0:
-                    tests = [line.strip() for line in res.stdout.splitlines() if line.strip() and "::" in line]
-                    evidence[f] = {
-                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-                        "collected_tests": tests
-                    }
-                else:
-                    evidence[f] = {
-                        "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-                        "error": f"pytest returned {res.returncode}"
-                    }
-            except Exception as e:
-                evidence[f] = {
-                    "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-                    "error": str(e)
-                }
-        else:
-            evidence[f] = {
-                "test_file": None,
-                "collected_tests": []
-            }
-    return evidence
-
-
-def calculate_todo_delta(diff: str) -> int:
-    added_todos = 0
-    removed_todos = 0
-    for line in diff.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
-            if "TODO" in line.upper() or "FIXME" in line.upper():
-                added_todos += 1
-        elif line.startswith("-") and not line.startswith("---"):
-            if "TODO" in line.upper() or "FIXME" in line.upper():
-                removed_todos += 1
-    return added_todos - removed_todos
 
 
 def build_deterministic_findings_section(gate_context: Any) -> str:
@@ -1001,37 +964,6 @@ def get_commit_message() -> str:
     return "(commit message not available)"
 
 
-def get_recent_file_churn(diff: str) -> str:
-    """Check if any changed files have been modified >3 times in the last week."""
-    # Extract filenames from diff headers
-    files = re.findall(r"^\+\+\+ b/(.+)$", diff, re.MULTILINE)
-    churn_warnings = []
-    for filepath in files[:20]:  # Limit to avoid slowness
-        try:
-            result = subprocess.run(
-                [
-                    "git",
-                    "log",
-                    "--oneline",
-                    "--since=7 days ago",
-                    "--follow",
-                    "--",
-                    filepath,
-                ],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=str(PROJECT_ROOT),
-            )
-            commit_count = len(result.stdout.strip().splitlines())
-            if commit_count >= 3:
-                churn_warnings.append(
-                    f"  {filepath} has been modified {commit_count} times in the last 7 days"
-                )
-        except Exception:
-            pass
-    return "\n".join(churn_warnings) if churn_warnings else ""
 
 
 def filter_diff_by_skip_paths(diff: str, skip_paths: list[str]) -> str:
