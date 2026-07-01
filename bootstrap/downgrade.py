@@ -69,8 +69,7 @@ class DowngradeManager:
         if self.config_path.exists():
             try:
                 content = self.config_path.read_text(encoding="utf-8")
-                # Parse framework version using regex anchored to framework block context
-                match = re.search(r"^\s*framework:\s*\r?\n(?:\s*(?:#.*)?\r?\n)*\s+version:\s*\"([^\"]+)\"", content, re.MULTILINE)
+                match = re.search(r"^[ \t]*framework:[ \t]*\r?\n(?:[ \t]*(?:#.*)?\r?\n)*[ \t]+version:[ \t]*\"([^\"]+)\"", content, re.MULTILINE)
                 if match:
                     return match.group(1)
             except Exception:
