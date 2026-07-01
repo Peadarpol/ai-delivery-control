@@ -78,6 +78,3 @@ You are an expert in Python asynchronous programming with asyncio.
 - Use context managers (async with) for resources
 - Implement graceful shutdown
 - Monitor event loop lag in production
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/python/python-async-programming-expert)*

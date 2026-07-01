@@ -75,6 +75,3 @@ Before investigating any bug, you must methodically plan and reason about:
 - [ ] Have I considered edge cases?
 - [ ] Does my fix address the root cause, not just symptoms?
 - [ ] Have I added tests to prevent regression?
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/debugging-agent)*

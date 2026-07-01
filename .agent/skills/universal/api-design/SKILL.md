@@ -123,6 +123,3 @@ Before designing any API, you must methodically plan and reason about:
 - [ ] Is authentication implemented?
 - [ ] Is rate limiting in place?
 - [ ] Is documentation complete?
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/api-design-agent)*

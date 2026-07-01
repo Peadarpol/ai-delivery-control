@@ -136,6 +136,3 @@ Before optimizing any code, you must methodically plan and reason about:
 - [ ] Is the bundle size reasonable?
 - [ ] Have I measured the improvement?
 - [ ] Is there a performance budget?
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/performance-optimization-agent)*

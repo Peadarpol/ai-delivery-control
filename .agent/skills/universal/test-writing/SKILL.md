@@ -114,6 +114,3 @@ Use descriptive names that document behavior:
 - ❌ Tests with no assertions
 - ❌ Duplicate test logic
 - ❌ Hard-coded test data that could change
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/test-writing-agent)*
