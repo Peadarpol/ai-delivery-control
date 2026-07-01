@@ -54,7 +54,7 @@ def test_staleness_clean(mock_proposals_dir, capsys):
 def test_staleness_warn(mock_proposals_dir, capsys):
     """Verify warning status when a proposal is between 30 and 90 days old."""
     warn_prop = mock_proposals_dir / "skill__rule__open.md"
-    thirty_five_days_ago = (datetime.datetime.now() - datetime.timedelta(days=35)).date()
+    thirty_five_days_ago = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=35)).date()
     date_str = thirty_five_days_ago.strftime("%Y-%m-%d")
     warn_prop.write_text(f"Generated: {date_str}\n", encoding="utf-8")
 
@@ -69,7 +69,7 @@ def test_staleness_warn(mock_proposals_dir, capsys):
 def test_staleness_critical(mock_proposals_dir, capsys):
     """Verify critical status when a proposal is older than 90 days."""
     critical_prop = mock_proposals_dir / "skill__rule__open.md"
-    ninety_five_days_ago = (datetime.datetime.now() - datetime.timedelta(days=95)).date()
+    ninety_five_days_ago = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=95)).date()
     date_str = ninety_five_days_ago.strftime("%Y-%m-%d")
     critical_prop.write_text(f"Generated: {date_str}\n", encoding="utf-8")
 
