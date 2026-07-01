@@ -142,6 +142,3 @@ Before designing any database schema, you must methodically plan and reason abou
 - [ ] Is the naming consistent?
 - [ ] Are migrations reversible?
 - [ ] Is documentation complete?
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/database-design-agent)*

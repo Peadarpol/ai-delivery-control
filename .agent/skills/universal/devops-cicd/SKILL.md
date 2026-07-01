@@ -130,6 +130,3 @@ Before designing any pipeline or infrastructure, you must methodically plan and 
 - [ ] Are health checks implemented?
 - [ ] Is monitoring in place?
 - [ ] Are secrets properly managed?
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/devops-cicd-agent)*

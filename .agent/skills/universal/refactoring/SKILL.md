@@ -132,6 +132,3 @@ Before performing any refactoring, you must methodically plan and reason about:
 - [ ] Is the behavior unchanged?
 - [ ] Is the code more readable?
 - [ ] Have I updated documentation?
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/refactoring-agent)*

@@ -7,31 +7,33 @@ version: 1.0.0
 
 # Security Audit
 
-## Purpose
-
-Systematically identify, assess, and mitigate security risks in the application's FastAPI backend and frontend. Focuses on data protection (PII), financial integrity (Invoices/Payments), and API security.
+Systematically identify, assess, and mitigate security risks in the application's backend API and frontend presentation layers. Focuses on data protection (PII), financial integrity, and API security.
 
 ## Core Audit Workflow
 
 ### 1. Data Protection & Privacy (PII)
-**Target**: `User`, `Staff`, `Contact` entities.
+**Target**: Sensitive entities (e.g., profiles, contact information, personal identifiers).
 - **Check**: Are emails, phone numbers, and addresses encrypted at rest or properly access-controlled?
-- **Action**: Verify `IDOR` prevention (User A cannot access User B's profile by changing the `user_id` in the URL).
+- **Action**: Verify `IDOR` prevention (a client cannot access another client's profile/resources by changing the resource ID in the request parameters).
 
 ### 2. Financial Integrity
-**Target**: `Invoice`, `Payment`, `Contract` entities.
-- **Check**: Can a user view another's invoice? Can a staff member modify an invoice without proper audit logs?
-- **Action**: Audit `Business Logic Flaws` (e.g., negative amounts in payments, overlapping contract dates).
+**Target**: Financial records and transaction entities (e.g., invoices, payments, subscriptions).
+- **Check**: Can a client view another client's invoice/payment? Can a staff member modify a transaction without proper audit logs?
+- **Action**: Audit `Business Logic Flaws` (e.g., negative amounts in payments, double-spending or double-booking patterns specific to your domain).
 
-### 3. API Security (FastAPI)
-**Target**: `src/application/api/` routes.
-- **Check**: Are all endpoints protected by `fastapi.Depends(get_current_user)`?
-- **Action**: Conduct `SQL Injection` audit (ensure SQLAlchemy ORM or parameterized queries are used exclusively).
+### 3. API Security & RBAC Enforcement
+**Target**: API routes and endpoints (e.g., in your API route layer).
+- **Check**: Are all endpoints protected by appropriate authorization and permission checks?
+- **Action**: 
+  - Ensure all non-public endpoints require an explicit permission or role dependency.
+  - Verify that the `SYSTEM_ADMIN` (or equivalent always-allowed role) short-circuit bypass is preserved cleanly and not bypassed.
+  - Ensure role checks use strict enums, not raw strings.
+  - Confirm table isolation: staff and members/clients authenticate against distinct tables/entities.
 
 ### 4. Input Validation (Poka-Yoke)
-**Target**: Pydantic models in `src/application/dtos/`.
-- **Check**: Do strings have length limits? Are email formats validated using `EmailStr`?
-- **Action**: Ensure `Inconsistent Validation` (e.g., validation in UI but not in API) is eliminated.
+**Target**: Payload schemas and models (e.g., in your DTO layer).
+- **Check**: Do strings have length limits? Are email formats validated using proper schema validators?
+- **Action**: Ensure inconsistent validation (e.g., validation in UI but not in API) is eliminated.
 
 ---
 
@@ -39,21 +41,28 @@ Systematically identify, assess, and mitigate security risks in the application'
 
 | OWASP | Vulnerability | Example Risk | Mitigation |
 |-------|---------------|-------------|------------|
-| **A01** | Broken Access Control | User viewing other invoices | Object-level auth check in Service layer |
-| **A02** | Cryptographic Failures | Passwords stored in plaintext | Use `passlib` with `bcrypt` / `argon2` |
-| **A03** | Injection | SQLi in Staff Search | Parameterized queries (SQLAlchemy) |
-| **A04** | Insecure Design | Brute-forcing user login | Rate limiting on `/api/token` |
+| **A01** | Broken Access Control | Client viewing other client invoices | Object-level auth check in Service layer |
+| **A02** | Cryptographic Failures | Passwords stored in plaintext | Use strong hashing (`bcrypt`, `argon2`) |
+| **A03** | Injection | SQLi in Search endpoints | Parameterized queries (SQLAlchemy ORM) |
+| **A04** | Insecure Design | Brute-forcing user login | Rate limiting on auth endpoints |
 | **A05** | Misconfiguration | CORS allowing `*` origins | Explicitly allowlist application domains |
 | **A07** | Auth Failures | Session Fixation | Regenerate tokens on login |
 | **A10** | SSRF | Webhooks targeting internal IPs | URL allowlisting for callbacks |
 
 ---
 
-## 📑 Resources
+## ⚠️ High-Risk Escalation Triggers
 
-- [OWASP Top 10 Reference](https://owasp.org/www-project-top-ten/): Industry standard for web security.
+> [!WARNING]
+> Modifying authentication, authorization, RBAC code, or endpoint protection logic is a **high-risk change**.
+> In accordance with `governance.md §2`, any commit that modifies these patterns must trigger an escalation for mandatory human review.
 
-## Remember
-- **Assume Breach**: Design for when a component fails.
-- **Least Privilege**: Only grant the permissions necessary for the task.
-- **Defense in Depth**: Validate at the API, Service, and Repository layers.
+---
+
+## 🚫 Rationalisations to Reject (Anti-Rationalisation)
+
+| Excuse / Rationalisation | Why it fails / Rebuttal |
+|--------------------------|-------------------------|
+| "This endpoint is only used by the frontend team, so we don't need a permission check." | Endpoints can be called directly by anyone using curl or API tools. Every endpoint must have backend authorization. |
+| "SYSTEM_ADMIN is an admin, so we should map it to permissions in the database query." | An admin short-circuit is a system safety invariant that must bypass database matrix queries to prevent lockout when DB maps are corrupted. |
+| "I'll do the IDOR check in the next pull request, this is just a quick CRUD setup." | Security controls like IDOR validation must land alongside the creation of the endpoint. |

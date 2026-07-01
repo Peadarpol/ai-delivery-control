@@ -101,6 +101,3 @@ You are an expert in Python testing with pytest and testing best practices.
 - Don't test third-party code
 - Refactor tests like production code
 - Use test-driven development when appropriate
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/python/python-testing-best-practices)*

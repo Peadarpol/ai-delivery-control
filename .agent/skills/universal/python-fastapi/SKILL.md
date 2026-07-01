@@ -77,6 +77,3 @@ You are an expert in Python backend development with FastAPI.
 - Use environment variables
 - Implement proper logging
 - Use Docker for containerization
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/python/python-backend-development-with-fastapi)*

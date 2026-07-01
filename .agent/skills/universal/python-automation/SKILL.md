@@ -86,6 +86,3 @@ You are an expert in Python automation and scripting.
 - Mock external dependencies
 - Use pytest for testing
 - Implement integration tests
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/python/python-automation-and-scripting-expert)*

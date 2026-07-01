@@ -135,6 +135,3 @@ Before performing any migration, you must methodically plan and reason about:
 - [ ] Is there a rollback plan?
 - [ ] Have I tested in staging?
 - [ ] Are monitoring/alerts in place?
-
----
-*Source: [GymBase Codes Community](https://GymBase.codes/rules/agentic-ai/code-migration-agent)*
