@@ -169,6 +169,8 @@ poetry run pytest tests/path/to/test_specific_bug.py -v --tb=short
 | "The CI will catch it" | CI catches it after the commit; catch it before |
 | "I'll verify in the next step" | Complete the gate before making the claim |
 | "All the relevant tests pass" | "Relevant" is your judgment call; run the full suite |
+| "This test is flaky, so I'll just skip or xfail it to unblock the build" | Flaky tests indicate latent concurrency or environmental bugs. Address the underlying cause rather than masking it. |
+| "I loosened the assertion so it's not brittle" | Weakening assertions reduces test coverage and allows regressions to pass. Fix the mock or stabilize the state instead. |
 
 ---
 
