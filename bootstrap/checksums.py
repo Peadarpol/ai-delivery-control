@@ -9046,7 +9046,7 @@ V1_4_5 = {
     '.agent/skills/universal/test-driven-development/scripts/validate.py': 'bcd3d5c7840e2cc91bd6ca26faf8adccde268bbd31a6cda27438f2860c20076a',
     '.agent/skills/universal/test-driven-development/testing-anti-patterns.md': 'bde453bc258f06543987477c837939afaa774ea2acbd9f308d702fc452bc4283',
     '.agent/skills/universal/test-writing/SKILL.md': 'a65ace6efe7492663bb42ce659bf5cda3c0209817d1209e24d73298885e4166c',
-    '.agent/skills/universal/testing-patterns/SKILL.md': 'bbc494fdf415406a36a571fdad524ee8584ac09255f0777fc592754f3dd43e65',
+    '.agent/skills/universal/testing-patterns/SKILL.md': 'bb9f78bfb720df0153ff85b2da26df36d10399610226f9bf2d906c1d43f0993e',
     '.agent/skills/universal/verification-before-completion/SKILL.md': '4c2ba4f17b2f58423d4ad9a33970075def3f38fc56c536e11c5fa92e90f8290d',
     '.agent/templates/commit_message.txt': '865d5fee605c0f8e0a6a1547d2f633c132ee11cc4219a42f1bd5a52d12e460b1',
     '.agent/templates/feature_spec.md': 'fcbecff78a08cc958f792aeb13d9a1fe56565ed6496e72b180f67e6ff2ccab64',

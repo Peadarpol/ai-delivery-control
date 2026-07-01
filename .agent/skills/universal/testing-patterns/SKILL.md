@@ -6,7 +6,7 @@ skill_type: universal
 version: 1.0.0
 ---
 
-# Testing Patterns and Utilities — Application Edition
+# Testing Patterns and Utilities
 
 ## Testing Philosophy
 
@@ -53,7 +53,7 @@ Use simple factory functions to create consistent test data without duplication.
 
 ```python
 from pydantic import BaseModel
-from src.domain.enums.user_roles import UserRole
+from src.domain.enums import UserRole
 
 class User(BaseModel):
     id: int
@@ -64,14 +64,14 @@ def get_mock_user(**overrides) -> User:
     defaults = {
         "id": 1,
         "name": "John Doe",
-        "role": UserRole.STAFF,
+        "role": UserRole.MEMBER,
     }
     return User(**{**defaults, **overrides})
 
 # Usage in tests
-def test_manager_access_allowed():
-    user = get_mock_user(role=UserRole.GYM_MANAGER)
-    assert user.role == UserRole.GYM_MANAGER
+def test_admin_access_allowed():
+    user = get_mock_user(role=UserRole.ADMIN)
+    assert user.role == UserRole.ADMIN
 ```
 
 > **Tip**: For complex SQLAlchemy models with relationships, use `factory_boy`
@@ -85,26 +85,26 @@ Prefer `FakeUnitOfWork` over deep repository mocking for service-layer tests.
 This verifies actual state transitions rather than mock call counts.
 
 ```python
-# tests/unit/services/test_booking_service.py
+# tests/unit/services/test_order_service.py
 from tests.utils.fake_unit_of_work import FakeUnitOfWork
-from src.application.services.booking_service import BookingService
+from src.application.services.order_service import OrderService
 from types import SimpleNamespace
 from datetime import datetime, timezone, timedelta
 
 future_date = datetime.now(timezone.utc) + timedelta(hours=3)
 
-def test_cancel_booking_success():
+def test_cancel_order_success():
     # Arrange
     uow = FakeUnitOfWork()
-    uow.sessions.entities[1] = SimpleNamespace(id=1, schedule_time=future_date)
-    uow.sessions.create_booking(SimpleNamespace(session_id=1, member_id=101))
-    service = BookingService(uow=uow)
+    uow.orders.entities[1] = SimpleNamespace(id=1, schedule_time=future_date)
+    uow.orders.create_order(SimpleNamespace(order_id=1, customer_id=101))
+    service = OrderService(uow=uow)
 
     # Act
-    service.cancel_booking(booking_id=1)
+    service.cancel_order(order_id=1)
 
     # Assert
-    assert uow.sessions.get_booking_by_id(1).status == "cancelled"
+    assert uow.orders.get_order_by_id(1).status == "cancelled"
     assert uow.committed is True   # ← Always verify the commit happened
 ```
 
@@ -119,16 +119,16 @@ Use `unittest.mock` / `pytest-mock` to isolate tests from external dependencies.
 
 ```python
 # Mocking a service dependency
-def test_member_service_sends_welcome_email(mocker):
+def test_order_service_sends_confirmation_email(mocker):
     mock_bus = mocker.MagicMock()
     uow = FakeUnitOfWork()
-    service = MemberService(uow=uow, bus=mock_bus)
+    service = OrderService(uow=uow, bus=mock_bus)
 
-    service.create_member(MemberCreate(email="j@example.com", ...))
+    service.create_order(OrderCreate(email="customer@example.com", ...))
 
     mock_bus.publish.assert_called_once()
     event = mock_bus.publish.call_args[0][0]
-    assert event.member_email == "j@example.com"
+    assert event.customer_email == "customer@example.com"
 ```
 
 **Rules:**
@@ -138,29 +138,29 @@ def test_member_service_sends_welcome_email(mocker):
 
 ---
 
-## Branch Isolation in Integration Tests
+## Tenant Isolation in Integration Tests
 
-All integration tests that write to the database must use a scoped `branch_id`
+All integration tests that write to the database must use a scoped `tenant_id`
 to prevent cross-tenant data leakage between test cases.
 
 ```python
 # conftest.py
 @pytest.fixture
-def test_branch(db_session):
-    branch = Branch(name="Test Branch", business_id=1)
-    db_session.add(branch)
+def test_tenant(db_session):
+    tenant = Tenant(name="Test Tenant", business_id=1)
+    db_session.add(tenant)
     db_session.commit()
-    return branch
+    return tenant
 
 @pytest.fixture
-def scoped_uow(db_session, test_branch):
-    """UnitOfWork pre-scoped to the test branch."""
+def scoped_uow(db_session, test_tenant):
+    """UnitOfWork pre-scoped to the test tenant."""
     uow = UnitOfWork(db_session)
-    uow.set_branch_context(test_branch.id)
+    uow.set_tenant_context(test_tenant.id)
     return uow
 ```
 
-Never share `branch_id=1` across all tests — isolation prevents false passes
+Never share `tenant_id=1` across all tests — isolation prevents false passes
 caused by data left behind by a previous test.
 
 ---
@@ -238,20 +238,20 @@ mutated logic before marking the feature complete.
 import pytest
 from tests.utils.fake_unit_of_work import FakeUnitOfWork
 
-class TestMemberService:
+class TestUserService:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.uow = FakeUnitOfWork()
-        self.service = MemberService(uow=self.uow)
+        self.service = UserService(uow=self.uow)
 
-    def test_get_member_not_found_raises_error(self):
-        self.uow.members.entities = {}   # empty store
-        with pytest.raises(MemberNotFoundError):
-            self.service.get_member(999)
+    def test_get_user_not_found_raises_error(self):
+        self.uow.users.entities = {}   # empty store
+        with pytest.raises(UserNotFoundError):
+            self.service.get_user(999)
 
-    def test_create_member_commits_and_returns_dto(self):
-        result = self.service.create_member(
-            MemberCreate(first_name="Jo", last_name="Doe", email="jo@example.com", ...)
+    def test_create_user_commits_and_returns_dto(self):
+        result = self.service.create_user(
+            UserCreate(first_name="Jo", last_name="Doe", email="jo@example.com", ...)
         )
         assert result.email == "jo@example.com"
         assert self.uow.committed is True
@@ -267,7 +267,7 @@ class TestMemberService:
 | Unit (mock) | Adapter boundaries (email, payment gateway, S3) | Fast |
 | Integration | Repository → DB round-trips, Alembic migrations, multi-service flows | Medium |
 | API / TestClient | FastAPI router wiring, auth header propagation, status codes | Medium |
-| BDD / Gherkin | High-value user journeys (member check-in, contract creation) | Medium |
+| BDD / Gherkin | High-value user journeys (checkout flow, user signup) | Medium |
 | Performance | p95 latency benchmarks (≥ weekly, not on every commit) | Slow |
 
 ---
@@ -280,7 +280,7 @@ class TestMemberService:
 4. **Always assert `uow.committed`** after write operations.
 5. **No `time.sleep()`** — use `anyio` timeouts or condition-based waiting (see `systematic-debugging/condition-based-waiting.md`).
 6. **No production data** — use factories and fixtures; never seed from a real database.
-7. **Enum types in factories** — use `UserRole.STAFF`, not `"staff"`.
+7. **Enum types in factories** — use `UserRole.MEMBER`, not `"member"`.
 8. **Mutation score target** — ≥80% on critical services.
 
 ## Running Tests
@@ -293,7 +293,7 @@ pytest
 pytest --cov=src --cov-report=term-missing
 
 # Specific test file
-pytest tests/unit/services/test_member_service.py -v
+pytest tests/unit/services/test_user_service.py -v
 
 # Mutation tests (critical services only)
 mutmut run --paths-to-mutate src/application/services/some_service.py
