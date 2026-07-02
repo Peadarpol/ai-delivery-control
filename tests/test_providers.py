@@ -198,13 +198,24 @@ class TestReviewProviderCallLlm:
                 return True
 
         p = DummyProvider()
-        res, input_tok, output_tok = p.call_llm(
+        res_true, input_tok_true, output_tok_true = p.call_llm(
             system_prompt="sys-prompt",
             user_prompt="user-prompt",
             max_tokens=1000,
             json_mode=True
         )
-        assert res == "Response to user-prompt under sys-prompt"
-        assert input_tok == 10
-        assert output_tok == 20
+        res_false, input_tok_false, output_tok_false = p.call_llm(
+            system_prompt="sys-prompt",
+            user_prompt="user-prompt",
+            max_tokens=1000,
+            json_mode=False
+        )
+        assert res_true == "Response to user-prompt under sys-prompt"
+        assert input_tok_true == 10
+        assert output_tok_true == 20
+
+        # Verify that json_mode is a no-op (outputs are identical for both calls)
+        assert res_true == res_false
+        assert input_tok_true == input_tok_false
+        assert output_tok_true == output_tok_false
 
