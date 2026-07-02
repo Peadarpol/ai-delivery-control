@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.4.7 — 2026-07-02
+
+### Spec Gate & Upgrade Path Fixes
+- **HIB-057**: `ReviewProvider.call_llm` was never defined, causing Pass 2 of the spec gate (`check_spec.py`) to throw `AttributeError` for all LLM-backed providers (Ollama, Anthropic, OpenAI). Spec quality review is now functional again for all providers.
+- **HIB-041**: The migration config validator rejected valid YAML multi-line block scalars without colons, causing `upgrade.py` to fail and roll back on otherwise-valid configs. Upgrades using block-scalar YAML now succeed.
+- **HIB-046**: Added python-precommit module execution fallback check to `validate_tools()` to prevent PATH warning false positives on Windows virtual environments.
+- No external config schema or contract changes. Safe upgrade from v1.4.6.
+
 ## v1.4.5 — 2026-06-30
 
 ### Gate Reliability, Cross-Platform Portability & Polish

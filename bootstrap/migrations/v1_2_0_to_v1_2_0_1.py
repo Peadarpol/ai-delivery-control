@@ -14,16 +14,8 @@ class MigrationV1_2_0_to_V1_2_0_1(MigrationProtocol):
     to_version = "1.2.0.1"
 
     def _validate_config(self, content: str):
-        """Validate config.yaml structure is not empty and is basic YAML syntax."""
-        if not content.strip():
-            raise ValueError("config.yaml is empty")
-            
-        for i, line in enumerate(content.splitlines(), 1):
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            if ":" not in line and not stripped.startswith("-"):
-                raise ValueError(f"Malformed YAML at line {i}: {line}")
+        from bootstrap.migration_base import validate_yaml_config
+        validate_yaml_config(content)
 
     def migrate(self, config_path: Path) -> None:
         """Upgrade configuration version from v1.2.0 to v1.2.0.1 and append gitignore exclusions."""

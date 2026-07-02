@@ -173,3 +173,49 @@ class TestCallApiWithRetry:
         ]), patch("time.sleep"):  # Skip actual delays
             result = providers_mod.call_api_with_retry(req=MagicMock(), timeout=5)
         assert json.loads(result)["ok"] is True
+
+
+class TestReviewProviderCallLlm:
+    def test_call_llm_routes_to_raw_completion(self, providers_mod):
+        # Create a dummy provider subclass since ReviewProvider is an ABC
+        class DummyProvider(providers_mod.ReviewProvider):
+            def review(self, system: str, user_content: str):
+                return {}
+
+            def raw_completion(self, system: str, user_content: str) -> str:
+                self.last_token_usage = {"input_tokens": 10, "output_tokens": 20}
+                return f"Response to {user_content} under {system}"
+
+            @property
+            def name(self) -> str:
+                return "dummy"
+
+            @property
+            def model(self) -> str:
+                return "dummy-model"
+
+            def is_available(self) -> bool:
+                return True
+
+        p = DummyProvider()
+        res_true, input_tok_true, output_tok_true = p.call_llm(
+            system_prompt="sys-prompt",
+            user_prompt="user-prompt",
+            max_tokens=1000,
+            json_mode=True
+        )
+        res_false, input_tok_false, output_tok_false = p.call_llm(
+            system_prompt="sys-prompt",
+            user_prompt="user-prompt",
+            max_tokens=1000,
+            json_mode=False
+        )
+        assert res_true == "Response to user-prompt under sys-prompt"
+        assert input_tok_true == 10
+        assert output_tok_true == 20
+
+        # Verify that json_mode is a no-op (outputs are identical for both calls)
+        assert res_true == res_false
+        assert input_tok_true == input_tok_false
+        assert output_tok_true == output_tok_false
+

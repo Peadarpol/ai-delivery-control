@@ -115,6 +115,28 @@ class ReviewProvider(ABC):
         """
         ...
 
+    def call_llm(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 1024,
+        json_mode: bool = False,
+    ) -> tuple[str, int, int]:
+        """Call LLM and return (response_text, input_tokens, output_tokens) to support check_spec.py.
+
+        Note: json_mode is accepted for call-site parity with check_spec.py; actual JSON
+        formatting is determined per-provider (Ollama/OpenAI force it internally via
+        raw_completion, Anthropic relies on system_prompt instructions) and this flag is
+        currently a no-op. Do not assume passing json_mode=False changes behavior.
+        """
+        response = self.raw_completion(system_prompt, user_prompt)
+        usage = self.last_token_usage
+        return (
+            response,
+            usage.get("input_tokens", 0),
+            usage.get("output_tokens", 0),
+        )
+
     @property
     def last_token_usage(self) -> Dict[str, int]:
         """Return thread-safe token usage of the last request."""

@@ -72,7 +72,7 @@ def test_upgrade_full_success(fresh_v110_project):
     state_file = fresh_v110_project / ".agent" / ".framework_migration_state"
     assert state_file.exists()
     state = json.loads(state_file.read_text(encoding="utf-8"))
-    assert state["current_version"] == "1.4.6"
+    assert state["current_version"] == "1.4.7"
     assert any("v1_1_0_to_v1_1_5" in m for m in state["applied_migrations"])
     
     # Backup directory must be deleted on successful exit
@@ -97,7 +97,7 @@ def test_upgrade_conflict_with_sidecar(modified_v110_project):
     assert "# Custom developer rule" in gov_content
     
     # A conflict sidecar should be created containing the framework target version
-    sidecar_file = modified_v110_project / ".agent" / "governance.md.framework-v1.4.6"
+    sidecar_file = modified_v110_project / ".agent" / "governance.md.framework-v1.4.7"
     assert sidecar_file.exists()
     sidecar_content = sidecar_file.read_text(encoding="utf-8")
     assert "# Custom developer rule" not in sidecar_content
@@ -141,7 +141,7 @@ def test_already_upgraded_re_verify_mode(fresh_v110_project, capsys):
     # Run second time
     manager.run_upgrade(skip_preflight=True)
     captured = capsys.readouterr()
-    assert "Project is already at version 1.4.6" in captured.out
+    assert "Project is already at version 1.4.7" in captured.out
 
 def test_adversarial_empty_config(malformed_config_project):
     """Verify that a malformed/empty config.yaml triggers validation errors and aborts safely."""
@@ -429,4 +429,33 @@ def test_upgrade_and_downgrade_v1_2_0_1(fresh_v110_project):
     gi_content_down = gitignore.read_text(encoding="utf-8")
     assert "# AI Delivery Control" not in gi_content_down
     assert ".agent/state/session.json" not in gi_content_down
+
+
+def test_validate_config_block_scalars():
+    """Verify that validate_yaml_config supports multi-line block scalars without raising errors."""
+    from bootstrap.migration_base import validate_yaml_config
+    
+    valid_yaml_with_block_scalars = """
+version: "1.4.7"
+custom_prompt: |
+  This is a prompt.
+  It spans multiple lines.
+  None of these lines contain colons.
+  - even this list indicator is ignored inside the block scalar
+another_key: value
+description: >-
+  This is a folded block scalar
+  without colons as well
+"""
+    # This should not raise any ValueError
+    validate_yaml_config(valid_yaml_with_block_scalars)
+    
+    # Assert that standard validation still works and flags actual malformed lines
+    invalid_yaml = """
+version: "1.4.7"
+malformed_line_no_colon
+"""
+    with pytest.raises(ValueError, match="Malformed YAML"):
+        validate_yaml_config(invalid_yaml)
+
 

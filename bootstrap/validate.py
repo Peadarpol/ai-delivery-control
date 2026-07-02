@@ -139,10 +139,19 @@ class Validator:
             missing.append("git")
             
         # Pre-commit check
+        pre_commit_ok = False
         try:
             subprocess.run(["pre-commit", "--version"], capture_output=True, text=True, check=True)
+            pre_commit_ok = True
         except (subprocess.SubprocessError, FileNotFoundError):
-            # Pre-commit might be installed via local project environment
+            # Check if available via python -m pre_commit in the current virtual environment
+            try:
+                subprocess.run([sys.executable, "-m", "pre_commit", "--version"], capture_output=True, text=True, check=True)
+                pre_commit_ok = True
+            except (subprocess.SubprocessError, FileNotFoundError):
+                pass
+
+        if not pre_commit_ok:
             missing.append("pre-commit")
             
         if missing:

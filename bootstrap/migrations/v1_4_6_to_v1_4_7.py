@@ -1,7 +1,21 @@
 """
-AI Delivery Control — Configuration Migration (v1.3.3 ➔ v1.3.4)
-Script and documentation-only release; no config.yaml schema changes.
-Updates the framework version field in config.yaml only.
+AI Delivery Control — Configuration Migration (v1.4.6 ➔ v1.4.7)
+Upgrade to v1.4.7 version-of-record.
+Fixes ReviewProvider.call_llm and YAML validation for block scalars.
+
+Framework-owned file copy list:
+  - src/scripts/ai_review.py
+  - src/scripts/providers.py
+  - src/scripts/roster_builder.py
+  - src/scripts/review_context_universal.md
+  - src/scripts/harness_utils.py
+  - src/scripts/gate_context.py
+  - src/scripts/capability_calibration.py
+  - src/scripts/state_persistence.py
+  - src/scripts/acceptance_hook.py
+  - src/scripts/context_loader.py
+  - src/scripts/route_decision.py
+  - src/scripts/rebuttal.py
 """
 
 import re
@@ -10,16 +24,16 @@ from pathlib import Path
 from bootstrap.migration_base import MigrationProtocol
 
 
-class MigrationV1_3_3_to_V1_3_4(MigrationProtocol):
-    from_version = "1.3.3"
-    to_version = "1.3.4"
+class MigrationV1_4_6_to_V1_4_7(MigrationProtocol):
+    from_version = "1.4.6"
+    to_version = "1.4.7"
 
     def _validate_config(self, content: str):
         from bootstrap.migration_base import validate_yaml_config
         validate_yaml_config(content)
 
     def migrate(self, config_path: Path) -> None:
-        """Bump framework version from v1.3.3 to v1.3.4 in config.yaml."""
+        """Bump framework version from v1.4.6 to v1.4.7 in config.yaml."""
         if not config_path.exists():
             raise FileNotFoundError(f"Configuration file not found at {config_path}")
 
@@ -37,7 +51,7 @@ class MigrationV1_3_3_to_V1_3_4(MigrationProtocol):
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def downgrade(self, config_path: Path) -> None:
-        """Revert framework version from v1.3.4 back to v1.3.3 in config.yaml."""
+        """Revert framework version from v1.4.7 back to v1.4.6 in config.yaml."""
         if not config_path.exists():
             raise FileNotFoundError(f"Configuration file not found at {config_path}")
 
@@ -56,13 +70,13 @@ class MigrationV1_3_3_to_V1_3_4(MigrationProtocol):
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().
-FROM_VERSION = "1.3.3"
-TO_VERSION = "1.3.4"
-MIGRATION_TYPE = "minor"
+FROM_VERSION = "1.4.6"
+TO_VERSION = "1.4.7"
+MIGRATION_TYPE = "patch"
 
 # Expose direct attributes for upgrade CLI scanning
-v1_3_3_to_v1_3_4_migration = MigrationV1_3_3_to_V1_3_4()
-from_version = MigrationV1_3_3_to_V1_3_4.from_version
-to_version = MigrationV1_3_3_to_V1_3_4.to_version
-migrate = v1_3_3_to_v1_3_4_migration.migrate
-downgrade = v1_3_3_to_v1_3_4_migration.downgrade
+v1_4_6_to_v1_4_7_migration = MigrationV1_4_6_to_V1_4_7()
+from_version = MigrationV1_4_6_to_V1_4_7.from_version
+to_version = MigrationV1_4_6_to_V1_4_7.to_version
+migrate = v1_4_6_to_v1_4_7_migration.migrate
+downgrade = v1_4_6_to_v1_4_7_migration.downgrade
