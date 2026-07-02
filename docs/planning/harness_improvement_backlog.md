@@ -884,7 +884,7 @@ be forged.
 **Date**: 2026-05-30
 **Source**: Gym Management System upgrade failure (v1.1.5.2 to v1.2.0)
 **Pillar**: Bootstrap / upgrade reliability
-**Status**: 📅 Backlog — minor quick fix
+**Status**: ✅ Complete (v1.4.7) — Centralized validate_yaml_config helper created in migration_base.py supporting block scalars and refactored all migration files.
 
 **Problem**: The `_validate_config` method implemented in several migration files (e.g., `v1_1_5_to_v1_2_0.py`, `v1_1_0_to_v1_1_5.py`) validates YAML syntax line-by-line using `":" not in line and not stripped.startswith("-")`. This fails on perfectly valid YAML multi-line block scalars (blocks starting with `|` or `>`) if a text line inside the block lacks a colon (such as comment lines or instruction steps like `"Dependabot auto-creates PRs..."`).
 
@@ -989,7 +989,7 @@ Since `[PROJECT_PACKAGE_MANAGER]` is already a template placeholder, the install
 **Date**: 2026-06-05
 **Source**: Operational failure on Windows
 **Pillar**: Bootstrap / validation accuracy
-**Status**: 📅 Backlog — quick fix
+**Status**: ✅ Complete (v1.4.7) — Added sys.executable fallback check to validate_tools() in validate.py.
 
 The hook wiring check (✅ Pre-commit Git Hook Layout) correctly confirms hooks are present and wired. The CLI tool check fires independently and cannot find `pre-commit` in the system PATH even when it's available in the Poetry venv. Fix: check for `pre-commit` using subprocess with the Poetry venv's Python rather than `shutil.which()` against system PATH.
 
@@ -1060,7 +1060,7 @@ This is the same marker-drift class that v1.4.2's backlog-repair pass addressed 
 **Date**: 2026-07-02
 **Source**: GymBase SPEC-127 verification run / check_spec.py
 **Pillar**: Stability / Framework
-**Status**: ✅ Complete (2026-07-02)
+**Status**: ✅ Complete (v1.4.7)
 
 **Symptom**: `AttributeError: 'OllamaProvider' object has no attribute 'call_llm'` when running Pass 2 of the spec gate (`check_spec.py`).
 

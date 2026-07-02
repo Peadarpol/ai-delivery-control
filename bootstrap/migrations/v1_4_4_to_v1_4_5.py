@@ -29,14 +29,8 @@ class MigrationV1_4_4_to_V1_4_5(MigrationProtocol):
     to_version = "1.4.5"
 
     def _validate_config(self, content: str):
-        if not content.strip():
-            raise ValueError("config.yaml is empty")
-        for i, line in enumerate(content.splitlines(), 1):
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            if ":" not in line and not stripped.startswith("-"):
-                raise ValueError(f"Malformed YAML at line {i}: {line}")
+        from bootstrap.migration_base import validate_yaml_config
+        validate_yaml_config(content)
 
     def migrate(self, config_path: Path) -> None:
         """Bump framework version from v1.4.4 to v1.4.5 in config.yaml."""
