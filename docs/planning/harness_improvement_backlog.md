@@ -1068,4 +1068,31 @@ This is the same marker-drift class that v1.4.2's backlog-repair pass addressed 
 
 **Suggested change / Fix**: Add a wrapper method `call_llm` to the base `ReviewProvider` class that routes requests to the existing `raw_completion` method and maps `self.last_token_usage` for token counting. This ensures parity with `check_spec.py`'s expectations across all LLM-backed providers. Note that this is a framework-wide fix, not a one-off patch, affecting any project running the spec gate under an LLM provider.
 
+---
+
+## HIB-058 — check_traceability.py does not verify Gherkin scenario coverage
+
+**Date**: 2026-07-04
+**Source**: GymBase, SPEC-127 pre-Phase-2 audit (external trigger, not a framework regression — same provenance pattern as HIB-057)
+**Pillar**: Governance / Traceability
+**Status**: 📅 Backlog — design exists (T1-L-18), not yet built
+
+**Symptom**: `check_traceability.py` verifies only that a commit message references an approved SPEC-ID and that the spec file exists with `Status: APPROVED`. It does not check whether Gherkin scenarios in the spec's acceptance-criteria section have corresponding test implementations.
+
+**Evidence**: In GymBase, the `cancelled_timely` refund scenario was fully specified in SPEC-127 §4 (signed off 2026-07-02). Multiple commits implementing partial cancellation logic all passed the traceability gate by referencing SPEC-127 in the commit message, but none implemented the refund path — no ledger entry, no balance change, no `is_paid` check. The gate never fired on this gap. It was found only by a direct code audit prior to Phase 2 architecture design, not by any automated check.
+
+**Root cause**: The gate is a commit-message-to-spec-ID linker, not a scenario-to-implementation coverage checker. These are different concerns that were never separated in the gate's design. A requirement can satisfy "this commit references an approved spec" while leaving an entire acceptance scenario unimplemented, because nothing maps individual `Gherkin Scenario:` blocks to individual tasks/tests/commits.
+
+**Design status**: This is not a new problem needing new design — a design already exists. See **T1-L-18** in `FRAMEWORK_BACKLOG.md` (formally assigned 2026-07-04, promoted from draft rev-5 content reasoned through five review rounds in the 2026-06-21 session).
+
+**T1-L-18 core mechanism**: A completeness check added to `check_spec.py` Pass 2 — advisory by default (prose-based, flags normative "shall/must" statements with no corresponding testable acceptance criterion), blocking (FAIL) only for risk-tagged specs (`[HIGH_RISK_SCHEMA_CHANGE]`), gated on a new stable acceptance-criterion ID primitive scoped only to risk-tagged specs (to keep the authoring cost proportionate). Explicitly not: a new HARD STOP gate layer, runtime/PreToolUse interception (closed by design per README's "not a runtime guard" philosophy), or a universal per-spec ID requirement (rejected as a blanket authoring tax).
+
+**Known limitation already logged in T1-L-18**: the risk tier is gated on a self-applied tag the drafting agent writes into its own spec — a structural backstop via `ai_review.py`'s `HIGH_RISK_PATTERNS` classifier exists for retrospective cross-checking, but isn't wired in yet; deliberately deferred to the dream phase to observe whether it's a real recurring pattern before building it.
+
+**Proposed fix** (pending confirmation this matches T1-L-18, rather than being filed as a separate duplicate effort): a `check_scenario_coverage.py` gate, or an extension to `check_spec.py`, that for any SPEC ID referenced in a commit, enumerates `Gherkin Scenario:` blocks in the spec and verifies a named test function/file exists for each — following T1-L-18's severity-tiered design (advisory by default, blocking only for risk-tagged specs).
+
+**Impact classification**: process gap, not a data integrity gap. No member data was corrupted in the GymBase instance — the missing refund implementation was caught and documented before the affected UI (member self-service cancellation) shipped. Classified high-priority-not-urgent in GymBase's own SPEC-127 tracking; the harness-level fix itself has no urgency deadline but represents a real, evidenced gap now that it's been triggered once in production-adjacent code.
+
+**Cross-reference**: This HIB entry and T1-L-18 describe the same gap; do not develop them as independent efforts. Treat this HIB entry as the supporting evidence case for T1-L-18.
+
 
