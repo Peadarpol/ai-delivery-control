@@ -299,5 +299,59 @@ Before any change spanning **3 or more files**:
 
 ---
 
-*Last Updated: 2026-06-22*
+## 8. Coupling Vocabulary (Reference)
+
+> **Status: advisory reference, not an enforced rule.** This section defines the shared
+> vocabulary used by the Cross-Boundary Coupling Declaration in the feature-spec template
+> (`.agent/templates/feature_spec.md` §5.1). It exists so that a coupling declaration means
+> the same thing across specs and across agents. No gate currently enforces these values;
+> they are a thinking aid for deliberate design and a parse target for future tooling.
+
+Coupling is evaluated as a triple — **strength**, **distance**, **volatility** — never as a
+single "good/bad" score. A dependency is well-matched when strong sharing happens only at
+short distance, *or* the shared thing rarely changes. The risk case to justify or redesign is
+**high strength AND long distance AND non-low volatility**.
+
+### 8.1 Integration Strength — *what kind of knowledge is shared*
+
+Ordered strongest (most knowledge shared, most fragile) to weakest:
+
+| Level | Meaning | Example |
+|---|---|---|
+| `intrusive` | Depends on another component's private internals or storage | Reaching into another module's DB tables or private state |
+| `functional` | Shares business functionality; a requirement change forces both to change together | Two modules encoding the same business process |
+| `model` | Shares a domain model; evolving the model changes all sharers | Shared domain entity across a boundary (DDD shared kernel) |
+| `contract` | Shares only an integration-specific contract, not the real model | Versioned API/event schema / DTO at the boundary |
+
+Lower strength is not automatically better — a shared model between two closely related,
+same-team components may be cheaper than the overhead of a formal contract. The point is to
+declare the strength deliberately, not to minimise it reflexively.
+
+### 8.2 Distance — *how far apart the components are*
+
+`same-module` < `cross-module` < `cross-service` < `cross-team`
+
+Treat a boundary maintained by a different team as one level further than the code structure
+alone suggests (Conway's Law): the same dependency costs more to change across an
+organisational boundary.
+
+### 8.3 Volatility — *how often the shared thing changes*
+
+`low` — stable, rarely changes (generic/solved concern, e.g. auth, a lookup table).
+`medium` — changes occasionally with requirements.
+`high` — actively evolving (typically core, differentiating business logic).
+
+As a heuristic, volatility tracks DDD subdomain type: core subdomains tend to be `high`,
+generic subdomains `low`. Latent imbalance (strong + distant coupling) does no damage while
+volatility stays low — but becomes the dominant cost the moment the shared thing starts to move.
+
+### 8.4 Relationship to detection
+
+This vocabulary is declared at spec time (point-in-time, human-reviewed). Coupling that
+*emerges* across many commits without being declared is a separate, temporal concern intended
+for a future co-change reconciler; it is out of scope for this section and for the spec field.
+
+---
+
+*Last Updated: 2026-07-04*
 

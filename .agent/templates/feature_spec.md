@@ -56,10 +56,24 @@ Identify any architectural invariants, layer boundaries, or system constraints t
 
 - [HIGH_RISK_SCHEMA_CHANGE] (Include this exact tag if this specification proposes database schema modifications, migration sequences, or transaction isolation alterations to elevate the Pass 2 LLM scrutiny).
 
+### 5.1 Cross-Boundary Coupling Declaration
+*Advisory (not gate-enforced). Vocabulary is defined in `.agent/governance.md` §8.*
+
+State whether this feature introduces or strengthens a dependency that crosses a declared architectural boundary (layer, module, service, or bounded context). If it does not, write `[NO_NEW_COUPLING]` and move on.
+
+For each new or strengthened cross-boundary dependency, add one `[COUPLING]` block:
+
+- [COUPLING]
+  - **Boundary crossed**: [e.g. Booking module → Entitlement module]
+  - **Strength**: [intrusive | functional | model | contract] (governance.md §8.1)
+  - **Distance**: [same-module | cross-module | cross-service | cross-team] (§8.2)
+  - **Volatility**: [low | medium | high] — how often the shared thing is expected to change (§8.3)
+  - **Rationale**: Why this strength is acceptable at this distance for this volatility. If strength is high AND distance is long AND volatility is not low, justify explicitly or redesign.
+
 ---
 
 ## 6. Decisions (ADRs referenced)
-List any active Architectural Decision Records (ADRs) this feature implements or relates to (e.g., `branch_isolation`, `repository_pattern`).
+List any active Architectural Decision Records (ADRs) this feature implements or relates to (e.g., `branch_isolation`, `repository_pattern`). If a `[COUPLING]` block in §5.1 represents a deliberate, standing exception, reference its Coupling Decision Record ID here once that mechanism exists (e.g. `CDR-004`).
 
 ---
 
@@ -69,3 +83,4 @@ Consistent parse target for the specification quality gate. Set status to `APPRO
 **Status**: DRAFT
 **Signed-off by**: [Human Architect Name]
 **Sign-off Date**: YYYY-MM-DD
+
