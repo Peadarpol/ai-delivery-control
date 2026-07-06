@@ -1,0 +1,32 @@
+# Agentic Workflow Configuration — ai-delivery-control (harness self-config)
+#
+# MINIMAL self-config. Declares only the harness's own architectural boundaries
+# so the co-change reconciler (T1-B-09) can distinguish boundary-crossing
+# co-change from within-boundary co-change. This is NOT a full self-governing
+# target config — target-app sections (tech_stack, capabilities, model_routing,
+# wiki_domains, etc.) are intentionally absent.
+
+project:
+  name: "ai-delivery-control"
+  type: "Governance Harness"
+
+framework:
+  version: "1.4.7"
+  repository: "https://github.com/Peadarpol/ai-delivery-control.git"
+
+# Architectural boundaries of the harness itself.
+# Consumed by _load_layer_paths_from_config() -> {name: path}.
+# NOTE: names are harness-tooling boundaries, not Clean-Architecture layers, so
+# build_route_decision()'s CA-vocabulary capability routing intentionally does
+# NOT activate on them (benign no-op). The reconciler consumes them as named
+# boundaries only.
+architecture:
+  layers:
+    - name: review_engine
+      path: src/scripts
+    - name: governance_scripts
+      path: .agent/scripts
+    - name: bootstrap
+      path: bootstrap
+    - name: skills
+      path: .agent/skills
