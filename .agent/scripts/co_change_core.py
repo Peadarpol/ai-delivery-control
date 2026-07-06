@@ -48,7 +48,8 @@ def get_git_co_changes(
     file_filter=None,
     prob_floor: float = 0.05,
     project_root: Path | None = None,
-) -> dict[str, dict[str, float]]:
+    return_frequencies: bool = False,
+) -> "dict[str, dict[str, float]] | tuple[dict[str, dict[str, float]], dict[tuple[str, str], int]]":
     """Parse git history to extract conditional co-change probabilities.
 
     Parameters ----------
@@ -62,6 +63,13 @@ def get_git_co_changes(
         Minimum conditional probability to record as a co-change edge.
     project_root : Path or None, default None
         Override the git repository root. When *None*, uses MODULE-level PROJECT_ROOT.
+    return_frequencies : bool, default False
+        When *False* (default), returns the co-change probability dict — byte-identical
+        to the original behaviour; no callers are affected.
+        When *True*, returns a 2-tuple ``(co_changes, frequencies)`` where
+        ``co_changes`` is the same dict and ``frequencies`` is a
+        ``dict[tuple[str, str], int]`` mapping each sorted file-pair to the number of
+        commits in which both files changed (the internal ``pair_freq``).
     """
     # Restore original predicate when file_filter is not set (backward compat)
     if file_filter is None:
@@ -70,6 +78,7 @@ def get_git_co_changes(
     root = project_root or PROJECT_ROOT
 
     co_changes = {}
+    pair_freq: dict = {}
     try:
         result = subprocess.run(
             ["git", "log", "--name-only", "-n", str(commit_window), "--pretty=format:"],
@@ -130,6 +139,8 @@ def get_git_co_changes(
     except Exception:
         pass
 
+    if return_frequencies:
+        return co_changes, pair_freq
     return co_changes
 
 

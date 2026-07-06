@@ -312,3 +312,105 @@ class TestRunCoChangeEstimatorDeterministic:
         for item in result:
             assert isinstance(item["probability"], float), \
                 f"Probability {item['probability']!r} is not a float"
+
+
+# ---------------------------------------------------------------------------
+# Piece 1 (T1-B-09) — return_frequencies parameter tests
+# ---------------------------------------------------------------------------
+
+class TestReturnFrequencies:
+    """Pin the return_frequencies=True behaviour of get_git_co_changes.
+
+    Uses the same fixture repo and module-patching helpers as the existing
+    TestGetGitCoChangesDeterministic class so the two test suites are compared
+    against the same controlled commit history.
+
+    Acceptance criteria (SPEC §1.3):
+      test_default_return_unchanged_by_new_param  — AC-1
+      test_frequencies_returned_as_tuple          — AC-2
+      test_exact_pair_frequency                   — AC-3
+      test_frequency_key_is_sorted_tuple          — AC-4
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, tmp_path: Path):
+        self._tmp_path = tmp_path
+        self._repo = _create_tmp_git_repo(tmp_path)
+        self._mod, self._mod_name = _make_patched_co_change_mod()
+        _patch_project_root(self._mod, self._repo)
+        yield
+        sys.modules.pop(self._mod_name, None)
+
+    # AC-1: Default path is unchanged
+    def test_default_return_unchanged_by_new_param(self):
+        """Both call forms without return_frequencies=True return the same dict.
+
+        Also validates that the returned dict still equals the hand-computed
+        values pinned by the existing characterization tests (a|b=1.0, b|a=2/3).
+        """
+        result_default = self._mod.get_git_co_changes()
+        result_explicit_false = self._mod.get_git_co_changes(return_frequencies=False)
+
+        # Both are plain dicts (not tuples)
+        assert isinstance(result_default, dict), \
+            "Default call must return a dict, not a tuple"
+        assert isinstance(result_explicit_false, dict), \
+            "return_frequencies=False must return a dict, not a tuple"
+
+        # Values must be equal (same probabilities)
+        assert result_default == result_explicit_false, \
+            "Default and explicit-False calls must produce identical dicts"
+
+        # Cross-check against the pinned probability values from the existing tests
+        import pytest as _pytest
+        assert result_default["src/b.py"]["src/a.py"] == _pytest.approx(1.0, rel=1e-9), \
+            "P(a|b) must still be 1.0"
+        assert result_default["src/a.py"]["src/b.py"] == _pytest.approx(2 / 3, rel=1e-9), \
+            "P(b|a) must still be 2/3"
+
+    # AC-2: Tuple is returned and element 0 equals default dict
+    def test_frequencies_returned_as_tuple(self):
+        """return_frequencies=True returns a 2-tuple; element 0 equals the default return."""
+        result = self._mod.get_git_co_changes(return_frequencies=True)
+
+        assert isinstance(result, tuple), \
+            f"Expected a tuple, got {type(result).__name__}"
+        assert len(result) == 2, \
+            f"Expected a 2-tuple, got length {len(result)}"
+
+        co_changes, frequencies = result
+
+        # Element 0 must be identical to the plain default return
+        expected_dict = self._mod.get_git_co_changes()
+        assert co_changes == expected_dict, \
+            "Element 0 of the tuple must equal the default dict return"
+
+    # AC-3: Exact commit-count for the known fixture pair
+    def test_exact_pair_frequency(self):
+        """frequencies[("src/a.py", "src/b.py")] == 2 (co-changed in commits 1 and 2)."""
+        _, frequencies = self._mod.get_git_co_changes(return_frequencies=True)
+
+        key = ("src/a.py", "src/b.py")
+        assert key in frequencies, \
+            f"Expected key {key!r} in frequencies dict; got keys: {list(frequencies.keys())}"
+        assert frequencies[key] == 2, \
+            f"Expected frequency 2 for the (a, b) pair; got {frequencies[key]}"
+
+    # AC-4: Keys are sorted 2-tuples
+    def test_frequency_key_is_sorted_tuple(self):
+        """All keys in frequencies are sorted 2-tuples of strings (order-independent lookup)."""
+        _, frequencies = self._mod.get_git_co_changes(return_frequencies=True)
+
+        assert len(frequencies) > 0, \
+            "frequencies dict must be non-empty for the fixture repo"
+
+        for key in frequencies:
+            assert isinstance(key, tuple), \
+                f"Key {key!r} is not a tuple"
+            assert len(key) == 2, \
+                f"Key {key!r} is not a 2-tuple"
+            f1, f2 = key
+            assert isinstance(f1, str) and isinstance(f2, str), \
+                f"Key elements must be strings, got {type(f1).__name__}, {type(f2).__name__}"
+            assert f1 <= f2, \
+                f"Key {key!r} is not sorted — f1 must be <= f2 for order-independent lookup"
