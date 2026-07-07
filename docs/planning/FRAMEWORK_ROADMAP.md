@@ -477,6 +477,67 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ---
 
+### v1.4.6 — Code Review Skill Split & Genericisation ✅ SHIPPED (2026-06-30, tag `20c6959`)
+
+**Goal**: Remove project-specific terminology leaks from universal skills and close two ReDoS vulnerabilities discovered in the migration toolchain.
+
+**Delivered**:
+- Decomposed the monolithic `code-review/SKILL.md` (previously exceeding the 150-line limit) into `branch-isolation/SKILL.md` (generic tenancy validation) and `schema-hardening/SKILL.md` (schema constraint validation), both including anti-rationalisation tables
+- Ported generic RBAC checks into `security-audit/SKILL.md`; genericised `testing-patterns/SKILL.md` by replacing project-specific role/model references with generic exemplars
+- Cleaned legacy attribution links from 12 skill files
+- Fixed regex backtracking (ReDoS) vulnerabilities in `upgrade.py` and `downgrade.py` — replaced unbounded `\s*` matchers with horizontal-only `[ \t]*`
+
+**Note**: This release completes the skill-decomposition work scoped in `PLAN_code-review-skill-split.md` (removed post-delivery, 2026-07-06 — confirmed delivered via this tag, backlog ✅ marker, and no remaining references).
+
+---
+
+### v1.4.7 — Gate Reliability & Migration Hardening ✅ SHIPPED (2026-07-02, tag `ce36183`)
+
+**Goal**: Close a spec-gate-blocking provider bug and centralise fragile ad-hoc YAML validation across the migration chain.
+
+**Delivered**:
+- HIB-057 — Fixed `call_llm` `AttributeError` in `ReviewProvider` that was blocking spec gate Pass 2 reviews
+- HIB-041 — Centralised naive YAML configuration validation into a `validate_yaml_config` helper in `bootstrap/migration_base.py`, supporting multi-line block scalars; all 16 migration script modules refactored to use it
+- HIB-046 — Added a `python-precommit` fallback module check inside `validate_tools()` in `validate.py`, preventing false-positive warnings on Windows
+- Framework checksum registry regenerated for v1.4.7
+
+---
+
+### v1.4.8 — Coupling Management Foundations 📋 IN PROGRESS (branch `feat/coupling-management`)
+
+**Goal**: Give the harness a vocabulary and a working mechanism for reasoning about software coupling deliberately — detecting emergent cross-boundary coupling, recording human judgments about it, and using those judgments to filter noise on every subsequent run. Extends the governance model from "what code looks like in one commit" to "how the system's structure evolves across many commits" — the harness's first genuinely temporal governance signal, alongside the existing point-in-time gates.
+
+**The gap this addresses**: The pre-commit review gate and architecture boundary checks are point-in-time — they see one diff at a time and cannot detect coupling that accretes silently across dozens of individually-unremarkable commits. This milestone adds that second clock, deliberately kept lightweight (on-demand CLI, no daemon) and evidence-driven (every design decision validated against the harness's own real commit history before being finalised).
+
+**Status**: All items below are implemented and merged to `feat/coupling-management`; branch not yet merged to `main`. Do not treat as shipped/available until merge.
+
+**Delivered on branch**:
+
+| ID | Item | Status |
+|----|------|--------|
+| T1-G-17 | Co-change core extraction (`co_change_core.py`) — parameterised, characterization-test-guarded extraction of git co-change logic from the pre-commit advisor, reusable by the reconciler | ✅ |
+| T1-B-10 | Harness minimal self-config (`architecture.layers`) — declares the harness's own architectural boundaries so coupling detection has something to check crossings against | ✅ |
+| T1-B-09 | Co-change reconciler CLI (`co_change_reconciler.py`) — on-demand, boundary-crossing-aware, frequency-gated and probability-ranked detector for emergent coupling; proven against the harness's own history | ✅ |
+| T1-B-12 | CDR (Coupling Decision Record) ledger — schema, pilot migration of 3 real evidence-backed decisions covering three distinct coupling archetypes (derived/mechanical, model, functional), and full reconciler integration (matching, classification into Undeclared/Escalated/Tolerated/Accepted, escalation detection with hub-scope exemption fix) | ✅ |
+
+**Governance vocabulary added**: `governance.md §8` — coupling evaluated as a strength/distance/volatility triple (not a single good/bad score); integration strength levels (intrusive → functional → model → contract); the balance rule (strong coupling only acceptable at short distance, or when volatility is low).
+
+**Not yet built (deliberately deferred)**:
+- Reliable session startup for non-frontier agents (T1-B-11) — surfaced during this work, not yet implemented
+- Session.json explicit shared contract (T1-E-03) — improvement path identified during CDR-002's investigation, not urgent (low volatility)
+- config.yaml parser unification (T1-E-04) — latent inconsistency identified, not yet fixed
+- Core bare-`{}` return on git failure (HIB-060) — minor hardening, not yet fixed
+- `check_traceability.py` alignment check with new config.yaml (HIB-061) — not yet verified
+- Brownfield baseline bulk-population tooling for the CDR ledger (no ID assigned yet) — needed before this is usable on a large existing codebase; deliberately deferred until real usage patterns are clearer
+- Active-model/cost-tier indicator at session start (T1-B-13) — unrelated finding surfaced during this work, filed separately
+
+**Success criteria for merge to main**:
+- Full test suite green on `main` after merge (currently 436+ passing on the branch)
+- Backlog and roadmap accurately reflect delivered scope (this entry)
+- No regression in existing pre-commit advisor behaviour (guaranteed by T1-G-17's characterization tests)
+
+---
+
 ### v1.5.0 — Quality Signal Maturity 📋 PLANNED (Q3 2026)
 
 **Goal**: The harness gets smarter about what signals it emits and when.
@@ -835,9 +896,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.5
+**Active milestone**: v1.4.8 (in progress, branch `feat/coupling-management`); v1.4.6 and v1.4.7 shipped since v1.4.5
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 📋 (in progress)
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 
