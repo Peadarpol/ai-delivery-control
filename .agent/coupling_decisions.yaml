@@ -1,0 +1,70 @@
+# Coupling Decision Records (CDR) ledger.
+# Consumed by the co-change reconciler (T1-B-09) to distinguish sanctioned crossings
+# from undeclared ones. Schema: docs/planning/specs/SPEC-cdr-ledger.md (this spec).
+# Migrated from CDR pilot 2026-07: pilot 001/002/005 -> CDR-001 (hub-collapsed);
+# pilot 003 -> CDR-002; pilot 004 -> CDR-003.
+version: 1
+decisions:
+  - id: CDR-001
+    scope: file
+    file: bootstrap/checksums.py
+    status: accepted
+    archetype: derived
+    rationale: >
+      Checksum manifest regenerated whenever tracked files change; co-changes with its
+      inputs by construction. Derived coupling with no independent behaviour that can
+      drift. Exempt all crossings involving this file. (Subsumes the three pair-level
+      findings from the first reconciler run: providers.py, init_session.py, ai_review.py.)
+    observed:
+      co_changes: 6        # highest of the three subsumed pairs
+      p_max: 0.71          # highest of the three subsumed pairs
+      as_of: 2026-07-08
+    boundaries: [bootstrap, review_engine, governance_scripts]
+
+  - id: CDR-002
+    scope: pair
+    files: [.agent/scripts/init_session.py, src/scripts/ai_review.py]
+    status: accepted
+    archetype: model
+    rationale: >
+      Producer/consumer coupling over the session.json state schema: init_session.py
+      creates the session and sets token-budget allocations; ai_review.py reads remaining
+      budget and writes back spent fields. They also share session-locking utilities and
+      the event trail. Co-change is the expected consequence of the shared session-state
+      model evolving (verified by commit analysis: 4 of 6 co-changes were genuine
+      shared-abstraction/state changes; no direct import).
+    follow_up: >
+      Make the session.json contract explicit — extract schema into a shared typed
+      definition both sides import (filed as T1-E-03, low priority).
+    observed:
+      co_changes: 6
+      p_max: 0.60
+      as_of: 2026-07-08
+    boundaries: [governance_scripts, review_engine]
+    sdv:
+      strength: model
+      distance: cross-boundary
+      volatility: low
+
+  - id: CDR-003
+    scope: pair
+    files: [bootstrap/validate.py, src/scripts/ai_review.py]
+    status: accepted
+    archetype: functional
+    rationale: >
+      Validator-to-validated coupling: validate.py checks install integrity of structures
+      ai_review.py depends on (outer_loop.mode config key, session.json gitignore
+      invariant, review_context file split). A validator is supposed to be coupled to what
+      it validates; low coupling here would be a defect (stale validator silently passing
+      broken installs). Verified by commit analysis: 3 of 6 co-changes were genuine
+      validator-tracks-validated changes; 3 were release-rollup bundling noise; no direct
+      import. No improvement path — the coupling is correct by design.
+    observed:
+      co_changes: 6
+      p_max: 0.46
+      as_of: 2026-07-08
+    boundaries: [bootstrap, review_engine]
+    sdv:
+      strength: functional
+      distance: cross-boundary
+      volatility: low
