@@ -1,5 +1,15 @@
 # Decisions Log
 
+## 2026-07-07: Reconciler ↔ CDR Ledger Integration (T1-B-12 Piece 2)
+- **Decision**: Integrated the co-change reconciler CLI with the CDR decisions ledger to filter out sanctioned crossings. Implemented pair-scope matching (using set-equality) and file-scope matching (hub check) against the ledger. Integrated status classifications: ACCEPTED, TOLERATED, AMBIGUOUS, and resolved status (regression check). Added tunable escalation checks for ACCEPTED and TOLERATED crossings (multi-layer delta/threshold checks) and restructured the markdown report into four sections + ambiguous matches. Exposed `--escalation-freq-multiplier` and `--escalation-prob-delta` flags.
+- **Context**: Required to bridge the boundary-crossing co-change detector with human coupling decisions, ensuring known/sanctioned debt does not clutter actionable findings.
+- **Consequence**: All 11 reconciler CLI tests and 436 full suite tests pass. Real-world proof run against the harness repo successfully moves the three pilot decisions from Undeclared to Accepted.
+
+## 2026-07-07: CDR Ledger Schema Design, Pilot Migration, & Validator (T1-B-12 Piece 1)
+- **Decision**: Created `.agent/coupling_decisions.yaml` schema and migrated pilot decisions (collapsing checksums pilot entries into a file-scoped exemption). Implemented the validation library `.agent/scripts/cdr_ledger_validate.py` (C1-C8 schema rules, including the C3 anti-confabulation rule) and a comprehensive validation test suite `tests/test_cdr_ledger.py`.
+- **Context**: Schema verification and pilot database representation were required as foundations before integrating subtraction logic into the co-change reconciler.
+- **Consequence**: All 428/428 tests pass. Full coverage for C3 validation.
+
 ## 2026-06-23: Roadmap Update for Version 1.5.x Milestones
 - **Decision**: Updated `docs/planning/FRAMEWORK_ROADMAP.md` to reflect the completed v1.5.x milestone plans (v1.5.0 Quality Signal Maturity, v1.5.1 Tool ABC Foundation, v1.5.2 Skill Chain & Gate Intelligence Completion), bumped current version to 1.4.4, updated active milestone records, and added v1.4.3 and v1.4.4 to the historical release family.
 - **Context**: Backlog items (T1-G-15, T1-D-08, T1-L-15, T1-B-06a, T1-L-16, T1-D-09) were accepted and added to the backlog. The roadmap updates were required to reflect the strategic decisions made for planning the upcoming releases.
@@ -60,7 +70,6 @@
 - **Context**: Rigorous security, developer ergonomics, and pipeline integration must be achieved simultaneously to prevent friction from causing hook circumvention.
 - **Consequence**: Delivers robust, enterprise-grade traceability and gating checks with zero developer friction and extremely high reliability.
 
-
 ## 2026-06-02: Applied Consolidated Backlog and Roadmap Updates
 - **Decision**: Applied the consolidated June 2026 backlog updates (Sprint 0, T1-B, T1-G, T1-L, T1-M, and T1-N items) to `FRAMEWORK_BACKLOG.md` and the milestone pre-sprint gate/strategic context additions to `FRAMEWORK_ROADMAP.md`.
 - **Context**: Keeping documentation in sync with consolidated research findings and plan refinements is necessary before starting Sprint 1 implementation.
@@ -75,7 +84,6 @@
 - **Decision**: Implemented rolling budget tracking summing regular, reasoning, and cache read tokens, coupled with atomic structured JSON HALT writes, and 80%/100% Warn/Halt warnings. Wrapped all `_lock_session` context managers in `try-except` blocks to print warning messages to stderr and proceed gracefully if concurrency lock acquisition fails.
 - **Context**: Prevent budget undercounting of reasoning/cache tokens, log session_id in the HALT file dictionary, and ensure the review gate does not crash due to temporary locking issues under concurrent execution.
 - **Consequence**: Verified all 28 E2E verification scenarios and 207 unit tests pass successfully.
-
 
 ## 2026-06-03: Two-Layer Context Architecture (UNIVERSAL_CONTEXT.md)
 - **Decision**: Consolidated shared tool context rules into `.agent/UNIVERSAL_CONTEXT.md` and converted editor-specific rules (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`) into thin shims loading it.
@@ -96,21 +104,6 @@
 - **Decision**: Adopted the combined MIT License + Commons Clause License Condition v1.0, updated the root LICENSE file, and removed the outdated README_draft.md.
 - **Context**: Preventing commercial exploitation and consulting wraps of the framework without restricting open developer use.
 - **Consequence**: Users can use, modify, and distribute the framework freely except for commercial resale or hosted services whose value is derived directly from the framework.
-
-## 2026-06-05: Structured Rebuttal Checklist and JSON Template (T1-G-06a, T1-G-06b)
-- **Decision**: Added a detailed rebuttal evidence checklist and a worked example (weak vs strong evidence) to `.agent/AGENTS.md` §8.6 and `.agent/governance.md` §3, and created `.agent/templates/gate_rebuttal_template.json` to act as a pre-populated template for developers/agents.
-- **Context**: Real-world use revealed that agents write weak rebuttals because of lack of clear instructions on what constitutes verifiable evidence, and because constructing the JSON from scratch is error-prone.
-- **Consequence**: Reduced the weak rebuttal rate by establishing a clear evidence standard and providing a template.
-
-## 2026-06-07: Relocated Onboarding Baseline Output to .agent/baseline/
-- **Decision**: Relocated the default diagnostic onboarding baseline report output path from the project root directory to `.agent/baseline/` in `.agent/scripts/onboarding.py`, added `.agent/baseline/` to `.gitignore`, updated the framework file checksum manifest to reflect the modified onboarding file, and updated the end-to-end test expectations in `run_e2e_verification.py`.
-- **Context**: Storing the onboarding baseline report in the project root causes clutter and pollution, and it should be contained in the `.agent/` folder structure along with other state files.
-- **Consequence**: Future onboarding runs cleanly generate the dated baseline files.
-
-## 2026-06-08: Wiki Pages Stored in docs/wiki/ as Regular Repo Files
-- **Decision**: All wiki pages live under `docs/wiki/` in the main repository as regular markdown files, not in GitHub's separate wiki system. All internal cross-page links must include an explicit `.md` extension.
-- **Context**: GitHub's file browser (blob viewer) does not resolve extensionless relative links.
-- **Consequence**: 54 links across all 17 wiki pages were updated to include `.md` extensions (commit 72ae66f).
 
 ## 2026-06-08: Scope-and-Boundaries as Public Honest-Limits Documentation
 - **Decision**: Created `docs/wiki/Scope-and-Boundaries.md` explicitly naming the three structural boundaries of the framework: (1) the gate governs commits, not in-session tool calls; (2) the gate checks individual commits, not accumulated architectural drift; (3) the self-improvement loop can only improve what the gate already notices.

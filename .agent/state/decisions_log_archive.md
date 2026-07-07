@@ -121,4 +121,17 @@
 - **Consequence**: The task is closed, verifying that audit logging is cleanly isolated and wired correctly.
 
 
+## 2026-06-05: Structured Rebuttal Checklist and JSON Template (T1-G-06a, T1-G-06b)
+- **Decision**: Added a detailed rebuttal evidence checklist and a worked example (weak vs strong evidence) to `.agent/AGENTS.md` §8.6 and `.agent/governance.md` §3, and created `.agent/templates/gate_rebuttal_template.json` to act as a pre-populated template for developers/agents.
+- **Context**: Real-world use revealed that agents write weak rebuttals because of lack of clear instructions on what constitutes verifiable evidence, and because constructing the JSON from scratch is error-prone.
+- **Consequence**: Reduced the weak rebuttal rate by establishing a clear evidence standard and providing a template.
 
+## 2026-06-07: Relocated Onboarding Baseline Output to .agent/baseline/
+- **Decision**: Relocated the default diagnostic onboarding baseline report output path from the project root directory to `.agent/baseline/` in `.agent/scripts/onboarding.py`, added `.agent/baseline/` to `.gitignore`, updated the framework file checksum manifest to reflect the modified onboarding file, and updated the end-to-end test expectations in `run_e2e_verification.py`.
+- **Context**: Storing the onboarding baseline report in the project root causes clutter and pollution, and it should be contained in the `.agent/` folder structure along with other state files.
+- **Consequence**: Future onboarding runs cleanly generate the dated baseline files.
+
+## 2026-06-08: Wiki Pages Stored in docs/wiki/ as Regular Repo Files
+- **Decision**: All wiki pages live under `docs/wiki/` in the main repository as regular markdown files, not in GitHub's separate wiki system. All internal cross-page links must include an explicit `.md` extension.
+- **Context**: GitHub's file browser (blob viewer) does not resolve extensionless relative links.
+- **Consequence**: 54 links across all 17 wiki pages were updated to include `.md` extensions (commit 72ae66f).

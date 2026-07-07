@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.4
-**Target Release**: v1.5.0
-**Last Updated**: 2026-06-23
+**Current Version**: 1.4.7
+**Target Release**: v1.4.8 (in progress) → v1.5.0
+**Last Updated**: 2026-07-08
 
 ---
 
@@ -906,14 +906,8 @@ Scope:
 
 ## Strategic Context
 
-> **Capability Inventory (2026-06-02)**: A direct code inspection inventory was
-> generated at `docs/planning/CAPABILITY_INVENTORY.md`. It is the authoritative
-> source of truth for what is actually delivered vs. what the backlog describes.
-> Where inventory findings conflict with backlog ✅ markers, the inventory takes
-> precedence. Key findings: T1-D-00 blocking dream phase routing; GymBase coupling
-> in functional code (S0-24); T1-I-07 partial delivery; BUG-11/12/13.
-> Sequencing observations in the inventory §3 should be reviewed before each
-> milestone planning session.
+> **Capability Inventory** (generated 2026-06-02, last reviewed 2026-06-22): A direct code inspection inventory lives at `docs/planning/CAPABILITY_INVENTORY.md`. It is the authoritative source of truth for what is actually delivered vs. what the backlog describes. Where inventory findings conflict with backlog ✅ markers, the inventory takes precedence. The original pre-sprint findings (T1-D-00 dream phase routing gap, GymBase coupling S0-24, T1-I-07 partial delivery, BUG-11/12/13) were all resolved before Sprint 1 began (2026-06-02) — retained here only as historical record, not current gaps. The inventory has not yet been updated for the v1.4.6–v1.4.8 releases (see coupling-management arc, v1.4.8); this is a known gap, not an omission — Capability Inventory updates are deliberately held until `feat/coupling-management` merges to `main`.
+> Sequencing observations in the inventory §3 should be reviewed before each milestone planning session.
 
 ### The Competitive Position
 

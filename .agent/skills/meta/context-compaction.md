@@ -27,26 +27,31 @@ Compaction MUST produce an updated handoff template containing:
 
 ---
 
-## Handoff Summary — 2026-07-07
+## Handoff Summary — 2026-07-07 (Session Close)
 
 ### 1. Completed Tasks
-- **CDR Ledger — Schema & Pilot Migration (T1-B-12, Piece 1)**:
-  - Created tracked version-controlled coupling decisions ledger at `.agent/coupling_decisions.yaml`.
-  - Implemented schema constraint validator at `.agent/scripts/cdr_ledger_validate.py`.
-  - Created test suite at `tests/test_cdr_ledger.py` verifying all schema rules and constraints (C1-C8), with explicit anti-confabulation validation (C3) where tolerated/unevaluated forbids rationale.
-  - Ran pytest suite with all tests (428/428) passing successfully.
+- **Reconciler ↔ CDR Ledger Integration (T1-B-12 Piece 2)**:
+  - Added `load_ledger` helper to `.agent/scripts/cdr_ledger_validate.py`.
+  - Updated arguments in `.agent/scripts/co_change_reconciler.py` to expose tunable escalation parameters.
+  - Implemented ledger loading, schema validation, pair-scope matching (using set-equality), and file-scope matching (hub check).
+  - Categorized crossings into Undeclared, Escalated, Tolerated, Accepted, and Ambiguous sections, writing a restructured Markdown report.
+  - Added 9 E2E and unit tests in `tests/test_co_change_reconciler.py` covering all integration requirements.
+  - Ran pytest suite with all tests (436/436) passing successfully.
+  - Verified primary proof run (defaults) and secondary proof run (low threshold) against the harness repository.
 
 ### 2. Architectural Decisions
-- Migrated CDR entries from pilot doc. Collapsed three checksums-related pilot entries (pilot-001, pilot-002, pilot-005) into a single file-scoped exemption entry (CDR-001) for `bootstrap/checksums.py`.
+- Restructured report format to isolate accepted/tolerated crossings from undeclared ones and highlight escalated crossings where metrics worsen.
+- Used set comparison `{files[0], files[1]} == {file_a, file_b}` to handle pair-scope exemptions order-independently.
+- Utilized `--escalation-freq-multiplier` (default 1.5) and `--escalation-prob-delta` (default 0.15) parameters to classify escalated entries.
 
 ### 3. Failed Experiments
 - None.
 
 ### 4. Remaining Tasks
-- Reconciler integration (subtraction logic - Piece 2).
 - Brownfield baseline bulk-population tool (Piece 3).
 
 ### 5. Open Questions
 - None.
+
 
 
