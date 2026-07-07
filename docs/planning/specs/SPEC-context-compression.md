@@ -38,10 +38,11 @@ Adapted from `caveman-compress` (source: `skills/caveman-compress/scripts/{compr
    - Validate structural invariants: heading count/text (error/warning split), fenced code blocks byte-exact (handles nested and variable-length fences), URL set equality, file-path set equality, inline-backtick spans as a multiset (catches *partial* loss, e.g. "lost 2 of 5 occurrences" — not just presence/absence), bullet-count drift >15%.
    - On validation failure: bounded fix-loop (2 retries), and **the fix prompt explicitly forbids recompression** — "ONLY fix the listed errors — leave everything else exactly as-is," with per-error-type repair instructions (e.g. "Code block mismatch: find the exact code block in ORIGINAL, restore it in COMPRESSED"). This is a scoped-remediation pattern, structurally close to the harness's existing rebuttal protocol.
    - Exhausted retries → restore original, delete backup, fail closed. No partially-validated file is ever left in place.
-5. **Backup placement (source: `compress.py: backup_dir_for`).** Backups are stored **out-of-tree** (`~/.local/share/caveman-compress/backups/`, not beside the source), because in-tree `.original.md` files were being re-ingested by skill auto-loaders as live context — a real bug they hit and fixed. Harness version should place backups outside any path the harness itself scans for context/spec files, for the same reason.
-6. **Harness-specific invariants to add to the validator:** the above validator has no concept of prohibition IDs (H/S/C/G refs), spec IDs, or coupling-declaration fields. These must be added as additional exact-match invariants (errors, not warnings) before this is safe to run over `AGENTS.md` or spec files — the source validator was written for generic markdown, not governance documents.
-7. **Audit integration:** compression runs emit a harness audit event (new event type, e.g. `CONTEXT_COMPRESSED`) recording file, timestamp, token delta, and validation result — consistent with existing `GATE_SKIPPED` precedent of making harness-internal transforms visible rather than invisible.
+5. **Backup placement (source: `compress.py: backup_dir_for`).** Backups are stored **out-of-tree** to prevent in-tree `.original.md` files from being re-ingested by skill auto-loaders. The harness version will place backups in the project-local `.agent/state/backups/` directory (which is ignored by Git and not scanned by context loaders).
+6. **Harness-specific invariants to add to the validator:** the validator must enforce exact-match invariants (errors, not warnings) for governance-sensitive tokens before this is safe to run over `AGENTS.md` or spec files. Minimally, this includes all occurrences of Coupling Decision Record IDs (`CDR-\d{3}`), spec story/task IDs (`SPEC-\w+-\w+` or `SPEC-\w+`), prohibition rules (`H-\d{2}`, `S-\d{2}`, `C-\d{2}`, `G-\d{2}`), and exact markdown header rule titles.
+7. **Audit integration:** compression runs emit a standard lifecycle audit event (event type: `context_compressed`) to `harness_events.jsonl` recording the target file path, timestamp, input/output token sizes, savings delta, and validation/repair execution results.
 8. **No auto-recompression on every edit.** Compression is an explicit, user- or hook-triggered maintenance action, not a background process silently rewriting files agents rely on for behavior.
+9. **Fast-tier model routing.** LLM calls for compression and repair prompts are routed exclusively to the configured `fast` tier model (e.g. Gemini Flash) to avoid premium tier cost overhead.
 
 ### 4.1 Fidelity evidence (source: `tests/caveman-compress/claude-md-project.{md,original.md}`)
 
@@ -51,13 +52,13 @@ Diffed a real before/after pair from their test fixtures: 7,782 → 4,607 bytes 
 
 Their own docs state the token-delta measurement has no fidelity check: "A skill that replies `k` to everything would score −99% and 'win'." This is an explicit gap in their tooling, not an oversight to inherit. Any harness adoption of this pattern must pair the token-delta measurement with the invariant validator (§4 item 4/6) as a hard gate — token savings alone is not an acceptance criterion.
 
-## 5. Open Questions (for review)
+## 5. Resolved Design Decisions
 
-1. Should `CONTEXT_COMPRESSED` be a new audit series entry (H/S/C/G) or a separate lightweight event class, given it's a maintenance action rather than a governance decision?
-2. Compression aggressiveness: should this support levels (light trim only vs. more aggressive fragment-style compression), or should the harness ship one conservative default (filler/redundancy removal only, no fragment/abbreviation style) to minimize ambiguity risk in a governance context? (§4.1 fidelity evidence favors conservative-default.)
-3. Where does the bounded fix-loop logic live — as a harness-owned script, or should it reuse/wrap the existing three-arm eval harness pattern for measuring compression quality over time?
-4. Should this be gated behind the existing enforcement posture model (strict/ratchet/observe), or is it orthogonal since it doesn't affect commit classification?
-5. What's the harness-specific invariant list for §4 item 6 — minimally: prohibition IDs, spec IDs, coupling declaration fields, gate names. Confirm/extend before implementation.
+1. **Audit Event Type**: `CONTEXT_COMPRESSED` is logged as a standard lifecycle event type (`event_type: "context_compressed"`) in `harness_events.jsonl` rather than an H/S/C/G policy verdict.
+2. **Compression Aggressiveness**: The harness uses a single conservative default (whitespace/filler/redundancy trimming) while preserving formatting structure, tables, and rules verbatim, avoiding aggressive abbreviation that risks semantic collapse.
+3. **Fix-Loop Architecture**: The validation checks and bounded repair loop logic (up to 2 retries) are implemented in `.agent/scripts/context_compressor.py`, which exposes an on-demand CLI tool.
+4. **Enforcement Gating**: The compression action runs as an explicit maintenance command and is orthogonal to enforcement postures, rolling back automatically to the original backup on any validation failure.
+5. **Harness-Specific Invariants**: The validator will strictly verify that Coupling IDs (`CDR-XXX`), Spec IDs (`SPEC-XXX`), prohibition tags, and rule title headers match the original multiset exactly.
 
 ## 6. Explicitly Deferred
 
