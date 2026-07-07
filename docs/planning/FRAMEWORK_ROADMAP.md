@@ -1,8 +1,8 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.7
-**Target Release**: v1.4.8 (in progress) → v1.5.0
+**Current Version**: 1.4.8
+**Target Release**: v1.5.0
 **Last Updated**: 2026-07-08
 
 ---
@@ -503,13 +503,13 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 
 ---
 
-### v1.4.8 — Coupling Management Foundations 📋 IN PROGRESS (branch `feat/coupling-management`)
+### v1.4.8 — Coupling Management Foundations ✅ SHIPPED (2026-07-08, branch `feat/coupling-management`)
 
 **Goal**: Give the harness a vocabulary and a working mechanism for reasoning about software coupling deliberately — detecting emergent cross-boundary coupling, recording human judgments about it, and using those judgments to filter noise on every subsequent run. Extends the governance model from "what code looks like in one commit" to "how the system's structure evolves across many commits" — the harness's first genuinely temporal governance signal, alongside the existing point-in-time gates.
 
 **The gap this addresses**: The pre-commit review gate and architecture boundary checks are point-in-time — they see one diff at a time and cannot detect coupling that accretes silently across dozens of individually-unremarkable commits. This milestone adds that second clock, deliberately kept lightweight (on-demand CLI, no daemon) and evidence-driven (every design decision validated against the harness's own real commit history before being finalised).
 
-**Status**: All items below are implemented and merged to `feat/coupling-management`; branch not yet merged to `main`. Do not treat as shipped/available until merge.
+**Status**: All items below are implemented and merged to `main`.
 
 **Delivered on branch**:
 
@@ -896,9 +896,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.8 (in progress, branch `feat/coupling-management`); v1.4.6 and v1.4.7 shipped since v1.4.5
+**Active milestone**: v1.5.0 (v1.4.8 shipped 2026-07-08)
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 📋 (in progress)
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 
