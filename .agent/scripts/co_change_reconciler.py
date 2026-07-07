@@ -33,6 +33,12 @@ except ImportError:
         sys.path.append(str(PROJECT_ROOT))
     from co_change_core import get_git_co_changes
 
+try:
+    from cdr_ledger_validate import load_ledger
+except ImportError:
+    if str(PROJECT_ROOT / ".agent" / "scripts") not in sys.path:
+        sys.path.append(str(PROJECT_ROOT / ".agent" / "scripts"))
+    from cdr_ledger_validate import load_ledger
 
 def boundary_of(file_path: str, layers: dict[str, str]) -> str | None:
     """Resolve file_path to its boundary layer name. Longest prefix wins."""
@@ -91,12 +97,38 @@ def main():
         default=None,
         help="Report file output path (default: .agent/state/co_change_reconciliation_report.md)."
     )
+    parser.add_argument(
+        "--escalation-freq-multiplier",
+        type=float,
+        default=1.5,
+        help="Multiplier for co-change frequency escalation check (default: 1.5)."
+    )
+    parser.add_argument(
+        "--escalation-prob-delta",
+        type=float,
+        default=0.15,
+        help="Delta for probability escalation check (default: 0.15)."
+    )
 
     args = parser.parse_args()
 
     # Determine project root
     raw_root = args.project_root or os.getcwd()
     target_root = Path(raw_root).resolve()
+
+    # Load and validate the CDR decisions ledger
+    ledger_path = target_root / ".agent" / "coupling_decisions.yaml"
+    ledger_exists = ledger_path.exists()
+    decisions = []
+
+    if ledger_exists:
+        try:
+            ledger_data = load_ledger(ledger_path)
+            decisions = ledger_data.get("decisions", [])
+        except Exception as e:
+            print(f"Error loading/validating ledger: {e}", file=sys.stderr)
+            sys.exit(1)
+
 
     # Load boundaries
     config_path = target_root / ".agent" / "config.yaml"
@@ -190,50 +222,199 @@ def main():
     # Sort descending by max probability, then frequency, then file paths (for determinism)
     crossings.sort(key=lambda x: (-x["p_max"], -x["freq"], x["file_a"], x["file_b"]))
 
+    undeclared_crossings = []
+    escalated_crossings = []
+    tolerated_crossings = []
+    accepted_crossings = []
+    ambiguous_crossings = []
+
+    for c in crossings:
+        file_a = c["file_a"]
+        file_b = c["file_b"]
+        freq = c["freq"]
+        p_max = c["p_max"]
+
+        # Find matching decisions
+        matched_entries = []
+        for dec in decisions:
+            scope = dec.get("scope")
+            if scope == "pair":
+                dec_files = dec.get("files", [])
+                if len(dec_files) == 2:
+                    if {dec_files[0], dec_files[1]} == {file_a, file_b}:
+                        matched_entries.append(dec)
+            elif scope == "file":
+                dec_file = dec.get("file")
+                if dec_file == file_a or dec_file == file_b:
+                    matched_entries.append(dec)
+
+        # Classification
+        if len(matched_entries) > 1:
+            c["matched_ids"] = ", ".join(sorted([d.get("id", "") for d in matched_entries]))
+            ambiguous_crossings.append(c)
+        elif len(matched_entries) == 1:
+            entry = matched_entries[0]
+            status = entry.get("status")
+            cdr_id = entry.get("id", "")
+
+            if status == "resolved":
+                c["notes"] = "⚠ RESOLVED-REGRESSION"
+                c["cdr_id"] = cdr_id
+                undeclared_crossings.append(c)
+            elif status in ("accepted", "tolerated"):
+                scope = entry.get("scope")
+                is_escalated = False
+
+                if scope == "pair":
+                    observed = entry.get("observed", {})
+                    obs_co = observed.get("co_changes", 0)
+                    obs_p = observed.get("p_max", 0.0)
+
+                    multiplier = args.escalation_freq_multiplier
+                    delta = args.escalation_prob_delta
+
+                    is_escalated = (freq >= obs_co * multiplier) or (p_max >= obs_p + delta)
+
+                    c["cdr_id"] = cdr_id
+                    c["matched_status"] = status
+                    c["observed_str"] = f"{obs_co} ({obs_p:.2f})"
+                    c["current_str"] = f"{freq} ({p_max:.2f})"
+
+                    freq_diff = freq - obs_co
+                    p_max_diff = p_max - obs_p
+                    freq_sign = "+" if freq_diff >= 0 else ""
+                    p_sign = "+" if p_max_diff >= 0 else ""
+                    c["delta_str"] = f"{freq_sign}{freq_diff} ({p_sign}{p_max_diff:.2f})"
+
+                if is_escalated:
+                    escalated_crossings.append(c)
+                else:
+                    c["cdr_id"] = cdr_id
+                    c["matched_status"] = status
+                    if status == "accepted":
+                        c["archetype"] = entry.get("archetype", "")
+                        accepted_crossings.append(c)
+                    elif status == "tolerated":
+                        c["reason"] = entry.get("reason", "")
+                        c["note"] = entry.get("note", "") or "-"
+                        tolerated_crossings.append(c)
+        else:
+            c["notes"] = "-"
+            undeclared_crossings.append(c)
+
     # Prepare markdown content
     iso_now = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     window_str = f"{args.window} commits" if args.window != 10000000 else "full history"
-    layer_names_str = ", ".join(sorted(layers.keys()))
+    ledger_display_path = ledger_path.as_posix() if ledger_exists else "none found"
 
     report_lines = [
         "# Co-Change Reconciliation Report",
         "",
-        f"**Generated**: {iso_now}",
-        f"**Target**: {target_root.as_posix()}",
-        f"**Window**: {window_str}  **Min-commits gate**: {args.min_commits}  **Prob floor**: {args.prob_floor}",
-        f"**Boundaries**: {len(layers)} declared ({layer_names_str})",
+        f"**Generated**: {iso_now}  **Ledger**: {ledger_display_path}",
+        f"**Target**: {target_root.as_posix()}  **Window / gate / floor**: {window_str} / {args.min_commits} / {args.prob_floor}",
         "",
-        f"## Undeclared boundary-crossing co-change ({len(crossings)} pairs)",
+        f"## 1. Undeclared boundary-crossing co-change ({len(undeclared_crossings)})",
         ""
     ]
 
-    if crossings:
+    if undeclared_crossings:
         report_lines.append(
             "Ranked by co-change probability. These file pairs cross an architectural boundary and "
             "co-change often enough to suggest emergent coupling that has not been deliberately declared."
         )
         report_lines.append("")
         report_lines.append(
-            "| Rank | File A | Boundary A | File B | Boundary B | Co-changes | P(max) |"
+            "| Rank | File A | Boundary A | File B | Boundary B | Co-changes | P(max) | Notes |"
         )
         report_lines.append(
-            "|------|--------|-----------|--------|-----------|-----------|--------|"
+            "|------|--------|-----------|--------|-----------|-----------|--------|-------|"
         )
-        for idx, c in enumerate(crossings, start=1):
+        for idx, c in enumerate(undeclared_crossings, start=1):
             report_lines.append(
-                f"| {idx} | {c['file_a']} | {c['boundary_a']} | {c['file_b']} | {c['boundary_b']} | {c['freq']} | {c['p_max']:.2f} |"
+                f"| {idx} | {c['file_a']} | {c['boundary_a']} | {c['file_b']} | {c['boundary_b']} | {c['freq']} | {c['p_max']:.2f} | {c.get('notes', '-')} |"
             )
     else:
         report_lines.append(
             "No boundary-crossing co-change pairs were found exceeding the minimum commit threshold."
         )
-
     report_lines.append("")
+
+    report_lines.append(f"## 2. Escalated (sanctioned couplings that have gotten worse) ({len(escalated_crossings)})")
+    report_lines.append("")
+    if escalated_crossings:
+        report_lines.append(
+            "| Rank | File A | File B | CDR ID | Status | Observed (at decision) | Current | Δ |"
+        )
+        report_lines.append(
+            "|------|--------|--------|--------|--------|------------------------|---------|---|"
+        )
+        for idx, c in enumerate(escalated_crossings, start=1):
+            report_lines.append(
+                f"| {idx} | {c['file_a']} | {c['file_b']} | {c['cdr_id']} | {c['matched_status']} | {c['observed_str']} | {c['current_str']} | {c['delta_str']} |"
+            )
+    else:
+        report_lines.append("No sanctioned coupling metrics have exceeded their escalation thresholds.")
+    report_lines.append("")
+
+    report_lines.append(f"## 3. Tolerated — known coupling debt ({len(tolerated_crossings)})")
+    report_lines.append("")
+    if tolerated_crossings:
+        report_lines.append(
+            "| File A | File B | CDR ID | Reason | Note |"
+        )
+        report_lines.append(
+            "|--------|--------|--------|--------|------|"
+        )
+        for c in tolerated_crossings:
+            report_lines.append(
+                f"| {c['file_a']} | {c['file_b']} | {c['cdr_id']} | {c['reason']} | {c['note']} |"
+            )
+    else:
+        report_lines.append("No tolerated coupling debt currently registered.")
+    report_lines.append("")
+
+    report_lines.append(f"## 4. Accepted — sanctioned, informational ({len(accepted_crossings)})")
+    report_lines.append("")
+    if accepted_crossings:
+        report_lines.append(
+            "| File A | File B | CDR ID | Archetype |"
+        )
+        report_lines.append(
+            "|--------|--------|--------|-----------|"
+        )
+        for c in accepted_crossings:
+            report_lines.append(
+                f"| {c['file_a']} | {c['file_b']} | {c['cdr_id']} | {c['archetype']} |"
+            )
+    else:
+        report_lines.append("No accepted couplings currently registered.")
+    report_lines.append("")
+
+    if ambiguous_crossings:
+        report_lines.append(f"## Ambiguous matches (data integrity — should normally be empty)")
+        report_lines.append("")
+        report_lines.append(
+            "| File A | File B | Matched IDs |"
+        )
+        report_lines.append(
+            "|--------|--------|-------------|"
+        )
+        for c in ambiguous_crossings:
+            report_lines.append(
+                f"| {c['file_a']} | {c['file_b']} | {c['matched_ids']} |"
+            )
+        report_lines.append("")
+
     report_lines.append("## Notes")
+    if not ledger_exists:
+        report_lines.append("- no CDR ledger found — all crossings shown as undeclared")
+    else:
+        report_lines.append(
+            f"- Checked against CDR ledger at {ledger_display_path} containing {len(decisions)} decisions."
+        )
     report_lines.append(
         "- This is diagnostic output, not a verdict. Each crossing may be legitimate (a deliberate, "
-        "acceptable coupling) or a signal to investigate. No CDR ledger exists yet, so ALL crossings "
-        "above the gate are listed."
+        "acceptable coupling) or a signal to investigate."
     )
     report_lines.append(
         "- To evaluate a crossing, apply the strength/distance/volatility lens (governance.md §8)."

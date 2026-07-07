@@ -178,3 +178,18 @@ def validate_ledger(data: dict) -> list[str]:
                     errors.append(f"{label} 'sdv.volatility' has invalid value '{volatility}'")
 
     return errors
+
+
+def load_ledger(path: str | Path) -> dict:
+    """Load and validate a coupling decisions YAML file.
+
+    Raises a ValueError listing all validation errors if the ledger is malformed.
+    """
+    import yaml
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    errors = validate_ledger(data)
+    if errors:
+        raise ValueError("Ledger validation errors found:\n" + "\n".join(f"- {e}" for e in errors))
+    return data
+

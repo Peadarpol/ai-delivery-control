@@ -191,8 +191,9 @@ class TestCoChangeReconcilerCLI:
 
         # Must have the header and target root
         assert "# Co-Change Reconciliation Report" in content
-        assert "**Min-commits gate**: 5" in content
-        assert "gov_scripts, layer1, layer2" in content
+        assert "full history / 5 / 0.05" in content
+        assert "**Ledger**: none found" in content
+
 
         # Check cross-boundary pair 1: layer1/a.py & layer2/b.py (5 co-changes)
         assert "src/layer1/a.py" in content
@@ -222,3 +223,310 @@ class TestCoChangeReconcilerCLI:
 
         assert res.returncode == 0
         assert "no architecture.layers declared; nothing to reconcile" in res.stdout
+
+    def _write_ledger(self, repo: Path, content: dict):
+        ledger_file = repo / ".agent" / "coupling_decisions.yaml"
+        ledger_file.write_text(yaml.dump(content), encoding="utf-8")
+
+    def test_accepted_pair_scope_lands_in_section_4(self):
+        self._write_ledger(self.repo, {
+            "version": 1,
+            "decisions": [
+                {
+                    "id": "CDR-001",
+                    "scope": "pair",
+                    "files": ["src/layer1/a.py", "src/layer2/b.py"],
+                    "status": "accepted",
+                    "archetype": "model",
+                    "rationale": "Valid rationale",
+                    "observed": {
+                        "co_changes": 5,
+                        "p_max": 1.0,
+                        "as_of": "2026-07-08"
+                    }
+                }
+            ]
+        })
+        report_path = self.tmp_path / "report_accepted_pair.md"
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5",
+            "--out",
+            str(report_path)
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 0
+        content = report_path.read_text(encoding="utf-8")
+
+        # lands in Section 4: Accepted
+        assert "## 4. Accepted — sanctioned, informational (1)" in content
+        assert "src/layer1/a.py | src/layer2/b.py | CDR-001 | model" in content
+
+        # NOT in Section 1: Undeclared (the other crossing src/layer1/a.py & .agent/scripts/x.py is still there)
+        assert "## 1. Undeclared boundary-crossing co-change (1)" in content
+        assert "src/layer1/a.py" in content
+        assert ".agent/scripts/x.py" in content
+
+    def test_accepted_file_scope_hub_lands_in_section_4(self):
+        self._write_ledger(self.repo, {
+            "version": 1,
+            "decisions": [
+                {
+                    "id": "CDR-001",
+                    "scope": "file",
+                    "file": "src/layer1/a.py",
+                    "status": "accepted",
+                    "archetype": "derived",
+                    "rationale": "Valid rationale",
+                    "observed": {
+                        "co_changes": 5,
+                        "p_max": 1.0,
+                        "as_of": "2026-07-08"
+                    }
+                }
+            ]
+        })
+        report_path = self.tmp_path / "report_accepted_file.md"
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5",
+            "--out",
+            str(report_path)
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 0
+        content = report_path.read_text(encoding="utf-8")
+
+        # both crossings involving src/layer1/a.py should land in section 4
+        assert "## 4. Accepted — sanctioned, informational (2)" in content
+        assert "src/layer1/a.py | src/layer2/b.py | CDR-001 | derived" in content
+        assert ".agent/scripts/x.py | src/layer1/a.py | CDR-001 | derived" in content
+        assert "## 1. Undeclared boundary-crossing co-change (0)" in content
+
+    def test_tolerated_lands_in_section_3(self):
+        self._write_ledger(self.repo, {
+            "version": 1,
+            "decisions": [
+                {
+                    "id": "CDR-001",
+                    "scope": "pair",
+                    "files": ["src/layer1/a.py", "src/layer2/b.py"],
+                    "status": "tolerated",
+                    "reason": "deferred",
+                    "note": "Let us wait",
+                    "observed": {
+                        "co_changes": 5,
+                        "p_max": 1.0,
+                        "as_of": "2026-07-08"
+                    }
+                }
+            ]
+        })
+        report_path = self.tmp_path / "report_tolerated.md"
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5",
+            "--out",
+            str(report_path)
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 0
+        content = report_path.read_text(encoding="utf-8")
+
+        assert "## 3. Tolerated — known coupling debt (1)" in content
+        assert "src/layer1/a.py | src/layer2/b.py | CDR-001 | deferred | Let us wait" in content
+
+    def test_resolved_regression_lands_in_section_1_with_warning(self):
+        self._write_ledger(self.repo, {
+            "version": 1,
+            "decisions": [
+                {
+                    "id": "CDR-001",
+                    "scope": "pair",
+                    "files": ["src/layer1/a.py", "src/layer2/b.py"],
+                    "status": "resolved",
+                    "resolved_by": "Refactoring",
+                    "observed": {
+                        "co_changes": 5,
+                        "p_max": 0.6,
+                        "as_of": "2026-07-08"
+                    }
+                }
+            ]
+        })
+        report_path = self.tmp_path / "report_resolved_regression.md"
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5",
+            "--out",
+            str(report_path)
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 0
+        content = report_path.read_text(encoding="utf-8")
+
+        # Resolved regression lands in Section 1 with note
+        assert "## 1. Undeclared boundary-crossing co-change (2)" in content
+        assert "src/layer1/a.py | layer1 | src/layer2/b.py | layer2 | 5 | 1.00 | ⚠ RESOLVED-REGRESSION |" in content
+
+    def test_escalation_lands_in_section_2(self):
+        # Observed: 2 co-changes, current is 5 co-changes (>= 2 * 1.5 = 3). Escalated!
+        self._write_ledger(self.repo, {
+            "version": 1,
+            "decisions": [
+                {
+                    "id": "CDR-001",
+                    "scope": "pair",
+                    "files": ["src/layer1/a.py", "src/layer2/b.py"],
+                    "status": "accepted",
+                    "archetype": "model",
+                    "rationale": "Valid rationale",
+                    "observed": {
+                        "co_changes": 2,
+                        "p_max": 0.5,
+                        "as_of": "2026-07-08"
+                    }
+                }
+            ]
+        })
+        report_path = self.tmp_path / "report_escalated.md"
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5",
+            "--out",
+            str(report_path)
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 0
+        content = report_path.read_text(encoding="utf-8")
+
+        assert "## 2. Escalated (sanctioned couplings that have gotten worse) (1)" in content
+        assert "src/layer1/a.py | src/layer2/b.py | CDR-001 | accepted | 2 (0.50) | 5 (1.00) | +3 (+0.50) |" in content
+
+    def test_ambiguous_matching_lands_in_ambiguous_section(self):
+        # Create overlapping entries
+        self._write_ledger(self.repo, {
+            "version": 1,
+            "decisions": [
+                {
+                    "id": "CDR-001",
+                    "scope": "pair",
+                    "files": ["src/layer1/a.py", "src/layer2/b.py"],
+                    "status": "accepted",
+                    "archetype": "model",
+                    "rationale": "Valid rationale 1",
+                    "observed": {
+                        "co_changes": 5,
+                        "p_max": 0.6,
+                        "as_of": "2026-07-08"
+                    }
+                },
+                {
+                    "id": "CDR-002",
+                    "scope": "file",
+                    "file": "src/layer1/a.py",
+                    "status": "accepted",
+                    "archetype": "derived",
+                    "rationale": "Valid rationale 2",
+                    "observed": {
+                        "co_changes": 5,
+                        "p_max": 0.6,
+                        "as_of": "2026-07-08"
+                    }
+                }
+            ]
+        })
+        report_path = self.tmp_path / "report_ambiguous.md"
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5",
+            "--out",
+            str(report_path)
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 0
+        content = report_path.read_text(encoding="utf-8")
+
+        assert "## Ambiguous matches (data integrity — should normally be empty)" in content
+        assert "src/layer1/a.py | src/layer2/b.py | CDR-001, CDR-002" in content
+
+    def test_missing_ledger_runs_gracefully_with_note(self):
+        # Delete ledger if exists
+        ledger_file = self.repo / ".agent" / "coupling_decisions.yaml"
+        if ledger_file.exists():
+            ledger_file.unlink()
+
+        report_path = self.tmp_path / "report_missing_ledger.md"
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5",
+            "--out",
+            str(report_path)
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 0
+        content = report_path.read_text(encoding="utf-8")
+
+        assert "no CDR ledger found — all crossings shown as undeclared" in content
+        assert "## 1. Undeclared boundary-crossing co-change (2)" in content
+
+    def test_malformed_ledger_validation_fails_and_halts(self):
+        self._write_ledger(self.repo, {
+            "version": 1,
+            "decisions": [
+                {
+                    "id": "CDR-001",
+                    "scope": "pair",
+                    "files": ["src/layer1/a.py", "src/layer2/b.py"],
+                    "status": "accepted",
+                    "archetype": "model",
+                    # missing rationale
+                    "observed": {
+                        "co_changes": 5,
+                        "p_max": 0.6,
+                        "as_of": "2026-07-08"
+                    }
+                }
+            ]
+        })
+        res = subprocess.run([
+            sys.executable,
+            str(_RECONCILER_PATH),
+            "--project-root",
+            str(self.repo),
+            "--min-commits",
+            "5"
+        ], capture_output=True, text=True, encoding="utf-8")
+
+        assert res.returncode == 1
+        assert "Error loading/validating ledger" in res.stderr
+        assert "missing rationale" in res.stderr
+
