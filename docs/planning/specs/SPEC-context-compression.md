@@ -1,9 +1,10 @@
 # SPEC: Context-Efficient Memory Compression
 
-**Status:** DRAFT v3 — awaiting review/approval before implementation
+**Status:** ON HOLD (v3.2) — §0 ROI gate MEASURED; recommend NOT proceeding with the LLM pipeline for rule-dense files. See §0.1.
 **Author:** Claude (spec/architecture) — implementation TBD (Gemini/Antigravity per standing workflow)
-**Related:** EFC scaling law research, canonical tool inventory parsimony lever
+**Related:** EFC scaling law research, canonical tool inventory parsimony lever; measurement companion: [SPEC-context-compression-ROI-baseline.md](./SPEC-context-compression-ROI-baseline.md)
 **Changelog:**
+- v3.2 records the §0 ROI-gate measurement (2026-07-07, Gemini Flash on this repo). Mechanical-only saving ≈ 0% (files already clean); LLM saving ≈ 20% (~3,700 tok/session, ~2–4% of budget); observed governance erosion on non-token lines that the specced validator would NOT catch. Outcome: gate NOT passed for rule-dense files (`AGENTS.md`, `governance.md`); status → ON HOLD. See §0.1.
 - v3.1 adds the idempotency rule — a body is never re-compressed as a whole; only content added since the last compression is eligible (§4 item 11) — and clarifies where the tool runs (per-project, on the incorporating project's own context files; §1.1).
 - v3 adds a mandatory **§0 ROI gate** (implementation may not proceed until answered), reframes fidelity around *mechanical carve-out of governance lines* rather than post-hoc token validation, and folds in mitigations from an external critical review (Gemini): strict frontmatter parsing (§4.2 mechanism), strict path allowlist + content pre-scan (§4.3), pinned-original backup retention (§4.5 / §5 Q6), line-anchored validation as a secondary net (§4.4), `NO-COMPRESS` fences (§4 item 10), and a content digest in the audit event (§4 item 7). Documents why reasoning-tier escalation was **rejected** in favour of fail-closed abort (§4.4). Records the review disposition in §9.
 - v2 revised §4 with mechanics confirmed by direct source review of github.com/JuliusBrussee/caveman (cloned, 177 files inspected), and added two candidate features (§7, §8) found during that pass. v1 was based on marketing copy / search snippets only.
@@ -17,6 +18,21 @@ This spec proposes an LLM-in-the-loop transform with a non-trivial failure surfa
 3. **Mechanical-alternative comparison.** The saving achievable by a **purely deterministic, non-LLM pass** (strip trailing whitespace, collapse blank-line runs, remove redundant HTML comments, table-whitespace normalisation). If the mechanical pass captures most of the win, it wins by default: it carries none of the fidelity risk this spec spends §4 mitigating.
 
 **Decision rule:** proceed with the LLM mechanism (§4) only if the LLM pass beats the mechanical pass by a margin large enough to justify the added failure surface, *and* the absolute saving is a meaningful fraction of the session budget. Otherwise implement the mechanical pass only, or shelve. This gate exists because neither the original spec nor its external review quantified whether the juice is worth the squeeze.
+
+### 0.1 Gate outcome — MEASURED 2026-07-07 (recommend NOT proceeding for rule-dense files)
+
+The gate was measured against this repo (full data in the [ROI baseline companion](./SPEC-context-compression-ROI-baseline.md), §5). Findings:
+
+1. **Baseline.** The per-session ("Tier A") load is **~18,600 tokens** — `AGENTS.md`, `governance.md`, `AGENT_CAPABILITY_BRIEFING.md`, and small state files. The largest files on disk (`FRAMEWORK_BACKLOG.md` ~61k, `FRAMEWORK_ROADMAP.md` ~19k) are **read on demand, not per session** — compressing them saves ~nothing per session.
+2. **Mechanical-alternative saving ≈ 0%.** The in-scope files are already clean (no whitespace/blank-run/scaffolding to strip). There is no free deterministic win to capture.
+3. **LLM saving ≈ 20%** (Gemini Flash, conservative prompt), i.e. **~3,700 tokens/session ≈ 2–4%** of a typical 100–200k session budget — not the 41% caveman fixture.
+4. **Fidelity failed on rule-dense files.** No negation was inverted, but conservative compression still narrowed a non-negotiable rule's trigger ("more than one file or layer" → "multi-file"), dropped a prohibited action ("compensating actions"), and removed scope qualifiers. **Critically, none of the damaged lines carry a rule-ID token, so the validator specced in §4 (items 4 & 6) would pass all of them as clean** — the protections are mis-targeted for the actual governance prose in these files.
+
+**Decision:** the gate is **NOT passed** for the rule-dense governance files (`AGENTS.md`, `governance.md`). The fidelity-safe saving after carving out governance prose is well below the headline 20%, on a pool worth only ~2–4% of a session — the compress/validate/repair failure surface is not justified, and the validator as designed does not catch the erosion actually observed. **Status → ON HOLD.**
+
+**Not fully closed / possible narrow follow-up:** low-rule-density descriptive files (e.g. parts of `AGENT_CAPABILITY_BRIEFING.md`) may achieve ~20% without touching enforcement text — worth a targeted per-file fidelity check before any adoption.
+
+**Preferred alternative *direction* (not a drop-in change):** the lossless relevance-gating pattern already demonstrated in `src/scripts/context_loader.py` (PA-02 section-selection + budgeted ADR injection) is the safer shape of solution than lossy compression — load only the context relevant to the task instead of rewriting it. **Caveat:** that file governs the *AI-review* prompt, not the session-start agent context (`AGENTS.md`/`governance.md` are read via the `AGENTS.md` convention on a different loading path). So this means *porting the section-gating pattern to the session-start path* — real work, not a one-file edit — with a natural hook in `init_session.py`'s existing task-magnitude gating (it already surfaces `decisions_log.md` only for major tasks). **This alternative must itself pass the §0 ROI gate:** it attacks the same ~2–4%-of-session pool and is non-trivial to build, so the most likely correct action is *no structural change until Tier-A context grows materially*.
 
 ## 1. Problem
 
