@@ -134,3 +134,11 @@
 - **Decision**: T1-D-02 (harness_health.py SQLite read-side) is reopened and its ✅ v1.4.0 mark removed. Corrections applied to FRAMEWORK_BACKLOG.md (table row + archive list), CHANGELOG.md, agent-capability-briefing.md (section heading + changelog row), CAPABILITY_INVENTORY.md (delivered tag + backlog dependency), and CANDIDATE_BACKLOG.md (dependency note).
 - **Context**: Code audit confirmed `state_persistence.py` has no SELECT functions and `harness_health.py` has no `sqlite3` import. Root cause: write-side sibling T1-D-01 shipped complete; T1-D-02 was co-marked without separate verification of the read-side consumer path.
 - **Consequence**: T1-D-02 is ⬜ undelivered. Any candidate work scoped as a read layer over T1-D-02 is blocked until the read-side is built.
+
+- **2026-07-07 (Architecture)**: Rejected SPEC-context-compression (LLM memory compression) via ROI gate. Decided the 2-4% budget savings were not worth the loss of governance nuance or the risk of semantic inversion.
+
+## 2026-07-08: [MTF-GOV] Approve pending governance rules and context compaction updates
+- **Decision**: Approve and merge the pending MTF governance changes (AGENTS.md, governance.md, context-compaction.md, validate.py) required by the cleanup plan.
+- **Decider**: Peter (Human Sign-off explicitly recorded prior to gating/commit)
+- **Context**: The cleanup plan requires AI review + human sign-off for governance changes. A dedicated MTF-GOV commit allows the gate to perform the AI review, while this entry records the mandatory human sign-off.
+- **Consequence**: Governance rules and compaction protocols are updated.

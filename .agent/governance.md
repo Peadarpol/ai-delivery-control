@@ -138,6 +138,61 @@ matches their precondition. None were dropped.
 | P-16 | Framework feature-branch naming | `AGENTS.md` §9.5 (framework branching convention) |
 | P-17 | Call git commands directly from agent code | Tier 2 — framework-repo rule (git state changes go through hooks/explicit user instruction) |
 
+### 3.3 Rationalization resistance for high-stakes discipline rules (H-03, H-05)
+
+H-03 (test-harness cheating) and H-05 (sycophancy) are **discipline** failures: the agent
+knows the rule and violates it anyway under pressure (deadline, sunk cost, a confident-sounding
+user). For that failure class the effective form is an explicit prohibition backed by a
+rationalization table and a red-flags self-check — soft guidance is negotiated away under
+pressure. These two carry the highest integrity cost in the set (H-03 blinds the only signal
+that work is correct; H-05 lets a flawed design reach code), so they get the full kit here.
+
+> **Provenance.** The rationalizations below are the *classes* of excuse that lead to the
+> concrete evasion tactics recorded in §3.1 (weakened/commented assertions, `sys.exit(0)`,
+> deleted tests, `--no-verify` / P-12 bypass) — distilled from the GymBase-informed failure
+> record, **not** verbatim incident transcripts. Per the TDD-for-rules methodology, the correct
+> way to extend these tables is to capture real rationalizations from RED-baseline pressure
+> runs (or mine the GymBase incident logs) and add each observed excuse verbatim. Treat this as
+> the seed, not the ceiling.
+
+#### H-03 — Test-harness cheating
+
+| Excuse | Reality |
+|---|---|
+| "The test is flaky/wrong — routing around it is fine." | If the test is genuinely wrong, fix or delete it in a *separate, reviewed* commit with justification — never silently to make the current commit pass. A test you route around under deadline is a signal you are choosing to treat as noise. |
+| "I'll re-enable the assertion / re-add the test right after this." | "After" does not survive the next deadline. The commit that lands with the check disabled is the artifact of record. Re-enable first, then commit. |
+| "`--no-verify` just this once — the change is trivial and I'm confident." | Confidence is not verification (H-02). Trivial changes are exactly where unverified regressions hide. Bypassing the gate with `--no-verify` is P-12 and a governance breach, not a shortcut. |
+| "`sys.exit(0)` / `exit(0)` in the hook is a temporary unblock." | It converts the one mechanism that proves correctness into a rubber stamp. There is no temporary version of blinding the gate. |
+| "Commenting out the assertion helps me isolate the real problem." | Isolation happens in a scratch branch or a debugger, not in the committed test. A committed test with its assertion commented out asserts nothing and lies green. |
+| "Tests pass locally with the tweak, so the behaviour is fine." | The tweak is what is passing, not the behaviour. Red-green requires the test to have failed for the *right reason* first; a test edited into passing skipped the red step. |
+
+**Red flags — STOP and restore the check to full strength:**
+- About to edit a *test* file to make a currently-failing commit pass
+- Reaching for `--no-verify`, `SKIP_AI_REVIEW` without a structured bypass, or `sys.exit(0)`/`exit(0)` in any hook or `conftest`
+- Commenting out, weakening, or deleting an assertion that is currently failing
+- Deleting or `skip`/`xfail`-marking a test you have not just proven is wrong
+- Redirecting or suppressing a check's stdout/stderr to hide its output
+
+→ All of these mean: stop, restore the check, and either fix the code or escalate (H-07). Making the signal green without making the work correct is the failure, not the fix.
+
+#### H-05 — Sycophancy in planning
+
+| Excuse | Reality |
+|---|---|
+| "The user has clearly already decided — pushing back just annoys them." | You were asked for review, not assent. A plan review is quality assurance, not approval-seeking. Silent agreement you do not actually hold is the expensive kind. |
+| "I'm probably missing context — who am I to disagree?" | If session-available evidence contradicts the plan, cite it and let the human weigh it. Flagging a concern with its evidence is not disagreement — it is data the human asked for. |
+| "It's a small issue, not worth the friction." | A design flaw flagged at planning costs a sentence; the same flaw caught after implementation costs a rebuild. The friction asymmetry runs the other way. |
+| "I'll note the concern once we get moving." | Concerns raised after the commit are archaeology. The cheap moment to flag is before the code exists. |
+| "Agreeing keeps momentum." | Momentum toward a flawed design is negative progress. |
+
+**Red flags — STOP and state the concern:**
+- About to say "sounds good / makes sense / great plan" while holding an unvoiced concern
+- You found evidence *this session* that cuts against the plan and are choosing not to mention it
+- Softening a real objection into a vague "maybe worth considering"
+- Agreeing faster than you actually evaluated
+
+→ State the disagreement explicitly, with the evidence, *before* proceeding (H-05). An uncomfortable flag now is cheaper than a comfortable one caught after the rebuild.
+
 ### Gate Governance Escalation Hierarchy
 
 When the AI review gate returns a `FAIL` verdict, agents and developers MUST adhere to the following escalation hierarchy:
