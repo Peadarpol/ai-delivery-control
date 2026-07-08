@@ -75,9 +75,11 @@ def call_api_with_retry(
 
 
 def _strip_json_fences(raw: str) -> str:
-    """Strip markdown code fences if the model wraps JSON in them."""
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
+    """Strip markdown code fences and extraneous text if the model wraps JSON in them."""
+    first_brace = raw.find('{')
+    last_brace = raw.rfind('}')
+    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
+        return raw[first_brace:last_brace+1]
     return raw
 
 
