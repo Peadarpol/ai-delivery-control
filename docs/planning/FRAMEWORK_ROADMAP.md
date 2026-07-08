@@ -528,7 +528,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - config.yaml parser unification (T1-E-04) — latent inconsistency identified, not yet fixed
 - Core bare-`{}` return on git failure (HIB-060) — minor hardening, not yet fixed
 - `check_traceability.py` alignment check with new config.yaml (HIB-061) — not yet verified
-- Brownfield baseline bulk-population tooling for the CDR ledger (no ID assigned yet) — needed before this is usable on a large existing codebase; deliberately deferred until real usage patterns are clearer
+- Brownfield baseline bulk-population tooling for the CDR ledger — the general mechanism now has an ID: T1-G-18 (gate enforcement postures) proposes a project-wide baseline manifest pattern; revisit whether the CDR ledger's own bulk-population need is served by that work or still wants a dedicated tool.
 - Active-model/cost-tier indicator at session start (T1-B-13) — unrelated finding surfaced during this work, filed separately
 
 **Success criteria for merge to main**:

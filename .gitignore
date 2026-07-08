@@ -46,3 +46,5 @@ tests/e2e/test_project/.agent/templates/
 tests/e2e/test_project/.agent/workflows/
 tests/e2e/test_project/.agent/.framework_migration_state
 tests/e2e/e2e_out.txt
+
+parked/
