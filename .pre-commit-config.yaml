@@ -1,0 +1,44 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-active-repo
+        name: Verify active repository (G-01)
+        entry: python .agent/scripts/check_repo.py
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
+
+      - id: ai-adversarial-review
+        name: "AI Adversarial Review (Claude Sonnet)"
+        entry: python src/scripts/ai_review.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [commit-msg]
+        verbose: true
+
+      - id: commit-traceability
+        name: Requirement Traceability Hook
+        entry: python .agent/scripts/check_traceability.py
+        language: system
+        stages: [commit-msg]
+        always_run: true
+        pass_filenames: false
+
+      - id: governance-audit
+        name: "Governance Audit Log"
+        entry: python .agent/scripts/governance_check.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [post-commit]
+        verbose: true
+
+      - id: session-heartbeat
+        name: "Record commit to session"
+        entry: python .agent/scripts/init_session.py --post-commit
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [post-commit]

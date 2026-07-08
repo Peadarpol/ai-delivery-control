@@ -73,6 +73,7 @@ model_routing:
     - adr_extract
   review_provider: anthropic
   review_model: claude-sonnet-4-6
+  max_tokens: 4096
 
   # Cline (VS Code) — local Ollama-hosted coding agent
   # Set cline_model to the model name pulled in your local Ollama instance.

@@ -205,7 +205,13 @@ DEFAULTS = {
     },
     "acceptance_gate": {
         "base_branch": "main",
-        "migration_paths": ["src/backend/db/migrations/"],
+        "migration_paths": [
+            "src/backend/db/migrations/",
+            "migrations/versions/",
+            "alembic/versions/",
+            "db/migration/",
+            "migrations/",
+        ],
     },
     "architecture_checks": {
         "adr_capability_mappings": {},

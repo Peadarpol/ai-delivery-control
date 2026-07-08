@@ -137,8 +137,13 @@
 
 - **2026-07-07 (Architecture)**: Rejected SPEC-context-compression (LLM memory compression) via ROI gate. Decided the 2-4% budget savings were not worth the loss of governance nuance or the risk of semantic inversion.
 
-## 2026-07-08: [MTF-GOV] Approve pending governance rules and context compaction updates
+## 2026-07-09: [MTF-GOV] Approve pending governance rules and context compaction updates
 - **Decision**: Approve and merge the pending MTF governance changes (AGENTS.md, governance.md, context-compaction.md, validate.py) required by the cleanup plan.
 - **Decider**: Peter (Human Sign-off explicitly recorded prior to gating/commit)
 - **Context**: The cleanup plan requires AI review + human sign-off for governance changes. A dedicated MTF-GOV commit allows the gate to perform the AI review, while this entry records the mandatory human sign-off.
 - **Consequence**: Governance rules and compaction protocols are updated.
+## 2026-07-09: Dismiss FID-1 (CODE_QUALITY non-standard model name)
+- **Decision**: Dismiss finding FID-1 regarding the model string 'claude-sonnet-4-6'.
+- **Context**: The model string `claude-sonnet-4-6` is the correct alias in our internal provider routing layer.
+- **Consequence**: The false positive finding is suppressed from future manual reviews or gating blocking concerns.
+
