@@ -186,6 +186,9 @@ def _safe_git_env() -> dict:
 _CONFIG_CACHE = None
 
 DEFAULTS = {
+    "model_routing": {
+        "max_tokens": 4096,
+    },
     "memory": {
         "retention": {
             "session_ledger_retention_days": 90,

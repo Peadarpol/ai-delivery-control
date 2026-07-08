@@ -35,6 +35,14 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+try:
+    from harness_utils import get_harness_config
+except ImportError:
+    def get_harness_config(section, key=None, default=None):
+        if section == "model_routing" and key == "max_tokens":
+            return 4096
+        return default
+
 
 # ── Config defaults ───────────────────────────────────────────────────────────
 
@@ -185,6 +193,7 @@ class AnthropicProvider(ReviewProvider):
     def __init__(self, model: str | None = None):
         self._model = model or DEFAULT_MODEL
         self._api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens", default=4096)
 
     @property
     def name(self) -> str:
@@ -210,7 +219,7 @@ class AnthropicProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": self._max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user_content}],
             }
@@ -253,7 +262,7 @@ class AnthropicProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": self._max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user_content}],
             }
@@ -302,6 +311,7 @@ class OpenAIProvider(ReviewProvider):
         self._base_url = os.environ.get(
             "OPENAI_BASE_URL", "https://api.openai.com/v1"
         ).rstrip("/")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens", default=4096)
 
     @property
     def name(self) -> str:
@@ -321,7 +331,7 @@ class OpenAIProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": self._max_tokens,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -362,7 +372,7 @@ class OpenAIProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": self._max_tokens,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -413,6 +423,7 @@ class OllamaProvider(ReviewProvider):
         self._base_url = os.environ.get(
             "OLLAMA_BASE_URL", "http://localhost:11434"
         ).rstrip("/")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens", default=4096)
 
     @property
     def name(self) -> str:
@@ -439,7 +450,7 @@ class OllamaProvider(ReviewProvider):
                 "prompt": user_content,
                 "format": "json",
                 "stream": False,
-                "options": {"num_predict": 1024},
+                "options": {"num_predict": self._max_tokens},
             }
         ).encode("utf-8")
 
@@ -473,7 +484,7 @@ class OllamaProvider(ReviewProvider):
                 "prompt": user_content,
                 "format": "json",
                 "stream": False,
-                "options": {"num_predict": 1024},
+                "options": {"num_predict": self._max_tokens},
             }
         ).encode("utf-8")
 
