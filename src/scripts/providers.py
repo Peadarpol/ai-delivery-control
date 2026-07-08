@@ -76,8 +76,38 @@ def call_api_with_retry(
 
 def _strip_json_fences(raw: str) -> str:
     """Strip markdown code fences if the model wraps JSON in them."""
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
+    # First, try to find a json fence block using DOTALL
+    import re
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", raw, re.DOTALL)
+    if match:
+        return match.group(1)
+        
+    # If no fences, fallback to extracting the outermost {} or []
+    first_brace = raw.find('{')
+    first_bracket = raw.find('[')
+    
+    first_idx = -1
+    if first_brace != -1 and first_bracket != -1:
+        first_idx = min(first_brace, first_bracket)
+    elif first_brace != -1:
+        first_idx = first_brace
+    elif first_bracket != -1:
+        first_idx = first_bracket
+        
+    last_brace = raw.rfind('}')
+    last_bracket = raw.rfind(']')
+    
+    last_idx = -1
+    if last_brace != -1 and last_bracket != -1:
+        last_idx = max(last_brace, last_bracket)
+    elif last_brace != -1:
+        last_idx = last_brace
+    elif last_bracket != -1:
+        last_idx = last_bracket
+        
+    if first_idx != -1 and last_idx != -1 and first_idx < last_idx:
+        return raw[first_idx:last_idx+1]
+        
     return raw
 
 
