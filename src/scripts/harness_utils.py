@@ -183,7 +183,7 @@ def _safe_git_env() -> dict:
     return {k: v for k, v in os.environ.items()
             if k in allowed or k.startswith("GIT_")}
 
-_CONFIG_CACHE = None
+_CONFIG_CACHE = {}
 
 DEFAULTS = {
     "model_routing": {
@@ -222,14 +222,21 @@ DEFAULTS = {
 }
 
 def _parse_yaml_val(val: str) -> Any:
-    if val == "null" or val == "~": return None
-    if val == "true": return True
-    if val == "false": return False
-    if val == "[]": return []
-    if val == "{}": return {}
+    if val == "null" or val == "~":
+        return None
+    if val == "true":
+        return True
+    if val == "false":
+        return False
+    if val == "[]":
+        return []
+    if val == "{}":
+        return {}
     try:
-        if "." in val: return float(val)
-        else: return int(val)
+        if "." in val:
+            return float(val)
+        else:
+            return int(val)
     except ValueError:
         pass
     return val
@@ -265,11 +272,8 @@ def _fallback_yaml_parse(content: str) -> dict:
             # list item support
             val = stripped[1:].strip().split("#", 1)[0].strip("'\"")
             if val:
-                val = _parse_yaml_val(val)
-                # If it's a list under a key, we need to handle it properly,
-                # but for simple sections, if there's no key, we might need a list.
-                # Just skip complex lists for fallback parser to keep it simple.
-                pass
+                import logging
+                logging.warning("harness_utils._fallback_yaml_parse: list item '%s' dropped. Use PyYAML for list support.", val)
                 
     return result
 
@@ -291,17 +295,20 @@ def load_yaml_with_fallback(path: Path | str) -> dict:
 def load_harness_config(config_path: Path | str | None = None, force_reload: bool = False) -> dict:
     """Load the harness config.yaml into a cached dict."""
     global _CONFIG_CACHE
-    if _CONFIG_CACHE is not None and not force_reload:
-        return _CONFIG_CACHE
-        
+    
     if config_path is None:
         # Find project root
         script_dir = Path(__file__).resolve().parent
         project_root = script_dir.parent.parent
         config_path = project_root / ".agent" / "config.yaml"
         
-    _CONFIG_CACHE = load_yaml_with_fallback(config_path)
-    return _CONFIG_CACHE
+    path_key = str(config_path)
+    
+    if not force_reload and path_key in _CONFIG_CACHE:
+        return _CONFIG_CACHE[path_key]
+        
+    _CONFIG_CACHE[path_key] = load_yaml_with_fallback(config_path)
+    return _CONFIG_CACHE[path_key]
 
 def get_harness_config(section: str, key: str | None = None, default: Any = None, config_path: Path | str | None = None) -> Any:
     """
@@ -314,7 +321,9 @@ def get_harness_config(section: str, key: str | None = None, default: Any = None
     """
     config = load_harness_config(config_path)
     
-    val = None
+    _MISSING = object()
+    val = _MISSING
+    
     if key is None:
         if section in config:
             val = config[section]
@@ -322,7 +331,7 @@ def get_harness_config(section: str, key: str | None = None, default: Any = None
         if section in config and isinstance(config[section], dict) and key in config[section]:
             val = config[section][key]
             
-    if val is not None:
+    if val is not _MISSING:
         return val
         
     # Check DEFAULTS table

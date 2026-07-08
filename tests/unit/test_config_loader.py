@@ -21,6 +21,7 @@ def test_config_loader_drift_assertions():
     # Load template content
     content = template_path.read_text(encoding="utf-8")
     
+    pytest.importorskip('yaml')
     import yaml
     template_dict = yaml.safe_load(content)
     
@@ -68,3 +69,21 @@ traceability:
     
     # 4. None if not provided
     assert get_harness_config("traceability", "not_exist", config_path=config_file) is None
+
+def test_get_harness_config_falsy_values(tmp_path):
+    """
+    Test that falsy config values (0, False, empty string) are correctly returned
+    and do not fall through to defaults. (Regression test for FID-1)
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text('''
+model_routing:
+  max_tokens: 0
+memory:
+  retention_days: false
+  other_val: ""
+    ''', encoding="utf-8")
+    
+    assert get_harness_config("model_routing", "max_tokens", config_path=config_file) == 0
+    assert get_harness_config("memory", "retention_days", config_path=config_file) is False
+    assert get_harness_config("memory", "other_val", config_path=config_file) == ""
