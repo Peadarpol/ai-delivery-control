@@ -182,3 +182,146 @@ def _safe_git_env() -> dict:
     }
     return {k: v for k, v in os.environ.items()
             if k in allowed or k.startswith("GIT_")}
+
+_CONFIG_CACHE = None
+
+DEFAULTS = {
+    "memory": {
+        "retention": {
+            "session_ledger_retention_days": 90,
+            "harness_events_retention_days": 365,
+            "review_log_retention_days": 90,
+            "dream_proposals_reviewed_retention_days": 365,
+        }
+    },
+    "traceability": {
+        "specs_path": "docs/planning/specs/",
+    },
+    "spec_gate": {
+        "specs_path": "docs/planning/specs/",
+    },
+    "acceptance_gate": {
+        "base_branch": "main",
+        "migration_paths": ["src/backend/db/migrations/"],
+    },
+    "architecture_checks": {
+        "adr_capability_mappings": {},
+    },
+    "outer_loop": {
+        "mode": "incremental",
+    }
+}
+
+def _parse_yaml_val(val: str) -> Any:
+    if val == "null" or val == "~": return None
+    if val == "true": return True
+    if val == "false": return False
+    if val == "[]": return []
+    if val == "{}": return {}
+    try:
+        if "." in val: return float(val)
+        else: return int(val)
+    except ValueError:
+        pass
+    return val
+
+def _fallback_yaml_parse(content: str) -> dict:
+    """Indentation-aware fallback YAML parser."""
+    result = {}
+    current_section = None
+    
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+            
+        indent = len(line) - len(line.lstrip())
+        
+        if ":" in stripped:
+            key_part, val_part = stripped.split(":", 1)
+            val_part = val_part.split("#", 1)[0].strip()
+            key = key_part.strip().strip("'\"")
+            
+            if indent == 0:
+                if not val_part:
+                    current_section = key
+                    result[current_section] = {}
+                else:
+                    current_section = None
+                    result[key] = _parse_yaml_val(val_part.strip("'\""))
+            elif indent > 0 and current_section is not None:
+                if val_part:
+                    result[current_section][key] = _parse_yaml_val(val_part.strip("'\""))
+        elif stripped.startswith("-") and current_section is not None:
+            # list item support
+            val = stripped[1:].strip().split("#", 1)[0].strip("'\"")
+            if val:
+                val = _parse_yaml_val(val)
+                # If it's a list under a key, we need to handle it properly,
+                # but for simple sections, if there's no key, we might need a list.
+                # Just skip complex lists for fallback parser to keep it simple.
+                pass
+                
+    return result
+
+def load_yaml_with_fallback(path: Path | str) -> dict:
+    """Load YAML file using pyyaml if available, else fallback."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    try:
+        content = path.read_text(encoding="utf-8")
+        try:
+            import yaml
+            return yaml.safe_load(content) or {}
+        except ImportError:
+            return _fallback_yaml_parse(content)
+    except Exception:
+        return {}
+
+def load_harness_config(config_path: Path | str | None = None, force_reload: bool = False) -> dict:
+    """Load the harness config.yaml into a cached dict."""
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE is not None and not force_reload:
+        return _CONFIG_CACHE
+        
+    if config_path is None:
+        # Find project root
+        script_dir = Path(__file__).resolve().parent
+        project_root = script_dir.parent.parent
+        config_path = project_root / ".agent" / "config.yaml"
+        
+    _CONFIG_CACHE = load_yaml_with_fallback(config_path)
+    return _CONFIG_CACHE
+
+def get_harness_config(section: str, key: str | None = None, default: Any = None, config_path: Path | str | None = None) -> Any:
+    """
+    Get a value from the harness config.
+    Resolution order:
+      1. Config value from .agent/config.yaml
+      2. Central DEFAULTS table (if known)
+      3. Explicit default= argument
+      4. None
+    """
+    config = load_harness_config(config_path)
+    
+    val = None
+    if key is None:
+        if section in config:
+            val = config[section]
+    else:
+        if section in config and isinstance(config[section], dict) and key in config[section]:
+            val = config[section][key]
+            
+    if val is not None:
+        return val
+        
+    # Check DEFAULTS table
+    if key is None:
+        if section in DEFAULTS:
+            return DEFAULTS.get(section, default)
+    else:
+        if section in DEFAULTS and key in DEFAULTS[section]:
+            return DEFAULTS[section].get(key, default)
+            
+    return default

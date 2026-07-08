@@ -168,3 +168,53 @@ def test_agents_md_section_4_uses_hscg_labels():
         "AGENTS.md §4 does not appear to contain H/S/C/G series prohibition labels. "
         "Expected rows like '| H-01 |', '| C-04 |' in the prohibition tables."
     )
+
+def test_no_explicit_default_for_known_config_keys():
+    """
+    T1-E-04: Ensure no call site passes a default= argument for a key that exists 
+    in the DEFAULTS table in harness_utils.py. The central table should be the only
+    source of defaults for known keys.
+    """
+    import sys
+    import re
+    scripts_path = REPO_ROOT / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
+        
+    try:
+        from harness_utils import DEFAULTS
+    except ImportError:
+        # If harness_utils doesn't exist or load yet, skip
+        return
+        
+    known_keys = set()
+    for section_dict in DEFAULTS.values():
+        if isinstance(section_dict, dict):
+            known_keys.update(section_dict.keys())
+            
+    # Regex to find get_harness_config calls with default= argument
+    # We will look for: get_harness_config(.*default=.*)
+    # Then check if the key is in known_keys.
+    pattern = re.compile(r'get_harness_config\s*\([^)]*[\'"]([a-zA-Z0-9_]+)[\'"][^)]*default\s*=')
+    
+    violations = []
+    
+    # Check all python files in src/scripts and .agent/scripts
+    search_dirs = [REPO_ROOT / "src" / "scripts", REPO_ROOT / ".agent" / "scripts"]
+    for d in search_dirs:
+        if not d.exists():
+            continue
+        for py_file in d.glob("*.py"):
+            content = py_file.read_text(encoding="utf-8")
+            for i, line in enumerate(content.splitlines(), 1):
+                match = pattern.search(line)
+                if match:
+                    key = match.group(1)
+                    if key in known_keys:
+                        violations.append(f"{py_file.name}:{i} passes default= for known key '{key}'")
+                        
+    assert not violations, (
+        "Call sites are passing explicit default= for keys that exist in the central DEFAULTS table.\n"
+        "Remove the default= argument and let harness_utils.py provide it:\n  " + 
+        "\n  ".join(violations)
+    )
