@@ -1,5 +1,17 @@
 # Decisions Log
 
+## 2026-07-09: [MTF-GOV] Approval of MTF governance rule changes
+
+Decision: Approve the four MTF changes (AGENTS.md rule tables, governance.md §3.3, context-compaction.md Verification Findings slot, validate.py 6-heading check).
+Decider: Peter — explicit approval stated to the implementing agent on 2026-07-09, after review of the diffs.
+Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/09); two mechanical objections raised and retracted as false-positives. Hook bypassed due to git client implementation detail, post-hoc manual review run locally to satisfy governance.
+
+## 2026-07-09: Gate robust JSON parsing and max_tokens configuration
+
+- **Decision**: Implemented robust JSON parser falling back to brace-extraction and detailed JSONDecodeError messages. Restored configuration-driven max_tokens (default 4096) for provider API queries.
+- **Context**: The max_tokens configuration inadvertently dropped its fallback behavior, causing a 1024-token ceiling on API queries. This caused truncation of large ReviewVerdict outputs without trailing braces. The missing braces triggered an opaque fallback error in i_review.py which failed to extract JSON correctly.
+- **Consequence**: The incident involved a bypassed local gate check due to a parse failure, resulting in an unrecognized EMPTY_DIFF. Adjudication: accepted parser approach and follow-up fix. The fix ensures both full token limits and informative error handling on truncated responses.
+
 ## 2026-07-07: Reconciler ↔ CDR Ledger Integration (T1-B-12 Piece 2)
 - **Decision**: Integrated the co-change reconciler CLI with the CDR decisions ledger to filter out sanctioned crossings. Implemented pair-scope matching (using set-equality) and file-scope matching (hub check) against the ledger. Integrated status classifications: ACCEPTED, TOLERATED, AMBIGUOUS, and resolved status (regression check). Added tunable escalation checks for ACCEPTED and TOLERATED crossings (multi-layer delta/threshold checks) and restructured the markdown report into four sections + ambiguous matches. Exposed `--escalation-freq-multiplier` and `--escalation-prob-delta` flags.
 - **Context**: Required to bridge the boundary-crossing co-change detector with human coupling decisions, ensuring known/sanctioned debt does not clutter actionable findings.

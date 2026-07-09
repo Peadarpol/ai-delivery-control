@@ -144,7 +144,8 @@ outer_loop:
     msg_file = mock_trace_env / ".git" / "COMMIT_EDITMSG"
     msg_file.write_text("--no-trace Trivial typo fix in README documentation", encoding="utf-8")
     
-    with patch("subprocess.run") as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]):
+    with patch("subprocess.run") as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]), patch("check_traceability.get_config_options") as mock_get_config:
+        mock_get_config.return_value = (mock_trace_env / "docs" / "planning" / "specs", "contractual")
         mock_run.return_value.stdout = "src/main.py\n"
         with pytest.raises(SystemExit) as excinfo:
             check_traceability.main()
