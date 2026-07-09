@@ -74,13 +74,25 @@ def call_api_with_retry(
     raise last_error  # type: ignore[misc]
 
 
-def _strip_json_fences(raw: str) -> str:
-    """Strip markdown code fences and extraneous text if the model wraps JSON in them."""
+def _parse_json_response(raw: str) -> Dict[str, Any]:
+    """Parse JSON response, falling back to brace extraction, and providing detailed errors."""
+    # Try parsing the raw response first just in case
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+        
     first_brace = raw.find('{')
     last_brace = raw.rfind('}')
-    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
-        return raw[first_brace:last_brace+1]
-    return raw
+    
+    if first_brace != -1 and last_brace != -1 and first_brace <= last_brace:
+        extracted = raw[first_brace:last_brace+1]
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError as e:
+            raise json.JSONDecodeError(f"Extractable JSON parse failed: {e}. Raw response: {raw}", e.doc, e.pos) from e
+    
+    raise json.JSONDecodeError(f"Extractable JSON not found (no braces). Provider returned an error message or non-JSON. Raw response: {raw}", raw, 0)
 
 
 # ── Abstract Base ─────────────────────────────────────────────────────────────
@@ -118,7 +130,7 @@ class ReviewProvider(ABC):
         ...
 
     @abstractmethod
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         """Send a completion request and return the raw text response from the LLM.
 
         This method must also calculate and update self.last_token_usage.
@@ -129,7 +141,7 @@ class ReviewProvider(ABC):
         self,
         system_prompt: str,
         user_prompt: str,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         json_mode: bool = False,
     ) -> tuple[str, int, int]:
         """Call LLM and return (response_text, input_tokens, output_tokens) to support check_spec.py.
@@ -139,7 +151,7 @@ class ReviewProvider(ABC):
         raw_completion, Anthropic relies on system_prompt instructions) and this flag is
         currently a no-op. Do not assume passing json_mode=False changes behavior.
         """
-        response = self.raw_completion(system_prompt, user_prompt)
+        response = self.raw_completion(system_prompt, user_prompt, max_tokens=max_tokens)
         usage = self.last_token_usage
         return (
             response,
@@ -248,10 +260,9 @@ class AnthropicProvider(ReviewProvider):
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         }
         raw = body["content"][0]["text"].strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        return _parse_json_response(raw)
 
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         if not self._api_key:
             raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
 
@@ -264,7 +275,7 @@ class AnthropicProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": self._max_tokens,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user_content}],
             }
@@ -364,10 +375,9 @@ class OpenAIProvider(ReviewProvider):
             "cache_read_input_tokens": 0,
         }
         raw = body["choices"][0]["message"]["content"].strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        return _parse_json_response(raw)
 
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY environment variable not set")
 
@@ -475,10 +485,9 @@ class OllamaProvider(ReviewProvider):
             "cache_read_input_tokens": 0,
         }
         raw = body.get("response", "{}").strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        return _parse_json_response(raw)
 
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         payload = json.dumps(
             {
                 "model": self._model,

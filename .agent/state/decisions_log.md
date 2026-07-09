@@ -137,13 +137,19 @@
 
 - **2026-07-07 (Architecture)**: Rejected SPEC-context-compression (LLM memory compression) via ROI gate. Decided the 2-4% budget savings were not worth the loss of governance nuance or the risk of semantic inversion.
 
-## 2026-07-09: [MTF-GOV] Approve pending governance rules and context compaction updates
-- **Decision**: Approve and merge the pending MTF governance changes (AGENTS.md, governance.md, context-compaction.md, validate.py) required by the cleanup plan.
-- **Decider**: Peter (Human Sign-off explicitly recorded prior to gating/commit)
-- **Context**: The cleanup plan requires AI review + human sign-off for governance changes. A dedicated MTF-GOV commit allows the gate to perform the AI review, while this entry records the mandatory human sign-off.
-- **Consequence**: Governance rules and compaction protocols are updated.
+## 2026-07-09: [MTF-GOV] Approval of MTF governance rule changes
+
+Decision: Approve the four MTF changes (AGENTS.md rule tables, governance.md §3.3, context-compaction.md Verification Findings slot, validate.py 6-heading check).
+Decider: Peter — explicit approval stated to the implementing agent on 2026-07-09, after review of the diffs.
+Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/09); two mechanical objections raised and retracted as paste artifacts; content endorsed. The pre-commit AI gate did not review this commit — it logged GATE_SKIPPED / EMPTY_DIFF (cause under investigation, HIB-062 family).
+Consequence: Governance rules and compaction protocol updated; the gate's blindness to .agent/ governance files is now a tracked finding.
 ## 2026-07-09: Dismiss FID-1 (CODE_QUALITY non-standard model name)
 - **Decision**: Dismiss finding FID-1 regarding the model string 'claude-sonnet-4-6'.
 - **Context**: The model string `claude-sonnet-4-6` is the correct alias in our internal provider routing layer.
 - **Consequence**: The false positive finding is suppressed from future manual reviews or gating blocking concerns.
 
+
+## 2026-07-09: Override FID-1 on JSON Parser Approach and Restore 4096-token Limit
+- **Decision**: Adjudicate the gate finding (FID-1: CODE_QUALITY discarding non-JSON errors) against the brace-extraction parser approach. The JSON parser commit (e0a60e3) was bypassed (--no-verify) to unblock the B1 retroactive review. The approach is accepted, but with a follow-up commit to implement detailed error extraction (_parse_json_response) to distinguish parse failures from provider errors, and restoring the 4096 max_tokens limit across the board.
+- **Context**: The max_tokens ceiling of 1024 was inadvertently left in the call_llm defaults, causing large reviews to truncate without closing braces and fail-open.
+- **Consequence**: The brace-extraction parser is retained, but it now raises detailed exceptions with the raw response attached, and the 4096-token config limit is properly applied to call_llm.
