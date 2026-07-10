@@ -17,13 +17,21 @@ ENV/
 env/
 
 # Harness dynamic / user files
-.ai-review-log.jsonl
-.agent/state/
+# .ai-review-log.jsonl is committed: gate verdict history is audit evidence (2026-07-10)
 .agent/wiki/
 .agent/baseline/
 .skip-ai-reason.json
 rebuttal_pass.json
 .agent/state/gemini_session_close.json
+# Harness operational state (scratch — never commit)
+.agent/state/session.json
+.agent/state/HALT
+.agent/state/*.lock
+.agent/state/gemini_session_close.json
+.agent/state/dream_proposals/
+.agent/state/config.yaml.migration_backup
+# Deliberately committable: decisions_log.md, harness_events.jsonl (audit trail)
+
 
 # Mock testing scratch directory
 scratch/
