@@ -19,12 +19,12 @@ if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-CONFIG_PATH = Path(".agent/config.yaml")
-
 def load_limits() -> dict:
     """Load agent_limits from config.yaml, falling back to defaults."""
     # Bootstrap harness_utils
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
     from harness_utils import get_harness_config
     
     limits = {

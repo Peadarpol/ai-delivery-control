@@ -33,12 +33,14 @@ WIKI_DIR = Path(".agent/wiki")
 
 def load_domain_registry(config_path: "Path | None" = None) -> dict:
     """
-    Loads domain_registry.
-    Defaults to loading from the central config if config_path is None.
-    If the specified config_path does not exist (e.g. initial setup), returns an empty dict.
-    Delegates path loading and defaults to harness_utils.get_harness_config.
+    Loads domain_registry.json.
+    Returns empty dict if not found (silent degraded mode).
+    This logic intentionally matches other agentic utilities (like circuit_breaker)
+    that prefer safe degraded operation over fatal crashes when agent-specific config is absent.
     """
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    scripts_dir = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
     from harness_utils import get_harness_config
     
     wiki_domains = get_harness_config("wiki_domains", config_path=config_path)
@@ -115,7 +117,9 @@ def get_hash(paths: list[str]) -> str:
 def load_config() -> dict:
     import sys
     from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
     from harness_utils import get_harness_config
     return get_harness_config("model_routing")
 
@@ -365,7 +369,9 @@ def main() -> None:
     # ── Shared AST Roster compilation ───────────────────────────────────────
     # We compile the mixin-aware ORM roster strictly via static AST analysis
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+        scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+        if str(scripts_path) not in sys.path:
+            sys.path.insert(0, str(scripts_path))
         from roster_builder import build_branch_isolation_roster
         from harness_utils import get_harness_config
         bi_cfg = get_harness_config("branch_isolation", default={})

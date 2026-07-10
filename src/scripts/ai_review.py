@@ -1900,6 +1900,19 @@ def _run_review(commit_msg_file: str | None = None) -> int:
                                     f.write(gate_context.to_json(indent=2))
                         except Exception:
                             pass
+                    
+                    try:
+                        log_harness_event({
+                            "event_type": "ai_review_truncated",
+                            "severity": "ERROR",
+                            "payload": {
+                                "model": provider.model,
+                                "effective_max_tokens": 8192
+                            }
+                        })
+                    except Exception:
+                        pass
+                        
                     sys.exit(1)
             results.append(review_dict)
 

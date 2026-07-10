@@ -76,7 +76,13 @@ class SpecQualityVerdict(BaseModel):
 
 def load_config() -> dict:
     """Safely load .agent/config.yaml."""
-    from src.scripts.harness_utils import get_harness_config
+    import sys
+    from pathlib import Path
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
+    from harness_utils import get_harness_config
+    
     return {
         "specs_path": get_harness_config("spec_gate", "specs_path"),
         "budget_provider": get_harness_config("model_routing", "budget_provider"),

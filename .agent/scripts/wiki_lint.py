@@ -236,7 +236,9 @@ def check_ollama_availability(url: str = "http://localhost:11434/api/tags") -> b
 
 def load_config() -> dict:
     """Load config.yaml to get local model and base url configurations."""
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
     from harness_utils import get_harness_config
     return get_harness_config("model_routing")
 

@@ -290,11 +290,12 @@ def _fallback_yaml_parse(content: str) -> dict:
                 
     return result
 
-def load_yaml_with_fallback(path: Path | str) -> dict:
+def load_yaml_with_fallback(path: Path | str, strict: bool = False) -> dict:
     """Load YAML file using pyyaml if available, else fallback."""
     path = Path(path)
     if not path.exists():
         return {}
+    
     try:
         content = path.read_text(encoding="utf-8")
         try:
@@ -302,10 +303,16 @@ def load_yaml_with_fallback(path: Path | str) -> dict:
             return yaml.safe_load(content) or {}
         except ImportError:
             return _fallback_yaml_parse(content)
+        except Exception:
+            if strict:
+                raise
+            return {}
     except Exception:
+        if strict:
+            raise
         return {}
 
-def load_harness_config(config_path: Path | str | None = None, force_reload: bool = False) -> dict:
+def load_harness_config(config_path: Path | str | None = None, force_reload: bool = False, strict: bool = False) -> dict:
     """Load the harness config.yaml into a cached dict."""
     global _CONFIG_CACHE
     
@@ -317,13 +324,15 @@ def load_harness_config(config_path: Path | str | None = None, force_reload: boo
         
     path_key = str(config_path)
     
-    if not force_reload and path_key in _CONFIG_CACHE:
+    if not force_reload and not strict and path_key in _CONFIG_CACHE:
         return _CONFIG_CACHE[path_key]
         
-    _CONFIG_CACHE[path_key] = load_yaml_with_fallback(config_path)
-    return _CONFIG_CACHE[path_key]
+    loaded = load_yaml_with_fallback(config_path, strict=strict)
+    if not strict:
+        _CONFIG_CACHE[path_key] = loaded
+    return loaded
 
-def get_harness_config(section: str, key: str | None = None, default: Any = None, config_path: Path | str | None = None) -> Any:
+def get_harness_config(section: str, key: str | None = None, default: Any = None, config_path: Path | str | None = None, strict: bool = False) -> Any:
     """
     Get a value from the harness config.
     Resolution order:
@@ -332,7 +341,7 @@ def get_harness_config(section: str, key: str | None = None, default: Any = None
       3. Explicit default= argument
       4. None
     """
-    config = load_harness_config(config_path)
+    config = load_harness_config(config_path, strict=strict)
     
     _MISSING = object()
     val = _MISSING

@@ -131,7 +131,9 @@ def main():
 
 
     # Bootstrap harness_utils
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
     from harness_utils import get_harness_config
 
     config_path = target_root / ".agent" / "config.yaml"
@@ -139,7 +141,20 @@ def main():
         print("no architecture.layers declared; nothing to reconcile")
         sys.exit(0)
         
-    layers_list = get_harness_config("architecture", "layers", default=[], config_path=config_path)
+    try:
+        layers_list = get_harness_config("architecture", "layers", default=[], config_path=config_path, strict=True)
+    except Exception as e:
+        print(f"⚠️  [RECONCILER] Config parse error: {e}", file=sys.stderr)
+        try:
+            from harness_utils import log_harness_event
+            log_harness_event({
+                "event_type": "config_parse_error",
+                "severity": "ERROR",
+                "payload": {"file": str(config_path), "error": str(e)}
+            })
+        except Exception:
+            pass
+        sys.exit(1)
     
     if not layers_list or not isinstance(layers_list, list):
         print("no architecture.layers declared; nothing to reconcile")
