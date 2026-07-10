@@ -130,21 +130,17 @@ def main():
             sys.exit(1)
 
 
-    # Load boundaries
+    # Bootstrap harness_utils
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    from harness_utils import get_harness_config
+
     config_path = target_root / ".agent" / "config.yaml"
     if not config_path.exists():
         print("no architecture.layers declared; nothing to reconcile")
         sys.exit(0)
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f) or {}
-    except Exception as e:
-        print(f"Error reading configuration: {e}")
-        sys.exit(0)
-
-    architecture = config.get("architecture", {})
-    layers_list = architecture.get("layers", []) if isinstance(architecture, dict) else []
+        
+    layers_list = get_harness_config("architecture", "layers", default=[], config_path=config_path)
+    
     if not layers_list or not isinstance(layers_list, list):
         print("no architecture.layers declared; nothing to reconcile")
         sys.exit(0)

@@ -32,31 +32,16 @@ STATE_FILE = Path(".agent/state/wiki_compile_state.json")
 WIKI_DIR = Path(".agent/wiki")
 
 def load_domain_registry(config_path: "Path | None" = None) -> dict:
-    """Load the wiki domain registry from .agent/config.yaml::wiki_domains.
-
-    Each entry maps a domain name to a list of ADR source file paths.
-    The output path is derived automatically as .agent/wiki/{domain}.md.
-
-    Domains whose source files are ALL missing are silently skipped — no
-    [FILE NOT FOUND] pages are compiled for absent ADRs. This makes the
-    framework safe to install on projects that have not yet written their ADRs.
-
-    Returns an empty dict when:
-    - config.yaml is absent
-    - the wiki_domains section is missing or empty
-    - all configured domains have no existing source files
     """
-    resolved_config = Path(config_path) if config_path else CONFIG_PATH
-    if not resolved_config.exists():
-        return {}
-
-    try:
-        with open(resolved_config, encoding="utf-8") as f:
-            raw = yaml.safe_load(f) or {}
-    except Exception:
-        return {}
-
-    wiki_domains = raw.get("wiki_domains") or {}
+    Loads domain_registry.
+    Defaults to loading from the central config if config_path is None.
+    If the specified config_path does not exist (e.g. initial setup), returns an empty dict.
+    Delegates path loading and defaults to harness_utils.get_harness_config.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    from harness_utils import get_harness_config
+    
+    wiki_domains = get_harness_config("wiki_domains", config_path=config_path)
     if not wiki_domains:
         return {}
 
@@ -128,14 +113,11 @@ def get_hash(paths: list[str]) -> str:
 
 
 def load_config() -> dict:
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-            return config.get("model_routing", {})
-        except Exception:
-            return {}
-    return {}
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+    from harness_utils import get_harness_config
+    return get_harness_config("model_routing")
 
 
 def load_state() -> dict:
@@ -385,19 +367,10 @@ def main() -> None:
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
         from roster_builder import build_branch_isolation_roster
-        config_path = Path(".agent/config.yaml")
-        patterns = ["src/**/models.py", "src/**/model.py"]
-        base_classes = ["BranchAwareMixin", "BranchIsolatedMixin"]
-        if config_path.exists():
-            try:
-                import yaml
-                with open(config_path, encoding="utf-8") as f:
-                    cfg = yaml.safe_load(f) or {}
-                bi_cfg = cfg.get("branch_isolation", {})
-                patterns = bi_cfg.get("model_file_patterns", patterns)
-                base_classes = bi_cfg.get("base_classes", base_classes)
-            except Exception:
-                pass
+        from harness_utils import get_harness_config
+        bi_cfg = get_harness_config("branch_isolation", default={})
+        patterns = bi_cfg.get("model_file_patterns", ["src/**/models.py", "src/**/model.py"])
+        base_classes = bi_cfg.get("base_classes", ["BranchAwareMixin", "BranchIsolatedMixin"])
         
         roster = build_branch_isolation_roster(patterns, base_classes, Path.cwd())
         roster_path = Path(".agent/wiki/branch_isolation_roster.json")

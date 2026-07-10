@@ -1805,3 +1805,75 @@ class TestCapabilityCalibrationIntegration:
             assert any("treated as WARN-only" in note for note in called_verdict.route_decision.policy_notes)
             assert any("treated as FAIL-escalated" in note for note in called_verdict.route_decision.policy_notes)
 
+
+class TestTruncationHandling:
+    def test_truncate_then_succeed(self, ai_review, tmp_path):
+        """Test that _run_review retries exactly once with max_tokens=8192 upon TruncationError."""
+        from unittest.mock import MagicMock, patch, ANY
+        import providers
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        # First call raises TruncationError, second succeeds
+        mock_provider.review.side_effect = [
+            providers.TruncationError('Truncated'),
+            {
+                'verdict': 'PASS',
+                'intent_alignment': 'Aligned.',
+                'issues': [],
+                'summary': 'Fixed.'
+            }
+        ]
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('ai_review.render_review'):
+
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+            assert mock_provider.review.call_count == 2
+            # Second call should have max_tokens=8192
+            mock_provider.review.assert_called_with(ai_review.SYSTEM_PROMPT, ANY, max_tokens=8192)
+            mock_persist.assert_called_once()
+
+    def test_truncate_then_truncate(self, ai_review, tmp_path):
+        """Test that truncation on the retry fails closed and logs TRUNCATED."""
+        from unittest.mock import MagicMock, patch, ANY
+        import providers
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        mock_provider.review.side_effect = [providers.TruncationError('Truncated'), providers.TruncationError('Truncated again')]
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('ai_review.render_review'):
+
+            import pytest
+            with pytest.raises(SystemExit) as exc_info:
+                ai_review._run_review()
+            assert exc_info.value.code == 1
+            mock_persist.assert_called_once()
+            # Check that effective_max_tokens was logged as 8192 and verdict is TRUNCATED
+            call_kwargs = mock_persist.call_args.kwargs
+            assert call_kwargs.get('fail_open_reason') == 'TRUNCATED'
+            assert call_kwargs.get('review', {}).get('verdict') == 'TRUNCATED'
+            assert call_kwargs.get('effective_max_tokens') == 8192

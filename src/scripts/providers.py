@@ -74,7 +74,12 @@ def call_api_with_retry(
     raise last_error  # type: ignore[misc]
 
 
-def _parse_json_response(raw: str) -> Dict[str, Any]:
+class TruncationError(Exception):
+    """Raised when the LLM truncates the response due to token limits."""
+    pass
+
+
+def _parse_json_response(raw: str, stop_reason: str | None = None) -> Dict[str, Any]:
     """Parse JSON response, falling back to brace extraction, and providing detailed errors."""
     # Try parsing the raw response first just in case
     try:
@@ -90,8 +95,13 @@ def _parse_json_response(raw: str) -> Dict[str, Any]:
         try:
             return json.loads(extracted)
         except json.JSONDecodeError as e:
+            if stop_reason in ("max_tokens", "length"):
+                raise TruncationError(f"Provider truncated response due to max_tokens limit. Raw response: {raw}") from e
             raise json.JSONDecodeError(f"Extractable JSON parse failed: {e}. Raw response: {raw}", e.doc, e.pos) from e
     
+    if stop_reason in ("max_tokens", "length"):
+        raise TruncationError(f"Provider truncated response due to max_tokens limit. Raw response: {raw}")
+
     raise json.JSONDecodeError(f"Extractable JSON not found (no braces). Provider returned an error message or non-JSON. Raw response: {raw}", raw, 0)
 
 
@@ -111,7 +121,7 @@ class ReviewProvider(ABC):
     """
 
     @abstractmethod
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         """Send a review request and return parsed JSON response.
 
         Args:
@@ -220,7 +230,7 @@ class AnthropicProvider(ReviewProvider):
     def is_available(self) -> bool:
         return bool(self._api_key)
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         if not self._api_key:
             raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
 
@@ -233,9 +243,14 @@ class AnthropicProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": self._max_tokens or 4096,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "system": system,
-                "messages": [{"role": "user", "content": user_content}],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": user_content,
+                    }
+                ],
             }
         ).encode("utf-8")
 
@@ -260,7 +275,8 @@ class AnthropicProvider(ReviewProvider):
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         }
         raw = body["content"][0]["text"].strip()
-        return _parse_json_response(raw)
+        stop_reason = body.get("stop_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
 
     def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         if not self._api_key:
@@ -337,14 +353,14 @@ class OpenAIProvider(ReviewProvider):
     def is_available(self) -> bool:
         return bool(self._api_key)
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY environment variable not set")
 
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": self._max_tokens or 4096,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -375,7 +391,8 @@ class OpenAIProvider(ReviewProvider):
             "cache_read_input_tokens": 0,
         }
         raw = body["choices"][0]["message"]["content"].strip()
-        return _parse_json_response(raw)
+        stop_reason = body["choices"][0].get("finish_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
 
     def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         if not self._api_key:
@@ -454,7 +471,7 @@ class OllamaProvider(ReviewProvider):
         except Exception:
             return False
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         payload = json.dumps(
             {
                 "model": self._model,
@@ -462,7 +479,7 @@ class OllamaProvider(ReviewProvider):
                 "prompt": user_content,
                 "format": "json",
                 "stream": False,
-                "options": {"num_predict": self._max_tokens or 4096},
+                "options": {"num_predict": max_tokens if max_tokens is not None else (self._max_tokens or 4096)},
             }
         ).encode("utf-8")
 
@@ -485,7 +502,8 @@ class OllamaProvider(ReviewProvider):
             "cache_read_input_tokens": 0,
         }
         raw = body.get("response", "{}").strip()
-        return _parse_json_response(raw)
+        stop_reason = body.get("done_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
 
     def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         payload = json.dumps(

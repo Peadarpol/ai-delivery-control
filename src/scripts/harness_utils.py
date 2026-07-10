@@ -188,6 +188,19 @@ _CONFIG_CACHE = {}
 DEFAULTS = {
     "model_routing": {
         "max_tokens": 4096,
+        "budget_provider": "ollama",
+        "budget_model": "gemma4",
+        "budget_base_url": "http://localhost:11434",
+    },
+    "agent_limits": {
+        "max_files_per_commit": 15,
+        "max_test_retries": 3,
+        "warn_session_minutes": 120,
+        "max_session_minutes": 240,
+    },
+    "wiki_domains": {},
+    "spec_gate": {
+        "specs_path": "docs/planning/specs/",
     },
     "memory": {
         "retention": {
