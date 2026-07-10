@@ -98,6 +98,7 @@ working as intended.
   `diff_hash` and uses naive local timestamps; `GATE_SKIPPED` writer uses UTC-Z (T1-E-03 family).
 - `--no-trace` habit erosion: a governed escape valve used on every commit for a week; use
   `Refs:` when a work item exists.
+- 2026-07-10 (later): tracking live logs proved incompatible with pre-commit — every commit blocked. Policy reversed with evidence: untracked live logs + committed snapshots (HIB-063). The durable-evidence goal stands; the mechanism was corrected.
 - RED-baseline enrichment (queued): the three specimens from §3 into `governance.md` §3.3.
 - MTF cross-cutting follow-ups (queued): clinerules `03-prohibitions.md`, `customisation.md`
   §4.2/4.3, checksum regeneration.

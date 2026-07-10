@@ -169,3 +169,6 @@ Consequence: Governance rules and compaction protocol updated; the gate's blindn
 ## 2026-07-10 (Session Close)
 - **Config Defaults Policy**: Established project-specific rule in eview_context_project.md that call sites must not pass default= for keys existing in the central DEFAULTS registry (harness_utils.py). Absent fallbacks are by design, relying on the registry.
 - **Fixture Hygiene**: Ensured test fixtures use 	mp_path and cleaned up legacy directories (	emp_test_git_repo, 	ests/test_reconciler_repo, 	ests/.agent).
+
+* **Ratification**: aa40ad2 committed via --no-verify due to verdict-log staging loop (gate writes .ai-review-log.jsonl during the commit that stages it) and traceability regex gap. Contents reviewed conversationally pre-commit. Ratified by Peter, 2026-07-10, quote: [I accept the bypass as a justified exception].
+* **Record correction**: 2026-07-10: correction — the 2026-07-09 claim that Refs: T1-E-04 was 'handled perfectly by the Traceability Gate' was inaccurate. The hook's regex accepts only SPEC-\d+; commit 6743f1a passed because the hook did not enforce on it, not because it recognised the reference.
