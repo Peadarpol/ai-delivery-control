@@ -28,11 +28,11 @@ def load_limits() -> dict:
     from harness_utils import get_harness_config
     
     limits = {
-        "max_files_per_commit": get_harness_config("agent_limits", "max_files_per_commit", default=15),
-        "max_test_retries": get_harness_config("agent_limits", "max_test_retries", default=3),
+        "max_files_per_commit": get_harness_config("agent_limits", "max_files_per_commit"),
+        "max_test_retries": get_harness_config("agent_limits", "max_test_retries"),
         "max_task_budget": get_harness_config("agent_limits", "max_task_budget", default=100),
-        "max_session_minutes": get_harness_config("agent_limits", "max_session_minutes", default=240),
-        "warn_session_minutes": get_harness_config("agent_limits", "warn_session_minutes", default=120),
+        "max_session_minutes": get_harness_config("agent_limits", "max_session_minutes"),
+        "warn_session_minutes": get_harness_config("agent_limits", "warn_session_minutes"),
     }
     return limits
 

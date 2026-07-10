@@ -78,8 +78,8 @@ def main():
     from harness_utils import get_harness_config
     
     framework_version = get_harness_config("framework", "version", default="UNKNOWN")
-    budget_provider = get_harness_config("model_routing", "budget_provider", default="UNKNOWN")
-    budget_base_url = get_harness_config("model_routing", "budget_base_url", default="UNKNOWN")
+    budget_provider = get_harness_config("model_routing", "budget_provider")
+    budget_base_url = get_harness_config("model_routing", "budget_base_url")
             
     print(f"Framework:  v{framework_version}")
     print(f"Budget LMM: {budget_provider} ({budget_base_url})")
