@@ -165,3 +165,7 @@ Consequence: Governance rules and compaction protocol updated; the gate's blindn
 - **Decision**: Adjudicate the gate finding (FID-1: CODE_QUALITY discarding non-JSON errors) against the brace-extraction parser approach. The JSON parser commit (e0a60e3) was bypassed (--no-verify) to unblock the B1 retroactive review. The approach is accepted, but with a follow-up commit to implement detailed error extraction (_parse_json_response) to distinguish parse failures from provider errors, and restoring the 4096 max_tokens limit across the board.
 - **Context**: The max_tokens ceiling of 1024 was inadvertently left in the call_llm defaults, causing large reviews to truncate without closing braces and fail-open.
 - **Consequence**: The brace-extraction parser is retained, but it now raises detailed exceptions with the raw response attached, and the 4096-token config limit is properly applied to call_llm.
+
+## 2026-07-10 (Session Close)
+- **Config Defaults Policy**: Established project-specific rule in eview_context_project.md that call sites must not pass default= for keys existing in the central DEFAULTS registry (harness_utils.py). Absent fallbacks are by design, relying on the registry.
+- **Fixture Hygiene**: Ensured test fixtures use 	mp_path and cleaned up legacy directories (	emp_test_git_repo, 	ests/test_reconciler_repo, 	ests/.agent).
