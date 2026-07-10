@@ -118,11 +118,11 @@ Same cross-reference problem as FM8-04.
 
 ## session.json — schema v1.0
 
-**Writer**: `init_session.py` (create and close), `check_spec.py` (token_usage increment)
-**Readers**: `check_halt.py`, `ai_review.py`, `check_spec.py`, `distill_dream.py`
+**Writers**: `init_session.py`, `check_spec.py`
+**Readers**: `session_health.py`, `init_session.py`, `governance_check.py`, `check_spec.py`, `check_halt.py`, `audit_logger.py`
 
-Fields: `session_id` (UUID v4), `start_time` (ISO 8601 UTC), `last_activity` (ISO 8601 UTC),
-`status` (`"ACTIVE"` | `"COMPLETED"`), `agent` (string), `task_magnitude`
+Fields: `schema_version` (`"1.0"`), `session_id` (UUID v4), `start_time` (ISO 8601 UTC), `last_activity` (ISO 8601 UTC),
+`status` (`"ACTIVE"` | `"COMPLETED"`), `agent` (string), `model` (string), `cost_tier` (`"frontier"` | `"standard"` | `"local"` | `"unknown"`), `task_magnitude`
 (`"micro"` | `"standard"` | `"major"`), `task_magnitude_source` (`"auto"` | `"agent_override"`),
 `token_usage` (dict with 8 integer fields), `outcome_override` (optional string),
 `outcome_override_source` (optional string), `outcome_override_note` (optional string)

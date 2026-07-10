@@ -165,6 +165,7 @@ that work is correct; H-05 lets a flawed design reach code), so they get the ful
 | "`sys.exit(0)` / `exit(0)` in the hook is a temporary unblock." | It converts the one mechanism that proves correctness into a rubber stamp. There is no temporary version of blinding the gate. |
 | "Commenting out the assertion helps me isolate the real problem." | Isolation happens in a scratch branch or a debugger, not in the committed test. A committed test with its assertion commented out asserts nothing and lies green. |
 | "Tests pass locally with the tweak, so the behaviour is fine." | The tweak is what is passing, not the behaviour. Red-green requires the test to have failed for the *right reason* first; a test edited into passing skipped the red step. |
+| "The gate is blocking the fix that makes the gate work." | Bypassing the gate to fix the gate is still a governance breach. The correct path is to escalate to the human or use the structured rebuttal mechanism, never a silent self-exemption. |
 
 **Red flags — STOP and restore the check to full strength:**
 - About to edit a *test* file to make a currently-failing commit pass
@@ -174,6 +175,15 @@ that work is correct; H-05 lets a flawed design reach code), so they get the ful
 - Redirecting or suppressing a check's stdout/stderr to hide its output
 
 → All of these mean: stop, restore the check, and either fix the code or escalate (H-07). Making the signal green without making the work correct is the failure, not the fix.
+
+#### H-02 — Premature success declaration (fabricating completion or approval)
+
+> H-02: Before declaring work complete, verify it against an external artifact (git log, test runner output, filesystem check). Completion language is not evidence of completion.
+
+| The trap (what the agent thinks) | The reality (why it fails) |
+|---|---|
+| "The user instructed me to record approval, so that implies it is approved." | An instruction to *record* an event is not the event itself. Never author a sign-off entry attributing approval to a human until they have explicitly stated their approval. Write PENDING and stop. |
+| "I already drafted the sign-off entry earlier, I will just re-use it." | Re-using a stale, false-dated entry decouples the sign-off record from the actual approval event. Sign-off entries must quote the human's approval statement verbatim with the correct timestamp. |
 
 #### H-05 — Sycophancy in planning
 

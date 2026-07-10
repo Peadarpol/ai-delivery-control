@@ -1,13 +1,14 @@
 # Customisation Guide
 
-Three surfaces let you tailor the harness to your project without modifying framework files.
-All three are preserved when you re-run the installer.
+Four surfaces let you tailor the harness to your project without modifying framework files.
+All four are preserved when you re-run the installer.
 
 | Surface | File | What it controls |
 |---|---|---|
 | **Review invariants** | `src/scripts/review_context_project.md` | What the AI gate checks in your codebase |
 | **Custom skills** | `.agent/skills/your-skill/SKILL.md` | New named behaviours for your domain |
 | **Architecture rules** | `.agent/config.yaml` → `architecture:` | Layer boundaries and forbidden patterns |
+| **Model tiers** | `.agent/config.yaml` → `model_tiers:` | Keywords mapping model names to cost tiers |
 
 ---
 
@@ -231,7 +232,26 @@ Lists the base class names the architecture checker uses to identify domain aggr
 roots when verifying layering rules. Match these to the actual base classes in your
 domain layer.
 
-## 4. Prohibition Tiers
+---
+
+## 4. Configuring Model Cost Tiers
+
+The harness automatically infers the model being used via the `AGENT_MODEL` environment variable (or falls back to `.agent/config.yaml`'s `model_routing`). It then maps this string to a cost tier (`frontier`, `standard`, `local`, `unknown`) for token-usage aggregation.
+
+Because model naming conventions change rapidly (e.g., OpenAI moving from the size-suffix `gpt-4o-mini` to `GPT-5.6 Sol/Terra/Luna`), the harness relies on a keyword heuristic mapped in `.agent/config.yaml`:
+
+```yaml
+model_tiers:
+  standard: ["flash", "lite", "mini", "haiku", "luna"]
+  frontier: ["pro", "sonnet", "opus", "sol", "terra"]
+  local: ["llama", "mistral", "qwen"]
+```
+
+> **Maintenance Note**: This configuration surface must be reviewed periodically as model providers alter their naming structures. If you adopt a new local model or a new flagship model whose name doesn't include any of the existing keywords, its token usage will be misclassified as `unknown` until you add its family keyword to the appropriate tier list.
+
+---
+
+## 5. Prohibition Tiers (MTF)
 
 To keep the framework templates clean and maintainable, agent prohibitions are structured into a three-tier model:
 
@@ -258,7 +278,7 @@ You can copy and paste the following templates into your project's `.agent/AGENT
 #### Template for §4.2 — Project-Specific Rules
 
 ```markdown
-## §4.2 — Project-Specific Rules
+### 4.2 — Project-Specific Rules
 
 > These rules apply because this project uses [stack/toolchain/pattern].
 > They are not universal. Do not carry them to other projects.
@@ -292,7 +312,7 @@ You can copy and paste the following templates into your project's `.agent/AGENT
 #### Template for §4.3 — Pattern-Conditional Rules
 
 ```markdown
-## §4.3 — Pattern-Conditional Rules
+### 4.3 — Pattern-Conditional Rules
 
 > These rules apply ONLY because this project uses the patterns listed below.
 > Do not apply these rules to projects that do not use these patterns.

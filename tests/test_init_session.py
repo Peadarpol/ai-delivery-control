@@ -293,3 +293,89 @@ class TestInitSessionGeminiClose:
             assert "Gemini close session_id mismatch" in captured.out
             assert close_file.exists()
 
+class TestInitSessionModelTiers:
+    def test_gpt_4o_mini_is_standard(self, clean_state):
+        """Verify gpt-4o-mini matches the 'mini' keyword and maps to standard."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("os.environ.get", side_effect=lambda k, d=None: "gpt-4o-mini-2024-07-18" if k == "AGENT_MODEL" else d):
+             
+            init_session.initialize_session("Harness")
+            
+            with open(session_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            assert data.get("cost_tier") == "standard"
+
+    def test_gpt_5_6_luna_is_standard(self, clean_state):
+        """Verify gpt-5.6-luna matches the 'luna' keyword and maps to standard."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("os.environ.get", side_effect=lambda k, d=None: "gpt-5.6-luna" if k == "AGENT_MODEL" else d):
+             
+            init_session.initialize_session("Harness")
+            
+            with open(session_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            assert data.get("cost_tier") == "standard"
+
+    def test_claude_sonnet_is_frontier(self, clean_state):
+        """Verify claude-sonnet-4-6 matches the 'sonnet' keyword and maps to frontier."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("os.environ.get", side_effect=lambda k, d=None: "claude-sonnet-4-6" if k == "AGENT_MODEL" else d):
+             
+            init_session.initialize_session("Harness")
+            
+            with open(session_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            assert data.get("cost_tier") == "frontier"
+
+    def test_qwen_is_local(self, clean_state):
+        """Verify qwen models match the 'qwen' keyword and map to local."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("os.environ.get", side_effect=lambda k, d=None: "qwen2.5-coder-7b" if k == "AGENT_MODEL" else d):
+             
+            init_session.initialize_session("Harness")
+            
+            with open(session_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            assert data.get("cost_tier") == "local"
+
+    def test_overlap_guard_warning(self, clean_state, capsys):
+        """Verify that an overlapping keyword triggers a warning."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        overlapping_tiers = {
+            "standard": ["flash", "lite"],
+            "frontier": ["lite", "pro"]
+        }
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_harness_config", side_effect=lambda k, default=None: overlapping_tiers if k == "model_tiers" else ({} if k == "model_routing" else default)), \
+             patch("os.environ.get", side_effect=lambda k, d=None: "flash" if k == "AGENT_MODEL" else d):
+             
+            init_session.initialize_session("Harness")
+            
+            captured = capsys.readouterr()
+            assert "[WARNING] Model tier keyword overlap detected: 'lite' is mapped to both 'standard' and 'frontier'" in captured.out
+

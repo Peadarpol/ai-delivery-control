@@ -160,26 +160,48 @@ def main():
         print_diagnostic_card("This commit is non-trivial and does not trace back to an approved spec.")
         sys.exit(1)
         
+    docs_dir = Path("docs")
+
     # If spec matches are present, verify spec files
     for spec_id in spec_matches:
         spec_id = spec_id.upper()
-        spec_file = specs_path / f"{spec_id}.md"
-        if not spec_file.exists():
-            print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
-            sys.exit(1)
-            
-        # Parse status
-        spec_content = spec_file.read_text(encoding="utf-8")
-        status_match = re.search(r"^\s*\**Status\**\s*:\s*(APPROVED|DRAFT)", spec_content, re.IGNORECASE | re.MULTILINE)
         
-        is_approved = status_match and status_match.group(1).upper() == "APPROVED"
-        if not is_approved:
-            is_ci = os.environ.get("CI", "").lower() == "true"
-            if is_ci:
-                print_diagnostic_card(f"Referenced spec {spec_id} is not APPROVED in CI environment.")
+        if spec_id.startswith("SPEC-"):
+            spec_file = specs_path / f"{spec_id}.md"
+            if not spec_file.exists():
+                print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
                 sys.exit(1)
-            else:
-                print(f"⚠️ [TRACEABILITY] Warning: Referenced spec {spec_id} is in DRAFT status.")
+                
+            # Parse status
+            spec_content = spec_file.read_text(encoding="utf-8")
+            status_match = re.search(r"^\s*\**Status\**\s*:\s*(APPROVED|DRAFT)", spec_content, re.IGNORECASE | re.MULTILINE)
+            
+            is_approved = status_match and status_match.group(1).upper() == "APPROVED"
+            if not is_approved:
+                is_ci = os.environ.get("CI", "").lower() == "true"
+                if is_ci:
+                    print_diagnostic_card(f"Referenced spec {spec_id} is not APPROVED in CI environment.")
+                    sys.exit(1)
+                else:
+                    print(f"⚠️ [TRACEABILITY] Warning: Referenced spec {spec_id} is in DRAFT status.")
+        else:
+            # HIB, BUG, T1 check (structural definition gating)
+            is_found = False
+            if docs_dir.exists():
+                for backlog_file in docs_dir.rglob("*.md"):
+                    content = backlog_file.read_text(encoding="utf-8", errors="ignore")
+                    for line in content.splitlines():
+                        # Require the ID to be formally defined (table row, list item (with optional checkbox), or heading)
+                        # and tolerate inline markdown emphasis (**, _, ~~, []) around the ID.
+                        if re.match(rf"^\s*(?:\|\s*|[\-\*]\s*(?:\[[ xX]\]\s*)?|#+\s*)[\*\~_\[\]\s]*{re.escape(spec_id)}\b", line, re.IGNORECASE):
+                            is_found = True
+                            break
+                    if is_found:
+                        break
+            
+            if not is_found:
+                print_diagnostic_card(f"Referenced backlog ID '{spec_id}' not found as a formal entry in docs/.")
+                sys.exit(1)
                 
     sys.exit(0)
 
