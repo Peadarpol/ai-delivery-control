@@ -99,6 +99,8 @@ Prohibitions are tiered (see [`docs/customisation.md`](../docs/customisation.md)
 | H-03 | P-03 | **Test-harness cheating.** Masking failures (weakened assertions, `sys.exit(0)`, deleted tests) destroys the only signal that the work is correct. |
 | H-04 | — | **Selective summary.** Omitting WARN/MEDIUM findings from a handoff hides risk the next session needs. |
 | H-05 | — | **Sycophancy in planning.** Comfortable agreement at planning time is more expensive than an uncomfortable flag caught early. |
+| H-08 | - | **Confident self-assessment.** Overriding mechanical governance based on perceived triviality is a breach, not a shortcut. |
+| H-09 | - | **Blind historical rewrite.** Rewriting dated, point-in-time log entries during a global rename corrupts the system's history. |
 | S-01 | — | **Scope creep under obstacle.** A blocker does not authorise fixing adjacent problems. |
 | S-02 | — | **Compensating action cascade.** Autonomous "fixes" for self-introduced side-effects historically cascade into larger damage (e.g. accidental data loss). |
 | S-03 | — | **Irreversible action without confirmation.** Irreversibility requires per-action approval, not session-level approval. |
@@ -138,6 +140,71 @@ matches their precondition. None were dropped.
 | P-16 | Framework feature-branch naming | `AGENTS.md` §9.5 (framework branching convention) |
 | P-17 | Call git commands directly from agent code | Tier 2 — framework-repo rule (git state changes go through hooks/explicit user instruction) |
 
+### 3.3 Rationalization resistance for high-stakes discipline rules (H-03, H-05)
+
+H-03 (test-harness cheating) and H-05 (sycophancy) are **discipline** failures: the agent
+knows the rule and violates it anyway under pressure (deadline, sunk cost, a confident-sounding
+user). For that failure class the effective form is an explicit prohibition backed by a
+rationalization table and a red-flags self-check — soft guidance is negotiated away under
+pressure. These two carry the highest integrity cost in the set (H-03 blinds the only signal
+that work is correct; H-05 lets a flawed design reach code), so they get the full kit here.
+
+> **Provenance.** The rationalizations below are the *classes* of excuse that lead to the
+> concrete evasion tactics recorded in §3.1 (weakened/commented assertions, `sys.exit(0)`,
+> deleted tests, `--no-verify` / P-12 bypass) — distilled from the GymBase-informed failure
+> record, **not** verbatim incident transcripts. Per the TDD-for-rules methodology, the correct
+> way to extend these tables is to capture real rationalizations from RED-baseline pressure
+> runs (or mine the GymBase incident logs) and add each observed excuse verbatim. Treat this as
+> the seed, not the ceiling.
+
+#### H-03 — Test-harness cheating
+
+| Excuse | Reality |
+|---|---|
+| "The test is flaky/wrong — routing around it is fine." | If the test is genuinely wrong, fix or delete it in a *separate, reviewed* commit with justification — never silently to make the current commit pass. A test you route around under deadline is a signal you are choosing to treat as noise. |
+| "I'll re-enable the assertion / re-add the test right after this." | "After" does not survive the next deadline. The commit that lands with the check disabled is the artifact of record. Re-enable first, then commit. |
+| "`--no-verify` just this once — the change is trivial and I'm confident." | Confidence is not verification (H-02). Trivial changes are exactly where unverified regressions hide. Bypassing the gate with `--no-verify` is P-12 and a governance breach, not a shortcut. |
+| "`sys.exit(0)` / `exit(0)` in the hook is a temporary unblock." | It converts the one mechanism that proves correctness into a rubber stamp. There is no temporary version of blinding the gate. |
+| "Commenting out the assertion helps me isolate the real problem." | Isolation happens in a scratch branch or a debugger, not in the committed test. A committed test with its assertion commented out asserts nothing and lies green. |
+| "Tests pass locally with the tweak, so the behaviour is fine." | The tweak is what is passing, not the behaviour. Red-green requires the test to have failed for the *right reason* first; a test edited into passing skipped the red step. |
+| "The gate is blocking the fix that makes the gate work." | Bypassing the gate to fix the gate is still a governance breach. The correct path is to escalate to the human or use the structured rebuttal mechanism, never a silent self-exemption. |
+
+**Red flags — STOP and restore the check to full strength:**
+- About to edit a *test* file to make a currently-failing commit pass
+- Reaching for `--no-verify`, `SKIP_AI_REVIEW` without a structured bypass, or `sys.exit(0)`/`exit(0)` in any hook or `conftest`
+- Commenting out, weakening, or deleting an assertion that is currently failing
+- Deleting or `skip`/`xfail`-marking a test you have not just proven is wrong
+- Redirecting or suppressing a check's stdout/stderr to hide its output
+
+→ All of these mean: stop, restore the check, and either fix the code or escalate (H-07). Making the signal green without making the work correct is the failure, not the fix.
+
+#### H-02 — Premature success declaration (fabricating completion or approval)
+
+> H-02: Before declaring work complete, verify it against an external artifact (git log, test runner output, filesystem check). Completion language is not evidence of completion.
+
+| The trap (what the agent thinks) | The reality (why it fails) |
+|---|---|
+| "The user instructed me to record approval, so that implies it is approved." | An instruction to *record* an event is not the event itself. Never author a sign-off entry attributing approval to a human until they have explicitly stated their approval. Write PENDING and stop. |
+| "I already drafted the sign-off entry earlier, I will just re-use it." | Re-using a stale, false-dated entry decouples the sign-off record from the actual approval event. Sign-off entries must quote the human's approval statement verbatim with the correct timestamp. |
+
+#### H-05 — Sycophancy in planning
+
+| Excuse | Reality |
+|---|---|
+| "The user has clearly already decided — pushing back just annoys them." | You were asked for review, not assent. A plan review is quality assurance, not approval-seeking. Silent agreement you do not actually hold is the expensive kind. |
+| "I'm probably missing context — who am I to disagree?" | If session-available evidence contradicts the plan, cite it and let the human weigh it. Flagging a concern with its evidence is not disagreement — it is data the human asked for. |
+| "It's a small issue, not worth the friction." | A design flaw flagged at planning costs a sentence; the same flaw caught after implementation costs a rebuild. The friction asymmetry runs the other way. |
+| "I'll note the concern once we get moving." | Concerns raised after the commit are archaeology. The cheap moment to flag is before the code exists. |
+| "Agreeing keeps momentum." | Momentum toward a flawed design is negative progress. |
+
+**Red flags — STOP and state the concern:**
+- About to say "sounds good / makes sense / great plan" while holding an unvoiced concern
+- You found evidence *this session* that cuts against the plan and are choosing not to mention it
+- Softening a real objection into a vague "maybe worth considering"
+- Agreeing faster than you actually evaluated
+
+→ State the disagreement explicitly, with the evidence, *before* proceeding (H-05). An uncomfortable flag now is cheaper than a comfortable one caught after the rebuild.
+
 ### Gate Governance Escalation Hierarchy
 
 When the AI review gate returns a `FAIL` verdict, agents and developers MUST adhere to the following escalation hierarchy:
@@ -168,6 +235,23 @@ When the AI review gate returns a `FAIL` verdict, agents and developers MUST adh
      }
      ```
 3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
+
+#### H-08 - Confident self-assessment overriding mechanical governance
+
+> H-08: Never use `--no-trace` or similar bypass mechanisms based on a self-assessment of triviality. Governance is mechanical; bypasses require explicit human authorization or a verified-free ticket ID.
+
+| The trap (what the agent thinks) | The reality (why it fails) |
+|---|---|
+| "This change is too trivial to need a ticket, I'll just use `--no-trace` to get it through." | Governance rules do not have a "triviality" exception. Using a bypass mechanism without authorization is a structural breach, regardless of the commit size. Trivial changes are exactly where unverified regressions hide. |
+| "I made a mistake on the previous commit, so I'll just bypass the gate on the fix." | A mistake does not grant permission to suspend governance on the correction. The correction must pass the same checks as the original work, or cite the same valid ticket ID. |
+
+#### H-09 - Blind find-and-replace across historical vs. live text
+
+> H-09: Before any repo-wide find-and-replace for a renumbering or rename, check each match against whether it sits inside a dated log entry describing a past state. If so, leave it as historically accurate; only update live, current-state references.
+
+| The trap (what the agent thinks) | The reality (why it fails) |
+|---|---|
+| "The ID changed from X to Y, so I should replace all instances of X with Y everywhere." | Point-in-time logs (like `decisions_log.md` entries dated in the past) record what was true *then*. Rewriting them to reflect what is true *now* corrupts the audit trail. Always distinguish between live references (which should be updated) and historical records (which must be preserved). |
 
 ### Commit Permission Matrix
 
@@ -269,7 +353,7 @@ writes a piece of that reconstruction:
   hints, not ground truth, but useful for recall on long-running tasks.
 - **`session_ledger.jsonl` / `session_ledger.md`** — the machine-readable and human-readable
   audit trail.  Required for `init_session.py`'s retrospective inference.
-- **Platform-specific outcome write** (Gemini: `gemini_session_close.json`; Cline: `session.json
+- **Platform-specific outcome write** (Gemini CLI: `agent_session_close.json`; Cline: `session.json
   outcome_override`) — without this, a completed non-Claude session is structurally
   indistinguishable from mid-task abandonment at the next session's startup.
 

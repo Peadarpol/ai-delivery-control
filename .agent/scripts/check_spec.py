@@ -76,34 +76,18 @@ class SpecQualityVerdict(BaseModel):
 
 def load_config() -> dict:
     """Safely load .agent/config.yaml."""
-    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return {}
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        # Simple regex parser to extract specs_path and model configuration
-        specs_path = "docs/planning/specs/"
-        specs_match = re.search(r"specs_path:\s*['\"]?([^'\"\n]+)['\"]?", content)
-        if specs_match:
-            specs_path = specs_match.group(1).strip()
-            
-        budget_provider = "ollama"
-        provider_match = re.search(r"budget_provider:\s*['\"]?([^'\"\n]+)['\"]?", content)
-        if provider_match:
-            budget_provider = provider_match.group(1).strip()
-            
-        budget_model = "gemma2"
-        model_match = re.search(r"budget_model:\s*['\"]?([^'\"\n]+)['\"]?", content)
-        if model_match:
-            budget_model = model_match.group(1).strip()
-            
-        return {
-            "specs_path": specs_path,
-            "budget_provider": budget_provider,
-            "budget_model": budget_model,
-        }
-    except Exception:
-        return {}
+    import sys
+    from pathlib import Path
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
+    from harness_utils import get_harness_config
+    
+    return {
+        "specs_path": get_harness_config("spec_gate", "specs_path"),
+        "budget_provider": get_harness_config("model_routing", "budget_provider"),
+        "budget_model": get_harness_config("model_routing", "budget_model"),
+    }
 
 
 def get_active_branch_spec() -> str | None:
@@ -150,36 +134,18 @@ def _load_outer_loop_mode() -> str:
 
     Returns 'incremental' on any failure, missing key, or unrecognised value.
     """
-    config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return "incremental"
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        in_outer_loop = False
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            indent = len(line) - len(line.lstrip())
-            if stripped == "outer_loop:":
-                in_outer_loop = True
-                continue
-            if in_outer_loop:
-                if indent == 0:
-                    break
-                m = re.match(r"mode:\s*['\"]?([a-zA-Z]+)['\"]?", stripped)
-                if m:
-                    mode = m.group(1).strip().lower()
-                    if mode in _VALID_MODES:
-                        return mode
-                    print(
-                        f"⚠️  [REVIEW-GATE] outer_loop.mode '{mode}' is not recognised. "
-                        "Valid values: discovery, incremental, contractual. Defaulting to incremental.",
-                        file=sys.stderr,
-                    )
-                    return "incremental"
-    except Exception:
-        pass
+    from src.scripts.harness_utils import get_harness_config
+    mode_val = get_harness_config("outer_loop", "mode")
+    if mode_val is None:
+        mode_val = "incremental"
+    mode = mode_val.strip().lower()
+    if mode in _VALID_MODES:
+        return mode
+    print(
+        f"⚠️  [REVIEW-GATE] outer_loop.mode '{mode}' is not recognised. "
+        "Valid values: discovery, incremental, contractual. Defaulting to incremental.",
+        file=sys.stderr,
+    )
     return "incremental"
 
 

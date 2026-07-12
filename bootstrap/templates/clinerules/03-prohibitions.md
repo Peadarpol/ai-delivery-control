@@ -7,6 +7,9 @@
 These apply to every project using this framework, unconditionally. Never do any of the
 following without explicit user instruction in the current session.
 
+> [!NOTE]
+> **Structure Note (H → S → C → G)**: The prohibitions are structured into four series, ordered from cognitive/honesty failures (H) through behavioral/autonomy failures (S) through security failures (C) to mechanical/git failures (G). The original Output Quality (Q-series) was dissolved: Q-01 (no stubs) is a conduct rule and lives in §3 Agent Conduct; Q-02 (no sycophancy) is a cognitive honesty failure and lives in the H-series as H-05.
+
 ## Honesty and Verification (H-series)
 
 | ID | Never do this |

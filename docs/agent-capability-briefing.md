@@ -45,7 +45,7 @@ automatically creates a git stash checkpoint to prevent loss of original session
 for subprocess operations exceeding 60 seconds.
 
 **Gemini CLI close protocol (HIB-GEMINI-01, v1.3.4)**: Establishes a structured close
-protocol for Gemini CLI sessions using `.agent/state/gemini_session_close.json` to record
+protocol for Gemini CLI sessions using `.agent/state/agent_session_close.json` to record
 outcomes, which is consumed at the next session start.
 
 ### Retrospective session outcome inference

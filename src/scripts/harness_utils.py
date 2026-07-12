@@ -182,3 +182,186 @@ def _safe_git_env() -> dict:
     }
     return {k: v for k, v in os.environ.items()
             if k in allowed or k.startswith("GIT_")}
+
+_CONFIG_CACHE = {}
+
+DEFAULTS = {
+    "model_routing": {
+        "max_tokens": 4096,
+        "budget_provider": "ollama",
+        "budget_model": "gemma4",
+        "budget_base_url": "http://localhost:11434",
+    },
+    "agent_limits": {
+        "max_files_per_commit": 15,
+        "max_test_retries": 3,
+        "warn_session_minutes": 120,
+        "max_session_minutes": 240,
+    },
+    "wiki_domains": {},
+    "spec_gate": {
+        "specs_path": "docs/planning/specs/",
+    },
+    "memory": {
+        "retention": {
+            "session_ledger_retention_days": 90,
+            "harness_events_retention_days": 365,
+            "review_log_retention_days": 90,
+            "dream_proposals_reviewed_retention_days": 365,
+        }
+    },
+    "traceability": {
+        "specs_path": "docs/planning/specs/",
+    },
+    "spec_gate": {
+        "specs_path": "docs/planning/specs/",
+    },
+    "acceptance_gate": {
+        "base_branch": "main",
+        "migration_paths": [
+            "src/backend/db/migrations/",
+            "migrations/versions/",
+            "alembic/versions/",
+            "db/migration/",
+            "migrations/",
+        ],
+    },
+    "architecture_checks": {
+        "adr_capability_mappings": {},
+    },
+    "outer_loop": {
+        "mode": "incremental",
+    }
+}
+
+def _parse_yaml_val(val: str) -> Any:
+    if val == "null" or val == "~":
+        return None
+    if val == "true":
+        return True
+    if val == "false":
+        return False
+    if val == "[]":
+        return []
+    if val == "{}":
+        return {}
+    try:
+        if "." in val:
+            return float(val)
+        else:
+            return int(val)
+    except ValueError:
+        pass
+    return val
+
+def _fallback_yaml_parse(content: str) -> dict:
+    """Indentation-aware fallback YAML parser."""
+    result = {}
+    current_section = None
+    
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+            
+        indent = len(line) - len(line.lstrip())
+        
+        if ":" in stripped:
+            key_part, val_part = stripped.split(":", 1)
+            val_part = val_part.split("#", 1)[0].strip()
+            key = key_part.strip().strip("'\"")
+            
+            if indent == 0:
+                if not val_part:
+                    current_section = key
+                    result[current_section] = {}
+                else:
+                    current_section = None
+                    result[key] = _parse_yaml_val(val_part.strip("'\""))
+            elif indent > 0 and current_section is not None:
+                if val_part:
+                    result[current_section][key] = _parse_yaml_val(val_part.strip("'\""))
+        elif stripped.startswith("-") and current_section is not None:
+            # list item support
+            val = stripped[1:].strip().split("#", 1)[0].strip("'\"")
+            if val:
+                import logging
+                logging.warning("harness_utils._fallback_yaml_parse: list item '%s' dropped. Use PyYAML for list support.", val)
+                
+    return result
+
+def load_yaml_with_fallback(path: Path | str, strict: bool = False) -> dict:
+    """Load YAML file using pyyaml if available, else fallback."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    
+    try:
+        content = path.read_text(encoding="utf-8")
+        try:
+            import yaml
+            return yaml.safe_load(content) or {}
+        except ImportError:
+            return _fallback_yaml_parse(content)
+        except Exception:
+            if strict:
+                raise
+            return {}
+    except Exception:
+        if strict:
+            raise
+        return {}
+
+def load_harness_config(config_path: Path | str | None = None, force_reload: bool = False, strict: bool = False) -> dict:
+    """Load the harness config.yaml into a cached dict."""
+    global _CONFIG_CACHE
+    
+    if config_path is None:
+        # Find project root
+        script_dir = Path(__file__).resolve().parent
+        project_root = script_dir.parent.parent
+        config_path = project_root / ".agent" / "config.yaml"
+        
+    path_key = str(config_path)
+    
+    if not force_reload and not strict and path_key in _CONFIG_CACHE:
+        return _CONFIG_CACHE[path_key]
+        
+    loaded = load_yaml_with_fallback(config_path, strict=strict)
+    if not strict:
+        _CONFIG_CACHE[path_key] = loaded
+    return loaded
+
+def get_harness_config(section: str, key: str | None = None, default: Any = None, config_path: Path | str | None = None, strict: bool = False) -> Any:
+    """
+    Get a value from the harness config.
+    Resolution order:
+      1. Config value from .agent/config.yaml
+      2. Central DEFAULTS table (if known)
+      3. Explicit default= argument
+      4. None
+    """
+    config = load_harness_config(config_path, strict=strict)
+    
+    _MISSING = object()
+    val = _MISSING
+    
+    if key is None:
+        if section in config:
+            val = config[section]
+    else:
+        if section in config and isinstance(config[section], dict) and key in config[section]:
+            val = config[section][key]
+            
+    if val is not _MISSING:
+        return val
+        
+    # Check DEFAULTS table
+    if key is None:
+        if section in DEFAULTS:
+            return DEFAULTS.get(section, default)
+    else:
+        if section in DEFAULTS and key in DEFAULTS[section]:
+            return DEFAULTS[section].get(key, default)
+            
+    return default

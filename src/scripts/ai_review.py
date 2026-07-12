@@ -814,6 +814,30 @@ def _handle_api_unavailable(reason: str, changed_files: List[str], active_domain
         return 0
 
 
+def _handle_parse_failure(reason: str, changed_files: List[str], active_domains: List[str]) -> int:
+    """Handle LLM JSON parse failures (e.g. invalid escapes) by uniformly failing closed (HIB-065)."""
+    # Persist the failure state so the next session can see it if needed
+    _persist_verdict(
+        review={"verdict": "FAIL", "summary": f"Parse failure: {reason}"}
+    )
+    
+    print("[REVIEW] LLM returned invalid JSON → FAIL CLOSED")
+    print(f"[REVIEW] Reason: {reason}")
+    print("[REVIEW] Hint: often caused by an unescaped backslash in a file path within the diff — check for raw C:\\...-style paths.")
+    print("[REVIEW] Override: SKIP_AI_REVIEW=1 SKIP_REASON='...'")
+    
+    log_harness_event({
+        "event_type": "review_parse_failure",
+        "severity": "HIGH",
+        "payload": {
+            "reason": reason,
+            "override_available": "SKIP_AI_REVIEW=1 SKIP_REASON=..."
+        }
+    })
+    sys.exit(1)  # Always block the commit
+    return 1
+
+
 def load_config() -> Dict[str, Any]:
     """Load optional .ai-review-config.json from project root."""
     if CONFIG_FILE.exists():
@@ -1193,6 +1217,7 @@ def _persist_verdict(
     review: Dict[str, Any] | None = None,
     fail_open_reason: str | None = None,
     provider_name: str | None = None,
+    effective_max_tokens: int | None = None,
 ) -> None:
     """Append the review verdict to a local JSONL log for auditability.
 
@@ -1235,6 +1260,9 @@ def _persist_verdict(
                 "summary": raw.get("summary", ""),
                 "model": MODEL,
             }
+
+        if effective_max_tokens is not None:
+            record["effective_max_tokens"] = effective_max_tokens
 
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
@@ -1504,7 +1532,6 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     config = load_config()
     if "timeout_seconds" in config:
         try:
-            import providers
             providers.DEFAULT_TIMEOUT = int(config["timeout_seconds"])
         except Exception:
             pass
@@ -1848,6 +1875,10 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     start_time = time.time()
 
     raw_review: Dict[str, Any] = {}
+    effective_max_tokens_used = getattr(provider, "_max_tokens", 4096)
+    if not effective_max_tokens_used:
+        effective_max_tokens_used = 4096
+
     try:
         results = []
         for i in range(passes):
@@ -1869,7 +1900,44 @@ def _run_review(commit_msg_file: str | None = None) -> int:
                 co_change_context=co_change_context,
                 deterministic_findings=deterministic_findings,
             )
-            review_dict = provider.review(SYSTEM_PROMPT, user_content)
+            try:
+                review_dict = provider.review(SYSTEM_PROMPT, user_content)
+            except providers.TruncationError:
+                print("⚠️  Provider truncated response due to token limit. Retrying with raised ceiling (8192)...")
+                try:
+                    review_dict = provider.review(SYSTEM_PROMPT, user_content, max_tokens=8192)
+                    effective_max_tokens_used = 8192
+                except providers.TruncationError as _:
+                    print("❌ Provider truncated response again despite raised ceiling.")
+                    _persist_verdict(
+                        review={"verdict": "TRUNCATED"},
+                        fail_open_reason="TRUNCATED",
+                        provider_name=provider.name,
+                        effective_max_tokens=8192
+                    )
+                    if gate_context:
+                        gate_context.verdict = "TRUNCATED"
+                        try:
+                            gc_path = PROJECT_ROOT / ".agent" / "state" / "gate_context.json"
+                            if gc_path.exists():
+                                with open(gc_path, "w", encoding="utf-8") as f:
+                                    f.write(gate_context.to_json(indent=2))
+                        except Exception:
+                            pass
+                    
+                    try:
+                        log_harness_event({
+                            "event_type": "ai_review_truncated",
+                            "severity": "ERROR",
+                            "payload": {
+                                "model": provider.model,
+                                "effective_max_tokens": 8192
+                            }
+                        })
+                    except Exception:
+                        pass
+                        
+                    sys.exit(1)
             results.append(review_dict)
 
             if passes > 1:
@@ -1953,7 +2021,8 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         return _handle_api_unavailable(reason, changed_files, active_domains)
     except json.JSONDecodeError as e:
         reason = f"JSON parse error: {e}"
-        return _handle_api_unavailable(reason, changed_files, active_domains)
+        _handle_parse_failure(reason, changed_files, active_domains)
+        return 1
     except Exception as e:
         reason = str(e)
         return _handle_api_unavailable(reason, changed_files, active_domains)
@@ -2114,7 +2183,11 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         except Exception as e:
             print(f"⚠️  [GATE] Failed to write back final GateContext: {e}")
 
-    _persist_verdict(verdict_obj=typed_verdict, provider_name=provider.name)
+    _persist_verdict(
+        verdict_obj=typed_verdict, 
+        provider_name=provider.name,
+        effective_max_tokens=effective_max_tokens_used
+    )
     render_review(raw_review, churn_info)
     print(f"  \u23f1\ufe0f  Review completed in {elapsed:.1f}s\n")
 

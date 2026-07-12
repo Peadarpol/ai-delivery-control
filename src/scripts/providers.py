@@ -35,6 +35,14 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+try:
+    from harness_utils import get_harness_config
+except ImportError:
+    def get_harness_config(section, key=None, default=None):
+        if section == "model_routing" and key == "max_tokens":
+            return 4096
+        return default
+
 
 # ── Config defaults ───────────────────────────────────────────────────────────
 
@@ -66,11 +74,35 @@ def call_api_with_retry(
     raise last_error  # type: ignore[misc]
 
 
-def _strip_json_fences(raw: str) -> str:
-    """Strip markdown code fences if the model wraps JSON in them."""
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    return raw
+class TruncationError(Exception):
+    """Raised when the LLM truncates the response due to token limits."""
+    pass
+
+
+def _parse_json_response(raw: str, stop_reason: str | None = None) -> Dict[str, Any]:
+    """Parse JSON response, falling back to brace extraction, and providing detailed errors."""
+    # Try parsing the raw response first just in case
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+        
+    first_brace = raw.find('{')
+    last_brace = raw.rfind('}')
+    
+    if first_brace != -1 and last_brace != -1 and first_brace <= last_brace:
+        extracted = raw[first_brace:last_brace+1]
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError as e:
+            if stop_reason in ("max_tokens", "length"):
+                raise TruncationError(f"Provider truncated response due to max_tokens limit. Raw response: {raw}") from e
+            raise json.JSONDecodeError(f"Extractable JSON parse failed: {e}. Raw response: {raw}", e.doc, e.pos) from e
+    
+    if stop_reason in ("max_tokens", "length"):
+        raise TruncationError(f"Provider truncated response due to max_tokens limit. Raw response: {raw}")
+
+    raise json.JSONDecodeError(f"Extractable JSON not found (no braces). Provider returned an error message or non-JSON. Raw response: {raw}", raw, 0)
 
 
 # ── Abstract Base ─────────────────────────────────────────────────────────────
@@ -89,7 +121,7 @@ class ReviewProvider(ABC):
     """
 
     @abstractmethod
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         """Send a review request and return parsed JSON response.
 
         Args:
@@ -108,7 +140,7 @@ class ReviewProvider(ABC):
         ...
 
     @abstractmethod
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         """Send a completion request and return the raw text response from the LLM.
 
         This method must also calculate and update self.last_token_usage.
@@ -119,7 +151,7 @@ class ReviewProvider(ABC):
         self,
         system_prompt: str,
         user_prompt: str,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         json_mode: bool = False,
     ) -> tuple[str, int, int]:
         """Call LLM and return (response_text, input_tokens, output_tokens) to support check_spec.py.
@@ -129,7 +161,7 @@ class ReviewProvider(ABC):
         raw_completion, Anthropic relies on system_prompt instructions) and this flag is
         currently a no-op. Do not assume passing json_mode=False changes behavior.
         """
-        response = self.raw_completion(system_prompt, user_prompt)
+        response = self.raw_completion(system_prompt, user_prompt, max_tokens=max_tokens)
         usage = self.last_token_usage
         return (
             response,
@@ -185,6 +217,7 @@ class AnthropicProvider(ReviewProvider):
     def __init__(self, model: str | None = None):
         self._model = model or DEFAULT_MODEL
         self._api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens")
 
     @property
     def name(self) -> str:
@@ -197,7 +230,7 @@ class AnthropicProvider(ReviewProvider):
     def is_available(self) -> bool:
         return bool(self._api_key)
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         if not self._api_key:
             raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
 
@@ -210,9 +243,14 @@ class AnthropicProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "system": system,
-                "messages": [{"role": "user", "content": user_content}],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": user_content,
+                    }
+                ],
             }
         ).encode("utf-8")
 
@@ -237,10 +275,10 @@ class AnthropicProvider(ReviewProvider):
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         }
         raw = body["content"][0]["text"].strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        stop_reason = body.get("stop_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
 
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         if not self._api_key:
             raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
 
@@ -253,7 +291,7 @@ class AnthropicProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user_content}],
             }
@@ -302,6 +340,7 @@ class OpenAIProvider(ReviewProvider):
         self._base_url = os.environ.get(
             "OPENAI_BASE_URL", "https://api.openai.com/v1"
         ).rstrip("/")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens")
 
     @property
     def name(self) -> str:
@@ -314,14 +353,14 @@ class OpenAIProvider(ReviewProvider):
     def is_available(self) -> bool:
         return bool(self._api_key)
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY environment variable not set")
 
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -352,17 +391,17 @@ class OpenAIProvider(ReviewProvider):
             "cache_read_input_tokens": 0,
         }
         raw = body["choices"][0]["message"]["content"].strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        stop_reason = body["choices"][0].get("finish_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
 
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY environment variable not set")
 
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -413,6 +452,7 @@ class OllamaProvider(ReviewProvider):
         self._base_url = os.environ.get(
             "OLLAMA_BASE_URL", "http://localhost:11434"
         ).rstrip("/")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens")
 
     @property
     def name(self) -> str:
@@ -431,7 +471,7 @@ class OllamaProvider(ReviewProvider):
         except Exception:
             return False
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         payload = json.dumps(
             {
                 "model": self._model,
@@ -439,7 +479,7 @@ class OllamaProvider(ReviewProvider):
                 "prompt": user_content,
                 "format": "json",
                 "stream": False,
-                "options": {"num_predict": 1024},
+                "options": {"num_predict": max_tokens if max_tokens is not None else (self._max_tokens or 4096)},
             }
         ).encode("utf-8")
 
@@ -462,10 +502,10 @@ class OllamaProvider(ReviewProvider):
             "cache_read_input_tokens": 0,
         }
         raw = body.get("response", "{}").strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        stop_reason = body.get("done_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
 
-    def raw_completion(self, system: str, user_content: str) -> str:
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
         payload = json.dumps(
             {
                 "model": self._model,
@@ -473,7 +513,7 @@ class OllamaProvider(ReviewProvider):
                 "prompt": user_content,
                 "format": "json",
                 "stream": False,
-                "options": {"num_predict": 1024},
+                "options": {"num_predict": max_tokens if max_tokens is not None else self._max_tokens},
             }
         ).encode("utf-8")
 

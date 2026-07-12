@@ -231,7 +231,9 @@ Lists the base class names the architecture checker uses to identify domain aggr
 roots when verifying layering rules. Match these to the actual base classes in your
 domain layer.
 
-## 4. Prohibition Tiers
+---
+
+## 4. Prohibition Tiers (MTF)
 
 To keep the framework templates clean and maintainable, agent prohibitions are structured into a three-tier model:
 
@@ -258,7 +260,7 @@ You can copy and paste the following templates into your project's `.agent/AGENT
 #### Template for §4.2 — Project-Specific Rules
 
 ```markdown
-## §4.2 — Project-Specific Rules
+### 4.2 — Project-Specific Rules
 
 > These rules apply because this project uses [stack/toolchain/pattern].
 > They are not universal. Do not carry them to other projects.
@@ -292,7 +294,7 @@ You can copy and paste the following templates into your project's `.agent/AGENT
 #### Template for §4.3 — Pattern-Conditional Rules
 
 ```markdown
-## §4.3 — Pattern-Conditional Rules
+### 4.3 — Pattern-Conditional Rules
 
 > These rules apply ONLY because this project uses the patterns listed below.
 > Do not apply these rules to projects that do not use these patterns.

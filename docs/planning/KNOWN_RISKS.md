@@ -19,7 +19,7 @@ that were designed for Gemini CLI:
 
 - `GEMINI.md` shim file — loaded as agent-specific context by the session
 - `TaskStart` hook — fires at session start, triggers `init_session.py`
-- `gemini_session_close.json` flow — outcome metadata written at session end
+- `agent_session_close.json` flow — outcome metadata written at session end
 - `outcome_override` field in `session.json` — read by `infer_and_close_previous_session()`
 
 ### Risk
@@ -35,7 +35,7 @@ Run a minimal test session in Antigravity IDE and confirm:
 
 1. `GEMINI.md` is loaded at session start (Gemini references project-specific context)
 2. `init_session.py` runs at session start (session_id appears in `session.json`)
-3. `gemini_session_close.json` can be written at session end without error
+3. `agent_session_close.json` can be written at session end without error
 4. `outcome_override` written to `session.json` is read correctly by the next
    `init_session.py` call's `infer_and_close_previous_session()`
 

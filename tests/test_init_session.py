@@ -134,7 +134,6 @@ class TestInitSessionSpecAwareness:
         """outcome_override claims success but no commits exist -> downgraded to partial."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
         with open(session_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         data["outcome_override"] = "success"
@@ -157,7 +156,6 @@ class TestInitSessionSpecAwareness:
         """outcome_override claims success and commits exist -> success accepted."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
         with open(session_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         data["outcome_override"] = "success"
@@ -213,17 +211,17 @@ class TestInitSessionGitStash:
         init_session._create_session_checkpoint("")
 
 
-class TestInitSessionGeminiClose:
-    def test_gemini_close_consumed(self, clean_state, capsys):
-        """Verify that a matching gemini_session_close.json is consumed and merged."""
+class TestInitSessionAgentClose:
+    def test_agent_close_consumed(self, clean_state, capsys):
+        """Verify that a matching agent_session_close.json is consumed and merged."""
         tmp_path, session_file, ledger_file = clean_state
         
-        # Write matching gemini close file
-        close_file = session_file.parent / "gemini_session_close.json"
+        # Write matching agent close file
+        close_file = session_file.parent / "agent_session_close.json"
         close_data = {
             "session_id": "test-session-123",
             "outcome": "partial",
-            "outcome_note": "Closed via gemini close protocol test"
+            "outcome_note": "Closed via agent close protocol test"
         }
         close_file.write_text(json.dumps(close_data), encoding="utf-8")
 
@@ -237,16 +235,15 @@ class TestInitSessionGeminiClose:
             captured = capsys.readouterr()
             
             assert outcome == "partial"
-            assert note == "Closed via gemini close protocol test"
-            assert "Gemini close file consumed" in captured.out
+            assert note == "Closed via agent close protocol test"
+            assert "Agent close file consumed" in captured.out
             assert not close_file.exists()
 
-    def test_gemini_close_success_downgraded_when_no_commits(self, clean_state, capsys):
-        """gemini_session_close claims success but no commits exist -> downgraded to partial."""
+    def test_agent_close_success_downgraded_when_no_commits(self, clean_state, capsys):
+        """agent_session_close claims success but no commits exist -> downgraded to partial."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        close_file = session_file.parent / "gemini_session_close.json"
+        close_file = session_file.parent / "agent_session_close.json"
         close_data = {
             "session_id": "test-session-123",
             "outcome": "success",
@@ -266,12 +263,12 @@ class TestInitSessionGeminiClose:
             assert "Downgraded to partial" in note
             assert "write-before-verify guard" in note
 
-    def test_gemini_close_mismatch(self, clean_state, capsys):
+    def test_agent_close_mismatch(self, clean_state, capsys):
         """Verify that a non-matching session close file is not consumed and issues warning."""
         tmp_path, session_file, ledger_file = clean_state
         
-        # Write non-matching gemini close file
-        close_file = session_file.parent / "gemini_session_close.json"
+        # Write non-matching agent close file
+        close_file = session_file.parent / "agent_session_close.json"
         close_data = {
             "session_id": "different-session-id",
             "outcome": "success",
@@ -290,6 +287,186 @@ class TestInitSessionGeminiClose:
             
             # Outcome should fall back to inferred "abandoned" because ID mismatched
             assert outcome == "abandoned"
-            assert "Gemini close session_id mismatch" in captured.out
+            assert "Agent close session_id mismatch" in captured.out
             assert close_file.exists()
 
+class TestInitSessionKind:
+    def test_default_to_code(self, clean_state):
+        """Default-to-code when session_kind is empty — regression, confirms nothing changes for existing behavior."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import init_session
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch.dict("os.environ", {"AGENT_SESSION_KIND": ""}):
+             
+            init_session.initialize_session("Harness")
+            
+            with open(session_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            assert data.get("session_kind") == "code"
+
+    def test_invalid_session_kind_warning(self, clean_state, capsys):
+        """Invalid session kind prints warning and defaults to code."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import init_session
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch.dict("os.environ", {"AGENT_SESSION_KIND": "debug"}):
+             
+            init_session.initialize_session("Harness")
+            
+            with open(session_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            assert data.get("session_kind") == "code"
+            
+            captured = capsys.readouterr()
+            assert "[WARNING] Invalid AGENT_SESSION_KIND 'debug', defaulting to 'code'" in captured.out
+
+    def test_analysis_no_commits_no_override(self, clean_state):
+        """analysis kind, no commits, no override -> partial, not abandoned."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import init_session
+        session_data = {
+            "session_id": "test-session-123",
+            "status": "ACTIVE",
+            "start_time": "2026-07-01T12:00:00Z",
+            "session_kind": "analysis"
+        }
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(json.dumps(session_data), encoding="utf-8")
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "partial"
+            assert "Outcome labeled partial" in note
+
+    def test_analysis_no_commits_override_success(self, clean_state):
+        """analysis kind, no commits, outcome_override: success -> accepted, stays success."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import init_session
+        session_data = {
+            "session_id": "test-session-123",
+            "status": "ACTIVE",
+            "start_time": "2026-07-01T12:00:00Z",
+            "session_kind": "analysis",
+            "outcome_override": "success",
+            "outcome_override_note": "I did some planning"
+        }
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(json.dumps(session_data), encoding="utf-8")
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "success"
+            assert note == "I did some planning"
+
+    def test_code_no_commits_override_success(self, clean_state):
+        """code kind, no commits, outcome_override: success -> still downgraded to partial."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import init_session
+        session_data = {
+            "session_id": "test-session-123",
+            "status": "ACTIVE",
+            "start_time": "2026-07-01T12:00:00Z",
+            "session_kind": "code",
+            "outcome_override": "success",
+            "outcome_override_note": "I wrote code but didn't commit"
+        }
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(json.dumps(session_data), encoding="utf-8")
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "partial"
+            assert "Downgraded to partial" in note
+
+    def test_agent_close_analysis_success_accepted_when_no_commits(self, clean_state):
+        """agent_session_close claims success, no commits, but session is analysis -> accepted."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import init_session
+        session_data = {
+            "session_id": "test-session-123",
+            "status": "ACTIVE",
+            "start_time": "2026-07-01T12:00:00Z",
+            "session_kind": "analysis"
+        }
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(json.dumps(session_data), encoding="utf-8")
+
+        close_file = session_file.parent / "agent_session_close.json"
+        close_data = {
+            "session_id": "test-session-123",
+            "outcome": "success",
+            "outcome_note": "I did some planning with agent close"
+        }
+        close_file.write_text(json.dumps(close_data), encoding="utf-8")
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "success"
+            assert note == "I did some planning with agent close"
+            assert not close_file.exists()
+
+    def test_agent_close_session_kind_success_accepted_when_no_commits(self, clean_state):
+        """Session starts code, closes via agent_session_close.json with session_kind: analysis + success -> accepted."""
+        tmp_path, session_file, ledger_file = clean_state
+        
+        import init_session
+        session_data = {
+            "session_id": "test-session-123",
+            "status": "ACTIVE",
+            "start_time": "2026-07-01T12:00:00Z",
+            "session_kind": "code"
+        }
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(json.dumps(session_data), encoding="utf-8")
+
+        close_file = session_file.parent / "agent_session_close.json"
+        close_data = {
+            "session_id": "test-session-123",
+            "outcome": "success",
+            "session_kind": "analysis",
+            "outcome_note": "I did some planning with agent close"
+        }
+        close_file.write_text(json.dumps(close_data), encoding="utf-8")
+        
+        with patch("init_session.SESSION_FILE", session_file), \
+             patch("init_session.LEDGER_FILE", ledger_file), \
+             patch("init_session.STATE_DIR", session_file.parent), \
+             patch("init_session.PROJECT_ROOT", tmp_path), \
+             patch("init_session.get_commits_after", return_value=[]):
+            
+            outcome, note = init_session.infer_and_close_previous_session()
+            assert outcome == "success"
+            assert note == "I did some planning with agent close"
+            assert not close_file.exists()

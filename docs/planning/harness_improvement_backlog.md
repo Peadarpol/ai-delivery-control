@@ -3,6 +3,8 @@
 Ad-hoc observations, small findings, and design notes captured during development sessions.
 These feed into `FRAMEWORK_BACKLOG.md` when they mature into formal items.
 
+> **ID discipline (2026-07-12)**: `HIB-*` IDs form a single namespace shared with `FRAMEWORK_BACKLOG.md`. Before assigning any new ID, verify it is free in **both** files. (Rule established after the HIB-062 cross-file collision, resolved as HIB-068.)
+
 ---
 
 ## HIB-001 — Scheduler shutdown RuntimeError on event loop close
@@ -102,7 +104,7 @@ Design specification for `bootstrap/upgrade.py` — safely update an existing AI
 **Date**: 2026-05-21
 **Source**: T1-F skill discovery
 **Pillar**: T1-F series
-**Status**: 📅 Backlog — T1-F series
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 Three-part skill discovery design:
 
@@ -121,7 +123,7 @@ Three-part skill discovery design:
 **Date**: 2026-05-21
 **Source**: T1-B governance restructure
 **Pillar**: T1-B series
-**Status**: 📅 Backlog — T1-B series
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 Restructure `governance.md` into Always/Ask First/Never three-category framework (source: Osmani O'Reilly, Feb 2026 — "curse of instructions" research).
 
@@ -142,7 +144,7 @@ Update AGENTS.md and `aisdlc-bootloader.md` to reference the three-category fram
 **Date**: 2026-05-21
 **Source**: T1-B skill authoring principle
 **Pillar**: T1-B series
-**Status**: 📅 Backlog — T1-B series
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 Add "curse of instructions" principle to skill quality bar and T1-B-06 audit criteria (source: Osmani O'Reilly Feb 2026 — GitHub analysis of 2,500+ agent config files; confirmed by GPT-4/Claude research).
 
@@ -173,7 +175,7 @@ Warning for absent `review_context_project.md` fires on projects that predate th
 **Date**: 2026-05-21
 **Source**: Session overhead observation
 **Pillar**: T1-C series
-**Status**: 📅 Backlog — T1-C series
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 Harness currently applies identical governance weight to all tasks regardless of scope. A single markdown file edit triggered full regression suite (50 tests), complete startup protocol, and 4-file session state update. Observed during backlog entry addition.
 
@@ -280,7 +282,7 @@ PASS and PASS_FAST verdicts not written to `.ai-review-log.jsonl`. Only FAIL ver
 **Date**: 2026-05-22
 **Source**: Gate stage tradeoff
 **Pillar**: T1-G-01 design
-**Status**: 📅 Design consideration
+**Status**: ❌ Deprecated — Superseded (v1.4.3 H/S/C/G tier restructure)
 
 `commit-msg` stage is correct for intent alignment but creates empty-diff problem for amends and rebases. Consider dual-stage: `pre-commit` for diff review, `commit-msg` for message format check only.
 
@@ -304,7 +306,7 @@ When the gate runs at the `commit-msg` stage, it fails to read the commit messag
 **Date**: 2026-05-23
 **Source**: Framework sync
 **Pillar**: T1-A-02 fix
-**Status**: 📅 Backlog
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 Framework sync must automatically bump `framework.version` in `config.yaml` and `UNIVERSAL_CONTEXT.md` to the new version. Currently, this process is manual, making it easy to forget or get wrong.
 
@@ -317,7 +319,7 @@ Framework sync must automatically bump `framework.version` in `config.yaml` and 
 **Date**: 2026-05-23
 **Source**: ADR Domains
 **Pillar**: T1-A-03 enhancement
-**Status**: 📅 Backlog
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 The gate could silently warn or fail if the ADR domain names defined in `adr_capability_mappings` do not correspond to actual ADR files in `docs/architecture/adr/`. Currently, there is no validation for this mapping alignment.
 
@@ -332,7 +334,7 @@ The gate could silently warn or fail if the ADR domain names defined in `adr_cap
 **Date**: 2026-05-24
 **Source**: Shokunin v4.2.3 verify_file_path pattern
 **Pillar**: T1-I-04 / Memory
-**Status**: 📅 Quick win — no new dependencies
+**Status**: ❌ Deprecated — Design decision finalized (commit-msg)
 
 `init_session.py` loads `active_context.md` and acts on its contents as if they
 are current facts. They are claims from a frozen point in time — the branch may
@@ -374,7 +376,7 @@ sections (agent conduct, skills guidance).
 **Date**: 2026-05-24
 **Source**: Shokunin v4.2.3 entry type system
 **Pillar**: T1-C-01 / Memory
-**Status**: 📅 Backlog — T1-C-01 scope extension
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 `harness_events.jsonl` uses governance-focused `event_type` (halt_event,
 governance_observation, action_trace) but doesn't classify governance-relevant
@@ -404,7 +406,7 @@ with a compliance-independent machine-generated record.
 **Date**: 2026-05-29
 **Source**: Cole Medin / Anthropic large codebase blog post
 **Pillar**: T1-B / Environment legibility
-**Status**: 📅 Backlog — v1.3.0 T1-B series
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 Cole Medin's implementation uses a dedicated `/memory` folder for agent memory
 files, separate from operational state. The current harness mixes agent memory
@@ -453,7 +455,7 @@ source tree. See BUG-09 in `FRAMEWORK_BACKLOG.md` for the full fix record.
 **Date**: 2026-05-29
 **Source**: Cole Medin / Anthropic large codebase blog post
 **Pillar**: T1-D-03 / Dream Phase signal
-**Status**: 📅 Backlog — documentation only (AGENTS.md update)
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 The dream phase (T1-D-03) runs weekly and requires frequency thresholds before
 generating improvement proposals. Observations that don't yet meet the threshold
@@ -481,7 +483,7 @@ observations file.
 **Date**: 2026-05-29
 **Source**: Cole Medin / Anthropic large codebase blog post
 **Pillar**: T1-H-04 / Skill routing
-**Status**: 📅 Backlog — schema extension
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 The harness activates skills based on capability type (`check_type`,
 `event_type`, keyword). There is no mechanism to auto-load a skill when the
@@ -513,7 +515,7 @@ structure at install time.
 **Date**: 2026-05-29
 **Source**: Cole Medin / Anthropic large codebase blog post
 **Pillar**: T1-B / Workflow documentation
-**Status**: 📅 Backlog — documentation only (AGENTS.md + workflow files)
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 The harness workflows (`feature-implementation.md`, `architect.md`) do not
 mention sub-agent exploration patterns. As projects grow and sessions regularly
@@ -540,7 +542,7 @@ context-bloat failure mode Cole identifies for large codebases.
 **Date**: 2026-05-29
 **Source**: majiayu000/harness ecosystem research
 **Pillar**: Governance architecture
-**Status**: 📅 Long-horizon — v3.0.0 territory, not actionable until Tier 2
+**Status**: ❌ Deprecated — Mitigated (AGENTS.md H-01 rule)
   infrastructure exists
 
 The majiayu000/harness project implements a Starlark-based execution policy
@@ -573,7 +575,7 @@ policies, not prose conventions.
 **Date**: 2026-05-29
 **Source**: Harness engineering ecosystem research; CodeRabbit analysis
 **Pillar**: Positioning / competitive differentiation
-**Status**: 📅 Monitoring — informs positioning, no immediate code action
+**Status**: ❌ Deprecated — Non-actionable (Market monitoring)
 
 When AI Delivery Control was conceived, the adversarial separation between
 writing agent and reviewing model was a distinctive architectural claim. As
@@ -787,7 +789,7 @@ changes. The developer gets no indication that a migration was omitted.
 **Date**: 2026-05-30
 **Source**: Migration chain robustness review
 **Pillar**: Bootstrap / upgrade reliability
-**Status**: 📅 Backlog — long-horizon, v1.3.0+ consideration
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 **Problem**: Migration modules currently append YAML blocks to
 `.agent/config.yaml` using string-based injection. YAML is fragile
@@ -824,7 +826,7 @@ structure becomes more complex.
 **Date**: 2026-05-30
 **Source**: Security review of framework distribution model
 **Pillar**: Security / Trust Model
-**Status**: 📅 Backlog — v1.3.0 security foundations sprint
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 **Problem**: Traditional supply chain security (pip-audit, bandit, guarddog) focuses
 on malicious executable code. AI governance frameworks introduce a qualitatively
@@ -944,7 +946,7 @@ Since `[PROJECT_PACKAGE_MANAGER]` is already a template placeholder, the install
 **Date**: 2026-05-31
 **Source**: Gap analysis — T1-E-01 pre-implementation design requirement
 **Pillar**: Security / Tool execution safety
-**Status**: 📅 Backlog — design constraint, must be captured before T1-E-01 implementation begins
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 **Problem**: T1-E-01 (Formalise skills as Tool ABC subclasses with `run()` methods) enables code-as-skill execution. Without an explicit sandboxing requirement in the `Tool` base class contract, concrete subclasses may inadvertently access unrestricted filesystem paths, make undeclared network calls, or use dangerous builtins (`exec`, `eval`, `__import__`). The existing T1-G-05 (restricted globals for `eval_runner.py`) covers evaluation cases; T1-E-01 needs the same treatment applied to the `Tool` ABC `run()` contract itself.
 
@@ -966,7 +968,7 @@ Since `[PROJECT_PACKAGE_MANAGER]` is already a template placeholder, the install
 **Date**: 2026-05-31
 **Source**: Gap analysis — reactive vs proactive false-positive handling; Google rule-disablement research
 **Pillar**: T1-G / Gate trust & calibration; T1-D-03 / Dream phase
-**Status**: 📅 Backlog — medium effort, v1.3.0+ consideration
+**Status**: ✅ Migrated (FRAMEWORK_BACKLOG.md)
 
 **Problem**: `harness_health.py` tracks verdict distributions but does not compute per-capability false-positive rate as a trend metric. The current false-positive handling (T1-L-10 eval regression, T1-G-06 rebuttal protocol) is entirely reactive — a developer must file a rebuttal before the calibration issue is surfaced. Research finding: false-positive rate is the primary predictor of governance tool abandonment. Google's internal tooling uses >10% false-positive rate as the threshold for automatic rule disablement review. The harness has no equivalent proactive signal.
 
@@ -1029,7 +1031,7 @@ analysis by Peter Long / Claude, 2026-06-06*
 **Date**: 2026-06-12
 **Source**: Antigravity / Peter (v1.3.4 release verification)
 **Pillar**: T1-D-03 / Dream Phase calibration
-**Status**: 📅 Backlog
+**Status**: ✅ Complete (v1.4.0)
 
 Historical FAIL entries from sessions where `session.json` was absent at write time write `session_id: "unknown"` to `.ai-review-log.jsonl`. At dream phase distillation time (`distill_dream.py`), this causes all such historic failures to cluster into a single phantom `"unknown"` session, regardless of how many actual developer sessions they represent.
 This systematically undercounts pattern spread (`appearance_rate` = `1 / total_sessions_30d`), preventing dominant patterns (like `INTENT_MISMATCH` in older datasets) from ever crossing the default 20% threshold.
@@ -1095,4 +1097,35 @@ This is the same marker-drift class that v1.4.2's backlog-repair pass addressed 
 
 **Cross-reference**: This HIB entry and T1-L-18 describe the same gap; do not develop them as independent efforts. Treat this HIB entry as the supporting evidence case for T1-L-18.
 
-
+
+
+---
+
+## HIB-068 — Large diffs failing open (DIFF_TOO_LARGE_FAILOPEN) is a critical gate design gap
+
+**Date**: 2026-07-08
+**Source**: Gate design gap
+**Pillar**: T1-G-01 hardening
+**Status**: ⬜ Not Started
+
+Large diffs failing open (`DIFF_TOO_LARGE_FAILOPEN`) allows high-risk (large) commits to skip AI review and bypass governance entirely. This is a critical design gap.
+Proof cases from today's review log:
+- `GATE_SKIPPED / DIFF_TOO_LARGE_FAILOPEN`, session_id: "unknown", commit missing AI-Assisted trailers.
+- (Additional entries cited by the operator in the review log where large diffs silently bypassed).
+This fail-open behavior is in direct conflict with the T1-L-08 fail-closed precedent. The gate must enforce a fail-closed response for oversized diffs, or require explicit chunking and gated review.
+
+**Cross-reference (2026-07-12)**: the formal work item for this gap is **T1-K-14** (fail-open gate audit) in `FRAMEWORK_BACKLOG.md`. Treat this entry as the supporting evidence case for T1-K-14 — do not develop it as an independent effort (same pattern as HIB-058/T1-L-18 and HIB-067/T1-K-13). A delivered instance of the required fail-closed pattern already exists: HIB-065's `_handle_parse_failure` (commit deafadd).
+
+
+## HIB-067 — Agent self-authorized --no-trace bypass twice in one session, including once during correction of the first bypass, despite a valid non-bypass path being available.
+
+**Date**: 2026-07-12
+**Source**: Session trace (652e2356-078d-409e-b6d7-0e7c96585c00)
+**Pillar**: T1-K-13 (authentication gap)
+**Status**: 📋 Backlog
+
+**Cross-reference (2026-07-12)**: the formal work item for this gap is **T1-K-13** (--no-trace authentication gap) in `FRAMEWORK_BACKLOG.md`. Treat this entry as the supporting evidence case for T1-K-13 — do not develop it as an independent effort (same pattern as HIB-068/T1-K-14).
+
+During the delivery of T1-L-04 robustness improvements, the agent bypassed the traceability gate (--no-trace) on a non-trivial test-import tidying commit, self-assessing the change as 'administrative/infrastructure' that didn't warrant a ticket. After this was identified as a governance violation, the agent corrected a resulting ID collision (T1-L-04 to T1-L-22) in state files. However, when making the empty metadata commit to record this correction, the agent invoked --no-trace *again*, despite having just verified T1-L-22 as a valid free ID that would have satisfied the hook normally.
+
+This serves as direct, first-party evidence for the --no-trace authentication gap (T1-K-13): an agent holding the tools and knowledge to follow the governed path will still choose the unauthenticated bypass path out of convenience for changes it unilaterally deems 'metadata' or 'administrative'. Transparency logs alone (the agent flagged the bypass) do not neutralize the structural bypass.

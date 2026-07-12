@@ -144,8 +144,68 @@ outer_loop:
     msg_file = mock_trace_env / ".git" / "COMMIT_EDITMSG"
     msg_file.write_text("--no-trace Trivial typo fix in README documentation", encoding="utf-8")
     
+    with patch("subprocess.run") as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]), patch("check_traceability.get_config_options") as mock_get_config:
+        mock_get_config.return_value = (mock_trace_env / "docs" / "planning" / "specs", "contractual")
+        mock_run.return_value.stdout = "src/main.py\n"
+        with pytest.raises(SystemExit) as excinfo:
+            check_traceability.main()
+        assert excinfo.value.code == 1
+
+
+def test_multiple_ids_scanned_once(mock_trace_env):
+    docs_dir = mock_trace_env / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    backlog_file = docs_dir / "backlog.md"
+    backlog_file.write_text("- [ ] HIB-001\n- [ ] BUG-002\n- [ ] T1-A-01\n", encoding="utf-8")
+    
+    msg_file = mock_trace_env / ".git" / "COMMIT_EDITMSG"
+    msg_file.write_text("Fixes [HIB-001], [BUG-002], and [T1-A-01]", encoding="utf-8")
+    
+    with patch("subprocess.run") as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]):
+        mock_run.return_value.stdout = "src/main.py\n"
+        
+        real_read_text = Path.read_text
+        def mock_read_text_impl(self, *args, **kwargs):
+            return real_read_text(self, *args, **kwargs)
+            
+        with patch.object(Path, 'read_text', autospec=True, side_effect=mock_read_text_impl) as mock_read_text:
+            with pytest.raises(SystemExit) as excinfo:
+                check_traceability.main()
+            assert excinfo.value.code == 0
+            calls = [call for call in mock_read_text.call_args_list if call[0][0].name == 'backlog.md']
+            assert len(calls) == 1
+
+def test_missing_docs_dir(mock_trace_env, capsys):
+    import shutil
+    shutil.rmtree(mock_trace_env / "docs")
+    
+    msg_file = mock_trace_env / ".git" / "COMMIT_EDITMSG"
+    msg_file.write_text("Fixes [HIB-001]", encoding="utf-8")
+    
     with patch("subprocess.run") as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]):
         mock_run.return_value.stdout = "src/main.py\n"
         with pytest.raises(SystemExit) as excinfo:
             check_traceability.main()
         assert excinfo.value.code == 1
+        
+        captured = capsys.readouterr()
+        assert "docs/ directory not found" in captured.err
+
+def test_huge_file_skipped(mock_trace_env, capsys):
+    docs_dir = mock_trace_env / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    huge_file = docs_dir / "huge.md"
+    huge_file.write_bytes(b"0" * (6 * 1024 * 1024))
+    
+    msg_file = mock_trace_env / ".git" / "COMMIT_EDITMSG"
+    msg_file.write_text("Fixes [HIB-001]", encoding="utf-8")
+    
+    with patch("subprocess.run") as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]):
+        mock_run.return_value.stdout = "src/main.py\n"
+        with pytest.raises(SystemExit) as excinfo:
+            check_traceability.main()
+        assert excinfo.value.code == 1
+        
+        captured = capsys.readouterr()
+        assert "Skipping" in captured.out
+        assert "huge.md" in captured.out

@@ -10,7 +10,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
 from audit_logger import log_action
 
 # Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError with emojis
@@ -20,28 +19,22 @@ if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-CONFIG_PATH = Path(".agent/config.yaml")
-
-# Defaults if config section missing
-DEFAULTS = {
-    "max_files_per_commit": 15,
-    "max_test_retries": 3,
-    "warn_session_minutes": 120,
-    "max_session_minutes": 240,
-}
-
-
 def load_limits() -> dict:
     """Load agent_limits from config.yaml, falling back to defaults."""
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-            limits = config.get("agent_limits", {})
-            return {**DEFAULTS, **limits}
-        except Exception:
-            return DEFAULTS
-    return DEFAULTS
+    # Bootstrap harness_utils
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
+    from harness_utils import get_harness_config
+    
+    limits = {
+        "max_files_per_commit": get_harness_config("agent_limits", "max_files_per_commit"),
+        "max_test_retries": get_harness_config("agent_limits", "max_test_retries"),
+        "max_task_budget": get_harness_config("agent_limits", "max_task_budget", default=100),
+        "max_session_minutes": get_harness_config("agent_limits", "max_session_minutes"),
+        "warn_session_minutes": get_harness_config("agent_limits", "warn_session_minutes"),
+    }
+    return limits
 
 
 def check_files_modified() -> tuple[bool, str]:

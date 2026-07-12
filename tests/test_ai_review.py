@@ -6,6 +6,7 @@ Tests are additive to .agent/tests/test_ai_review_preflight.py (QA-03).
 """
 
 import json
+import sys
 import os
 import tempfile
 import datetime
@@ -231,7 +232,6 @@ class TestBug04And05Fixes:
     @pytest.fixture(autouse=True)
     def setup_paths(self):
         """Ensure all required script paths are in sys.path so imports succeed."""
-        import sys
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
         
@@ -365,7 +365,6 @@ class TestHighRiskCommitClassification:
     @pytest.fixture(autouse=True)
     def setup_paths(self):
         """Ensure all required script paths are in sys.path so imports succeed."""
-        import sys
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
         
@@ -766,7 +765,6 @@ class TestStructuredBypassAndRegression:
 
         # Mock import and call of infer_and_close_previous_session
         # Set up sys.path or direct import
-        import sys
         scripts_dir = Path(__file__).resolve().parent.parent / ".agent" / "scripts"
         sys.path.insert(0, str(scripts_dir))
         
@@ -1443,7 +1441,6 @@ class TestConfigDrivenLayerRouting:
 class TestTokenBudgetEnforcement:
     def test_token_usage_written_to_session_on_pass(self, ai_review, tmp_path):
         """Full review PASS verdict must increment session.json rolling token usage."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1508,7 +1505,6 @@ class TestTokenBudgetEnforcement:
 
     def test_token_budget_warn_at_80_percent(self, ai_review, tmp_path):
         """At 80% ceiling, a warning is printed to stderr."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1567,7 +1563,6 @@ class TestTokenBudgetEnforcement:
 
     def test_token_budget_halt_at_100_percent(self, ai_review, tmp_path):
         """At 100% ceiling, a HALT file is written with correct reason and session_id."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1630,7 +1625,6 @@ class TestTokenBudgetEnforcement:
 
     def test_token_write_fails_gracefully(self, ai_review, tmp_path):
         """If writing fails due to lock timeout, the gate logs a warning but continues."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1804,4 +1798,152 @@ class TestCapabilityCalibrationIntegration:
             # Verify policy notes were added
             assert any("treated as WARN-only" in note for note in called_verdict.route_decision.policy_notes)
             assert any("treated as FAIL-escalated" in note for note in called_verdict.route_decision.policy_notes)
+
+
+class TestTruncationHandling:
+    def test_truncate_then_succeed(self, ai_review, tmp_path):
+        """Test that _run_review retries exactly once with max_tokens=8192 upon TruncationError."""
+        from unittest.mock import MagicMock, patch, ANY
+        import providers
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        # First call raises TruncationError, second succeeds
+        mock_provider.review.side_effect = [
+            providers.TruncationError('Truncated'),
+            {
+                'verdict': 'PASS',
+                'intent_alignment': 'Aligned.',
+                'issues': [],
+                'summary': 'Fixed.'
+            }
+        ]
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('ai_review.render_review'):
+
+            exit_code = ai_review._run_review()
+            assert exit_code == 0
+            assert mock_provider.review.call_count == 2
+            # Second call should have max_tokens=8192
+            mock_provider.review.assert_called_with(ai_review.SYSTEM_PROMPT, ANY, max_tokens=8192)
+            mock_persist.assert_called_once()
+
+    def test_truncate_then_truncate(self, ai_review, tmp_path):
+        """Test that truncation on the retry fails closed and logs TRUNCATED."""
+        from unittest.mock import MagicMock, patch, ANY
+        import providers
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        mock_provider.review.side_effect = [providers.TruncationError('Truncated'), providers.TruncationError('Truncated again')]
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('ai_review.render_review'):
+
+            import pytest
+            with pytest.raises(SystemExit) as exc_info:
+                ai_review._run_review()
+            assert exc_info.value.code == 1
+            mock_persist.assert_called_once()
+            # Check that effective_max_tokens was logged as 8192 and verdict is TRUNCATED
+            call_kwargs = mock_persist.call_args.kwargs
+            assert call_kwargs.get('fail_open_reason') == 'TRUNCATED'
+            assert call_kwargs.get('review', {}).get('verdict') == 'TRUNCATED'
+            assert call_kwargs.get('effective_max_tokens') == 8192
+
+
+class TestParseFailureHandling:
+    def test_json_decode_error_fails_closed(self, ai_review, tmp_path):
+        """Test that a JSONDecodeError (like invalid escape) fails closed and emits the proper event, even on low-risk commits."""
+        from unittest.mock import MagicMock, patch
+        
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        # Simulate JSON parse failure (e.g. invalid escape)
+        mock_provider.review.side_effect = json.JSONDecodeError("Invalid \\escape", "doc", 0)
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review.classify_commit_risk', return_value=(False, [])), \
+             patch('ai_review.log_harness_event') as mock_log, \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('sys.exit') as mock_exit:
+            
+            ai_review._run_review()
+            
+            # Assert it fails closed (exit 1)
+            mock_exit.assert_called_once_with(1)
+            
+            # Assert _persist_verdict was called with FAIL
+            mock_persist.assert_called_once()
+            assert mock_persist.call_args.kwargs.get('review', {}).get('verdict') == 'FAIL'
+            
+            # Assert the event was logged properly
+            calls = mock_log.call_args_list
+            parse_failure_events = [c[0][0] for c in calls if c[0][0]["event_type"] == "review_parse_failure"]
+            assert len(parse_failure_events) == 1
+            assert parse_failure_events[0]["severity"] == "HIGH"
+
+    def test_json_decode_error_fails_closed_high_risk(self, ai_review, tmp_path):
+        """Test that a JSONDecodeError fails closed on high-risk commits as well (uniformity)."""
+        from unittest.mock import MagicMock, patch
+        
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        mock_provider.review.side_effect = json.JSONDecodeError("Invalid \\escape", "doc", 0)
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review.classify_commit_risk', return_value=(True, ["match"])), \
+             patch('ai_review.log_harness_event') as mock_log, \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('sys.exit') as mock_exit:
+            
+            ai_review._run_review()
+            
+            # Assert it fails closed (exit 1)
+            mock_exit.assert_called_once_with(1)
+            
+            # Assert _persist_verdict was called with FAIL
+            mock_persist.assert_called_once()
+            assert mock_persist.call_args.kwargs.get('review', {}).get('verdict') == 'FAIL'
 

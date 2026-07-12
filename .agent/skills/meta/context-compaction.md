@@ -10,27 +10,48 @@ Compaction MUST produce an updated handoff template containing:
 - Summarize all completed work with exact details and files modified.
 - Include verification outputs or links to automated test results.
 
-### 2. Architectural Decisions
+### 2. Verification Findings (mandatory — ALL severities)
+- List **every** finding produced by any verification tool run this session: gate
+  verdicts, `ai_review` findings, test failures, and `bandit` / `gitleaks` /
+  `pip-audit` / lint / type warnings — **including non-blocking WARN and
+  MEDIUM-severity items**.
+- For each finding record: source tool, severity, a one-line description, and
+  resolution status (fixed / accepted / deferred â†’ where tracked).
+- **If verification produced no findings, you MUST write
+  `None — verification ran clean` explicitly.** An absent or empty section is a
+  defect, not a pass — the reviewer cannot distinguish "nothing to report" from
+  "forgot to report" unless you state it.
+- **Why this section exists:** it is the structural enforcement of prohibition
+  H-04 (selective summary). Findings cannot be silently dropped from a handoff
+  when the handoff has a required slot for them — omission shows up here as a
+  missing required field, rather than depending on the author remembering not to
+  omit at the moment of writing.
+
+### 3. Architectural Decisions
 - Document all core technical and business decisions made during this session.
 - Record any new database schemas, capability route mappings, or security invariants.
 
-### 3. Failed Experiments
+### 4. Failed Experiments
 - Detail any approaches that were attempted but rejected.
 - Explain the precise technical reasoning behind the rejection to avoid regression loops.
 
-### 4. Remaining Tasks
+### 5. Remaining Tasks
 - Outline the concrete next steps required to achieve the milestones.
 - Specify the exact files to target and the proposed implementation.
 
-### 5. Open Questions
+### 6. Open Questions
 - Detail any blocking issues or design choices that require feedback from the human developer.
 
 ---
 
 ## Handoff Summary — 2026-07-07 (Session Close)
 
+> _Authored under the prior five-section template (before the mandatory
+> **Verification Findings** slot was added 2026-07-08). Its section numbering
+> reflects that earlier structure._
+
 ### 1. Completed Tasks
-- **Reconciler ↔ CDR Ledger Integration (T1-B-12 Piece 2)**:
+- **Reconciler â†” CDR Ledger Integration (T1-B-12 Piece 2)**:
   - Added `load_ledger` helper to `.agent/scripts/cdr_ledger_validate.py`.
   - Updated arguments in `.agent/scripts/co_change_reconciler.py` to expose tunable escalation parameters.
   - Implemented ledger loading, schema validation, pair-scope matching (using set-equality), and file-scope matching (hub check).
@@ -55,3 +76,18 @@ Compaction MUST produce an updated handoff template containing:
 
 
 
+
+## Handoff Summary — 2026-07-07 (Session Close)
+### 1. Completed Tasks
+- Swept HIB items and updated tracking files.
+- Fixed HIB-060 in co_change_core.py.
+### 2. Verification Findings
+- None — verification ran clean.
+### 3. Architectural Decisions
+- HIB ghost items archived to main backlog.
+### 4. Failed Experiments
+- None.
+### 5. Remaining Tasks
+- T1-E-04, T1-E-03, T1-B-11.
+### 6. Open Questions
+- None.

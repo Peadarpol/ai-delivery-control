@@ -71,27 +71,15 @@ def main():
     print(f"Pre-commit: {pre_commit_ver}")
     
     # 2. Parse config.yaml
-    config_path = agent_dir / "config.yaml"
-    framework_version = "UNKNOWN"
-    budget_provider = "UNKNOWN"
-    budget_base_url = "UNKNOWN"
+    import sys
+    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
+    from harness_utils import get_harness_config
     
-    if config_path.exists():
-        content = config_path.read_text(encoding="utf-8")
-        # Extract version
-        v_match = re.search(r"^\s*version:\s*\"([^\"]+)\"", content, re.MULTILINE)
-        if v_match:
-            framework_version = v_match.group(1)
-            
-        # Extract budget provider
-        p_match = re.search(r"^\s*budget_provider:\s*([^\s#\n]+)", content, re.MULTILINE)
-        if p_match:
-            budget_provider = p_match.group(1).strip()
-            
-        # Extract budget url
-        u_match = re.search(r"^\s*budget_base_url:\s*([^\s#\n]+)", content, re.MULTILINE)
-        if u_match:
-            budget_base_url = u_match.group(1).strip()
+    framework_version = get_harness_config("framework", "version", default="UNKNOWN")
+    budget_provider = get_harness_config("model_routing", "budget_provider")
+    budget_base_url = get_harness_config("model_routing", "budget_base_url")
             
     print(f"Framework:  v{framework_version}")
     print(f"Budget LMM: {budget_provider} ({budget_base_url})")

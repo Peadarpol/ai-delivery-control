@@ -182,7 +182,7 @@ class TestReviewProviderCallLlm:
             def review(self, system: str, user_content: str):
                 return {}
 
-            def raw_completion(self, system: str, user_content: str) -> str:
+            def raw_completion(self, system: str, user_content: str, **kwargs) -> str:
                 self.last_token_usage = {"input_tokens": 10, "output_tokens": 20}
                 return f"Response to {user_content} under {system}"
 

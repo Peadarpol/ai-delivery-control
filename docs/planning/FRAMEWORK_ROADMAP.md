@@ -300,70 +300,6 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
-### v1.3.0 — Self-Improvement, Reliability & Security Foundations 📋 PLANNED (Q4 2026)
-
-**Goal**: The dream phase becomes operational — the framework's temporal moat starts generating real proposals from real session data. Memory system foundations make session history queryable and durable. Reliability mechanisms replace voluntary compliance with structured recovery. Security foundations address the novel context-injection attack surface before broad community distribution.
-
-**The strategic context**: The adversarial gate is the same for every installation on day one. The dream phase is what makes each installation unique over time. This milestone is where the compound effect begins.
-
-**Success criteria**:
-- Dream phase produces at least one actionable proposal from real session data
-- Session outcomes (success/partial/abandoned/escalated) are inferred and recorded automatically
-- Memory tiering is formalised — hot/warm/cold with explicit retention policies
-- Agent escalation produces a structured approval request, not a HALT file
-
-**Chain B — Self-Improvement Loop** (implementation sequence from backlog):
-
-| ID | Item | Category | Status |
-|----|------|----------|--------|
-| T1-I-00a | Consolidate audit logs → harness_events.jsonl | Memory prereq | ⬜ |
-| T1-I-00b | Audit audit_logger.py wiring | Memory prereq | ⬜ |
-| T1-D-00 | skill_ownership.yaml — dream phase routing map | Chain B prereq | ✅ (2026-06-02 pre-sprint) |
-| T1-C-01 | Retrospective session outcome inference + post-commit heartbeat | Chain B foundation | ✅ (v1.1.5) |
-| T1-I-03 | Outcome-aware session startup orientation | Chain B | ✅ (v1.1.5) |
-| T1-D-03 | Dream phase distillation (distill_dream.py) | Chain B capstone | ✅ (v1.1.5) |
-| T1-I-05 | Memory contradiction detector (integrated into T1-D-03) | Chain B | ✅ |
-
-**Memory system & reliability**:
-
-| ID | Item | Category | Status |
-|----|------|----------|--------|
-| T1-I-01 | Memory tiering (hot/warm/cold) | Memory | ⬜ |
-| T1-I-04 | Automated memory staleness detection | Memory | ⬜ |
-| T1-I-06 | Memory retention policy | Memory | ⬜ |
-| T1-C-02 | Structured HITL approval queue | Reliability | ⬜ |
-| T1-C-03 | Harness health alerting | Reliability | ⬜ |
-| T1-B-01 | Universal context file (eliminates three-copy drift) | Environment | ⬜ |
-| T1-B-02 | Harness versioning | Environment | ⬜ |
-| T1-B-03 | Onboarding workflow | Reliability | ✅ (v1.1.5) |
-| T1-J-01 | Automatic checkpoint before file changes | Recovery | ⬜ |
-| BUG-07 | Session heartbeat file modification failure | Bug fix | ✅ |
-| BUG-08 | Deprecated `datetime.utcnow()` in governance_check.py | Bug fix | ✅ |
-
-**Security foundations** *(new — addresses context-injection attack vector before broad community distribution)*:
-
-| ID | Item | Category | Status |
-|----|------|----------|--------|
-| S0-16 | GPG-sign all releases | Supply chain | ⬜ |
-| S0-17 | `validate.py --security` mode — hash and display governance files interactively | Verifiability | ⬜ |
-| S0-18 | `docs/security/` — document every context injection point as a visibility baseline | Transparency | ✅ (absorbed by T1-K-02) |
-| T1-K-05 | Formal security review: context-injection attack surface published as `docs/security/attack-surface-review.md` | Security | ⬜ |
-| T1-K-03 | Governance file diff highlighting on upgrade (AGENTS.md, governance.md, workflows) — on by default | Security | ⬜ |
-
-**Architecture**:
-
-| ID | Item | Category | Status |
-|----|------|----------|--------|
-| T1-E-01 | Formalise skills as Tool ABC subclasses | Architecture | ⬜ |
-
-T1-E-01 is sequenced here for two reasons: (1) T1-D-03 (dream phase distillation) ships with a documented verification gap — executable verification of proposed rules against session evidence requires the Tool ABC and SkillRegistry to be in place; closing that gap while the dream phase is being established avoids it staying open for over a year. (2) Formalising skills as Tool subclasses discovered via SkillRegistry pulls skill execution responsibility out of `ai_review.py`, directly addressing the structural coupling that accumulates when all skill dispatch is centralised. The Workflow Engine epic that follows also benefits from skills being proper Tool objects.
-
-**Self-governance note**: `ai_review.py` has 32 imports accumulated across six development phases (review gate, diff classifier, budget enforcer, rebuttal handler, PageRank router, roster checker). A CI ratchet test (`tests/test_ai_review.py::TestAiReviewImportCount`) enforces the current count as a ceiling — it must not grow further. The T1-E-01 refactoring should bring it to ≤25 by extracting skill responsibilities into separate modules. Lower the ratchet ceiling from 32 to 25 when that work is complete.
-
-**Workflow Engine epic — scoped and backlogged for v1.6.0**:
-A data-driven workflow orchestrator replacing prose-driven agent interpretation with machine-readable phase definitions, FSM-backed state transitions, and per-phase completion contracts. Design document: [`workflow-engine-design.md`](../design/workflow-engine-design.md). Five backlog items (T1-W-01 through T1-W-05): workflow schema, workflow defaults YAML, `workflow_runner.py` (FSM via `transitions` library), `ContractEvaluator`, and bootloader integration. Chain B prerequisites now delivered — scope defined in v1.6.0 milestone and backlog section T1-W.
-
----
 
 ### v1.4.0 — Intelligent Gate ✅ SHIPPED (2026-06-13)
 
@@ -528,7 +464,7 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - config.yaml parser unification (T1-E-04) — latent inconsistency identified, not yet fixed
 - Core bare-`{}` return on git failure (HIB-060) — minor hardening, not yet fixed
 - `check_traceability.py` alignment check with new config.yaml (HIB-061) — not yet verified
-- Brownfield baseline bulk-population tooling for the CDR ledger (no ID assigned yet) — needed before this is usable on a large existing codebase; deliberately deferred until real usage patterns are clearer
+- Brownfield baseline bulk-population tooling for the CDR ledger — the general mechanism now has an ID: T1-G-18 (gate enforcement postures) proposes a project-wide baseline manifest pattern; revisit whether the CDR ledger's own bulk-population need is served by that work or still wants a dedicated tool.
 - Active-model/cost-tier indicator at session start (T1-B-13) — unrelated finding surfaced during this work, filed separately
 
 **Success criteria for merge to main**:
@@ -537,6 +473,37 @@ A data-driven workflow orchestrator replacing prose-driven agent interpretation 
 - No regression in existing pre-commit advisor behaviour (guaranteed by T1-G-17's characterization tests)
 
 ---
+
+---
+
+### v1.4.9 — System Consolidation ✅ SHIPPED (2026-07-12)
+
+**Goal**: System consolidation, scope repair, traceability hardening, and parser unification.
+
+**Delivered items**:
+- T1-E-04: config.yaml parser unification
+- T1-E-03: session.json shared contract enforcement
+- HIB-062: Traceability ID coverage regex expansion
+- T1-B-11: Honest outcome labeling for non-code sessions (narrowed scope)
+- HIB-055: Universal review-context RULE sections orphaned
+- T1-B-13: Active-model/cost-tier indicator (built and deliberately reversed)
+
+---
+
+### v1.4.10 — Governance Hardening ⏳ PLANNED (Upcoming)
+
+**Goal**: Close the authentication and bypass gaps surfaced during recent incidents, hardening the traceability gate against unauthenticated circumvention, and standardising the commit strategy for audit logs.
+
+**Planned items**:
+- T1-K-12: Verifiable session governance (Layer 2 of the T1-B-11 work) — depends on T1-L-21.
+- T1-K-13: --no-trace authentication gap closure (preventing unauthenticated bypass for self-assessed metadata).
+- T1-K-14: review_parse_failure schema regression guard (merged with HIB-068).
+- HIB-063: Audit-log commit strategy (resolving the pre-commit conflict loop for harness_events.jsonl).
+- T1-L-20: Research pass for ID-verification against dual backlogs (riding along).
+- HIB-ENV-02: init_session.py stashes uncommitted work without warning.
+- T1-I-08: Stash accumulation cleanup.
+- HIB-059: SQLite sessions table missing session_id column.
+- HIB-061: Confirm check_traceability.py alignment with new .agent/config.yaml.
 
 ### v1.5.0 — Quality Signal Maturity 📋 PLANNED (Q3 2026)
 
@@ -1006,3 +973,72 @@ Full implementation detail: `FRAMEWORK_BACKLOG.md`
 ---
 
 *Extracted from and validated against GymBase, a multi-tenant SaaS gym management platform in active development. Public worked example planned for v1.1.0.*
+
+---
+
+
+
+---
+
+### Unscheduled Backlog — Pending Foundations & Improvements
+
+**Goal**: The dream phase becomes operational — the framework's temporal moat starts generating real proposals from real session data. Memory system foundations make session history queryable and durable. Reliability mechanisms replace voluntary compliance with structured recovery. Security foundations address the novel context-injection attack surface before broad community distribution.
+
+**The strategic context**: The adversarial gate is the same for every installation on day one. The dream phase is what makes each installation unique over time. This milestone is where the compound effect begins.
+
+**Success criteria**:
+- Dream phase produces at least one actionable proposal from real session data
+- Session outcomes (success/partial/abandoned/escalated) are inferred and recorded automatically
+- Memory tiering is formalised — hot/warm/cold with explicit retention policies
+- Agent escalation produces a structured approval request, not a HALT file
+
+**Chain B — Self-Improvement Loop** (implementation sequence from backlog):
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| T1-I-00a | Consolidate audit logs → harness_events.jsonl | Memory prereq | ⬜ |
+| T1-I-00b | Audit audit_logger.py wiring | Memory prereq | ⬜ |
+| T1-D-00 | skill_ownership.yaml — dream phase routing map | Chain B prereq | ✅ (2026-06-02 pre-sprint) |
+| T1-C-01 | Retrospective session outcome inference + post-commit heartbeat | Chain B foundation | ✅ (v1.1.5) |
+| T1-I-03 | Outcome-aware session startup orientation | Chain B | ✅ (v1.1.5) |
+| T1-D-03 | Dream phase distillation (distill_dream.py) | Chain B capstone | ✅ (v1.1.5) |
+| T1-I-05 | Memory contradiction detector (integrated into T1-D-03) | Chain B | ✅ |
+
+**Memory system & reliability**:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| T1-I-01 | Memory tiering (hot/warm/cold) | Memory | ⬜ |
+| T1-I-04 | Automated memory staleness detection | Memory | ⬜ |
+| T1-I-06 | Memory retention policy | Memory | ⬜ |
+| T1-C-02 | Structured HITL approval queue | Reliability | ⬜ |
+| T1-C-03 | Harness health alerting | Reliability | ⬜ |
+| T1-B-01 | Universal context file (eliminates three-copy drift) | Environment | ⬜ |
+| T1-B-02 | Harness versioning | Environment | ⬜ |
+| T1-B-03 | Onboarding workflow | Reliability | ✅ (v1.1.5) |
+| T1-J-01 | Automatic checkpoint before file changes | Recovery | ⬜ |
+| BUG-07 | Session heartbeat file modification failure | Bug fix | ✅ |
+| BUG-08 | Deprecated `datetime.utcnow()` in governance_check.py | Bug fix | ✅ |
+
+**Security foundations** *(new — addresses context-injection attack vector before broad community distribution)*:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| S0-16 | GPG-sign all releases | Supply chain | ⬜ |
+| S0-17 | `validate.py --security` mode — hash and display governance files interactively | Verifiability | ⬜ |
+| S0-18 | `docs/security/` — document every context injection point as a visibility baseline | Transparency | ✅ (absorbed by T1-K-02) |
+| T1-K-05 | Formal security review: context-injection attack surface published as `docs/security/attack-surface-review.md` | Security | ⬜ |
+| T1-K-03 | Governance file diff highlighting on upgrade (AGENTS.md, governance.md, workflows) — on by default | Security | ⬜ |
+
+**Architecture**:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| T1-E-01 | Formalise skills as Tool ABC subclasses | Architecture | ⬜ |
+
+T1-E-01 is sequenced here for two reasons: (1) T1-D-03 (dream phase distillation) ships with a documented verification gap — executable verification of proposed rules against session evidence requires the Tool ABC and SkillRegistry to be in place; closing that gap while the dream phase is being established avoids it staying open for over a year. (2) Formalising skills as Tool subclasses discovered via SkillRegistry pulls skill execution responsibility out of `ai_review.py`, directly addressing the structural coupling that accumulates when all skill dispatch is centralised. The Workflow Engine epic that follows also benefits from skills being proper Tool objects.
+
+**Self-governance note**: `ai_review.py` has 32 imports accumulated across six development phases (review gate, diff classifier, budget enforcer, rebuttal handler, PageRank router, roster checker). A CI ratchet test (`tests/test_ai_review.py::TestAiReviewImportCount`) enforces the current count as a ceiling — it must not grow further. The T1-E-01 refactoring should bring it to ≤25 by extracting skill responsibilities into separate modules. Lower the ratchet ceiling from 32 to 25 when that work is complete.
+
+**Workflow Engine epic — scoped and backlogged for v1.6.0**:
+A data-driven workflow orchestrator replacing prose-driven agent interpretation with machine-readable phase definitions, FSM-backed state transitions, and per-phase completion contracts. Design document: [`workflow-engine-design.md`](../design/workflow-engine-design.md). Five backlog items (T1-W-01 through T1-W-05): workflow schema, workflow defaults YAML, `workflow_runner.py` (FSM via `transitions` library), `ContractEvaluator`, and bootloader integration. Chain B prerequisites now delivered — scope defined in v1.6.0 milestone and backlog section T1-W.

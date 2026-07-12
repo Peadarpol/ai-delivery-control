@@ -17,13 +17,22 @@ ENV/
 env/
 
 # Harness dynamic / user files
+# live log untracked — hooks write it mid-commit; durable evidence via committed snapshots, see HIB-063. Snapshot as of 2026-07-10 preserved in aa40ad2.
 .ai-review-log.jsonl
-.agent/state/
 .agent/wiki/
 .agent/baseline/
 .skip-ai-reason.json
 rebuttal_pass.json
-.agent/state/gemini_session_close.json
+# Harness operational state (scratch — never commit)
+.agent/state/session.json
+.agent/state/HALT
+.agent/state/*.lock
+.agent/state/agent_session_close.json
+.agent/state/dream_proposals/
+.agent/state/config.yaml.migration_backup
+# Deliberately committable: decisions_log.md
+.agent/state/harness_events.jsonl
+
 
 # Mock testing scratch directory
 scratch/
@@ -46,3 +55,5 @@ tests/e2e/test_project/.agent/templates/
 tests/e2e/test_project/.agent/workflows/
 tests/e2e/test_project/.agent/.framework_migration_state
 tests/e2e/e2e_out.txt
+
+parked/

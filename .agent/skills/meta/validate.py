@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Context Compaction Validator.
-Verifies that context-compaction.md exists and contains the 5 required headings.
+Verifies that context-compaction.md exists and contains the 6 required headings.
 """
 
 import sys
@@ -38,10 +38,11 @@ def main() -> int:
 
     required_headings = [
         "### 1. Completed Tasks",
-        "### 2. Architectural Decisions",
-        "### 3. Failed Experiments",
-        "### 4. Remaining Tasks",
-        "### 5. Open Questions"
+        "### 2. Verification Findings (mandatory — ALL severities)",
+        "### 3. Architectural Decisions",
+        "### 4. Failed Experiments",
+        "### 5. Remaining Tasks",
+        "### 6. Open Questions"
     ]
 
     missing = []
