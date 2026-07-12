@@ -135,6 +135,7 @@ def test_order_service_sends_confirmation_email(mocker):
 - Mock external dependencies (email, payment gateway, S3) — not the code under test.
 - Use `FakeUnitOfWork` rather than mocking individual repositories.
 - Verify mock interactions only when the interaction itself is the behaviour being tested.
+- Env var mocking must always use `patch.dict('os.environ', {...})`, never patch `os.environ.get` directly to avoid intercepting legitimate env lookups.
 
 ---
 

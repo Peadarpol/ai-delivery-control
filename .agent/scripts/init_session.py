@@ -537,7 +537,11 @@ def initialize_session(agent_name: str = "Harness", session_kind: str | None = N
 
         if not session_kind:
             session_kind = os.environ.get("AGENT_SESSION_KIND")
-        if not session_kind or session_kind not in ["code", "analysis", "planning", "review"]:
+            
+        if session_kind and session_kind not in ["code", "analysis", "planning", "review"]:
+            print(f"[WARNING] Invalid AGENT_SESSION_KIND '{session_kind}', defaulting to 'code'")
+            session_kind = "code"
+        elif not session_kind:
             session_kind = "code"
 
         session_data = {

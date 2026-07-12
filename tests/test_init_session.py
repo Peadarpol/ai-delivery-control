@@ -302,7 +302,7 @@ class TestInitSessionModelTiers:
              patch("init_session.LEDGER_FILE", ledger_file), \
              patch("init_session.STATE_DIR", session_file.parent), \
              patch("init_session.PROJECT_ROOT", tmp_path), \
-             patch("os.environ.get", side_effect=lambda k, d=None: "gpt-4o-mini-2024-07-18" if k == "AGENT_MODEL" else d):
+             patch.dict("os.environ", {"AGENT_MODEL": "gpt-4o-mini-2024-07-18"}):
              
             init_session.initialize_session("Harness")
             
@@ -318,7 +318,7 @@ class TestInitSessionModelTiers:
              patch("init_session.LEDGER_FILE", ledger_file), \
              patch("init_session.STATE_DIR", session_file.parent), \
              patch("init_session.PROJECT_ROOT", tmp_path), \
-             patch("os.environ.get", side_effect=lambda k, d=None: "gpt-5.6-luna" if k == "AGENT_MODEL" else d):
+             patch.dict("os.environ", {"AGENT_MODEL": "gpt-5.6-luna"}):
              
             init_session.initialize_session("Harness")
             
@@ -334,7 +334,7 @@ class TestInitSessionModelTiers:
              patch("init_session.LEDGER_FILE", ledger_file), \
              patch("init_session.STATE_DIR", session_file.parent), \
              patch("init_session.PROJECT_ROOT", tmp_path), \
-             patch("os.environ.get", side_effect=lambda k, d=None: "claude-sonnet-4-6" if k == "AGENT_MODEL" else d):
+             patch.dict("os.environ", {"AGENT_MODEL": "claude-sonnet-4-6"}):
              
             init_session.initialize_session("Harness")
             
@@ -350,7 +350,7 @@ class TestInitSessionModelTiers:
              patch("init_session.LEDGER_FILE", ledger_file), \
              patch("init_session.STATE_DIR", session_file.parent), \
              patch("init_session.PROJECT_ROOT", tmp_path), \
-             patch("os.environ.get", side_effect=lambda k, d=None: "qwen2.5-coder-7b" if k == "AGENT_MODEL" else d):
+             patch.dict("os.environ", {"AGENT_MODEL": "qwen2.5-coder-7b"}):
              
             init_session.initialize_session("Harness")
             
@@ -372,7 +372,7 @@ class TestInitSessionModelTiers:
              patch("init_session.STATE_DIR", session_file.parent), \
              patch("init_session.PROJECT_ROOT", tmp_path), \
              patch("init_session.get_harness_config", side_effect=lambda k, default=None: overlapping_tiers if k == "model_tiers" else ({} if k == "model_routing" else default)), \
-             patch("os.environ.get", side_effect=lambda k, d=None: "flash" if k == "AGENT_MODEL" else d):
+             patch.dict("os.environ", {"AGENT_MODEL": "flash"}):
              
             init_session.initialize_session("Harness")
             
@@ -393,7 +393,7 @@ class TestInitSessionKind:
              patch("init_session.LEDGER_FILE", ledger_file), \
              patch("init_session.STATE_DIR", session_file.parent), \
              patch("init_session.PROJECT_ROOT", tmp_path), \
-             patch("os.environ.get", side_effect=lambda k, d=None: None if k == "AGENT_SESSION_KIND" else d):
+             patch.dict("os.environ", {"AGENT_SESSION_KIND": ""}):
              
             init_session.initialize_session("Harness")
             
