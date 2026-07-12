@@ -44,8 +44,8 @@ automatically creates a git stash checkpoint to prevent loss of original session
 **Mid-task checkpoints (T1-J-01a, v1.3.4)** are established as a convention in `AGENTS.md`
 for subprocess operations exceeding 60 seconds.
 
-**Gemini CLI close protocol (HIB-GEMINI-01, v1.3.4)**: Establishes a structured close
-protocol for Gemini CLI sessions using `.agent/state/agent_session_close.json` to record
+**Agent CLI close protocol (HIB-GEMINI-01, v1.3.4)**: Establishes a structured close
+protocol for Agent CLI sessions using `.agent/state/agent_session_close.json` to record
 outcomes, which is consumed at the next session start.
 
 ### Retrospective session outcome inference
