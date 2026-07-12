@@ -1,7 +1,7 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.8
+**Current Version**: 1.4.9
 **Target Release**: v1.5.0
 **Last Updated**: 2026-07-08
 
@@ -484,8 +484,10 @@ S0-05 must be cut before any beta invitations are sent.
 - T1-E-04: config.yaml parser unification
 - T1-E-03: session.json shared contract enforcement
 - HIB-062: Traceability ID coverage regex expansion
+- HIB-065: Parser-robustness failure mode (invalid-escape) — fail-closed via _handle_parse_failure
+- T1-L-22: check_traceability.py robustness (single-scan cache, missing-docs messaging, size guard)
 - T1-B-11: Honest outcome labeling for non-code sessions (narrowed scope)
-- HIB-055: Universal review-context RULE sections orphaned
+- ~~HIB-055: Universal review-context RULE sections orphaned~~ *(correction 2026-07-12: this shipped in v1.4.2, not v1.4.9 — erroneous duplicate entry, retained struck through rather than silently deleted)*
 - T1-B-13: Active-model/cost-tier indicator (built and deliberately reversed)
 
 ---
@@ -675,7 +677,7 @@ IDs when v1.5.2 planning is confirmed.
 
 **The strategic context**: Every workflow in the harness is currently a prose `.md` file that agents follow by reading and interpretation. There is no enforcement that an agent correctly identifies the current phase, satisfies phase exit conditions, or transitions in the correct order. The Workflow Engine makes phase enforcement as rigorous as commit-level enforcement — the gate checks commits; the runner checks phases. Design document: [`workflow-engine-design.md`](../design/workflow-engine-design.md).
 
-**Prerequisites**: T1-E-01 (skills as Tool ABC subclasses, delivered v1.3.0) required before T1-W-03. T1-D-01 (SQLite state index, v1.4.0) is a soft dependency — flat-file state is the authoritative source of truth; SQLite adds queryability.
+**Prerequisites**: T1-E-01 (skills as Tool ABC subclasses — **⬜ confirmed undelivered**; see v1.5.1, the sole content of which is delivering this item) required before T1-W-03. T1-D-01 (SQLite state index, v1.4.0) is a soft dependency — flat-file state is the authoritative source of truth; SQLite adds queryability.
 
 **Planned items**:
 
@@ -727,10 +729,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.5.0 (v1.4.5 shipped 2026-06-30)
+**Active milestone**: v1.4.10 (v1.4.9 shipped 2026-07-12)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
@@ -863,9 +865,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.5.0 (v1.4.8 shipped 2026-07-08)
+**Active milestone**: v1.4.10 (v1.4.9 shipped 2026-07-12)
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 
