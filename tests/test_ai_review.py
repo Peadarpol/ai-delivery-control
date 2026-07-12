@@ -1877,3 +1877,81 @@ class TestTruncationHandling:
             assert call_kwargs.get('fail_open_reason') == 'TRUNCATED'
             assert call_kwargs.get('review', {}).get('verdict') == 'TRUNCATED'
             assert call_kwargs.get('effective_max_tokens') == 8192
+
+
+class TestParseFailureHandling:
+    def test_json_decode_error_fails_closed(self, ai_review, tmp_path):
+        """Test that a JSONDecodeError (like invalid escape) fails closed and emits the proper event, even on low-risk commits."""
+        from unittest.mock import MagicMock, patch
+        import json
+        
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        # Simulate JSON parse failure (e.g. invalid escape)
+        mock_provider.review.side_effect = json.JSONDecodeError("Invalid \\escape", "doc", 0)
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review.classify_commit_risk', return_value=(False, [])), \
+             patch('ai_review.log_harness_event') as mock_log, \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('sys.exit') as mock_exit:
+            
+            ai_review._run_review()
+            
+            # Assert it fails closed (exit 1)
+            mock_exit.assert_called_once_with(1)
+            
+            # Assert _persist_verdict was called with FAIL
+            mock_persist.assert_called_once()
+            assert mock_persist.call_args.kwargs.get('review', {}).get('verdict') == 'FAIL'
+            
+            # Assert the event was logged properly
+            calls = mock_log.call_args_list
+            parse_failure_events = [c[0][0] for c in calls if c[0][0]["event_type"] == "review_parse_failure"]
+            assert len(parse_failure_events) == 1
+            assert parse_failure_events[0]["severity"] == "HIGH"
+
+    def test_json_decode_error_fails_closed_high_risk(self, ai_review, tmp_path):
+        """Test that a JSONDecodeError fails closed on high-risk commits as well (uniformity)."""
+        from unittest.mock import MagicMock, patch
+        import json
+        
+        mock_provider = MagicMock()
+        mock_provider.name = 'mock-provider'
+        mock_provider._max_tokens = 4096
+        
+        mock_provider.review.side_effect = json.JSONDecodeError("Invalid \\escape", "doc", 0)
+
+        with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
+             patch('ai_review.load_review_context', return_value=''), \
+             patch('repo_map.generate_repo_map', return_value=''), \
+             patch('repo_map.get_pagerank_scores', return_value={}), \
+             patch('ai_review.get_adr_context', return_value=('', [], [])), \
+             patch('co_change_check.run_co_change_estimator', return_value=[]), \
+             patch('providers.get_provider', return_value=mock_provider), \
+             patch('ai_review.PROJECT_ROOT', tmp_path), \
+             patch('ai_review.classify_commit_risk', return_value=(True, ["match"])), \
+             patch('ai_review.log_harness_event') as mock_log, \
+             patch('ai_review._persist_verdict') as mock_persist, \
+             patch('sys.exit') as mock_exit:
+            
+            ai_review._run_review()
+            
+            # Assert it fails closed (exit 1)
+            mock_exit.assert_called_once_with(1)
+            
+            # Assert _persist_verdict was called with FAIL
+            mock_persist.assert_called_once()
+            assert mock_persist.call_args.kwargs.get('review', {}).get('verdict') == 'FAIL'
+

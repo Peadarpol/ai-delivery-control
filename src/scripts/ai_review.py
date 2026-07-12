@@ -814,6 +814,30 @@ def _handle_api_unavailable(reason: str, changed_files: List[str], active_domain
         return 0
 
 
+def _handle_parse_failure(reason: str, changed_files: List[str], active_domains: List[str]) -> int:
+    """Handle LLM JSON parse failures (e.g. invalid escapes) by uniformly failing closed (HIB-065)."""
+    # Persist the failure state so the next session can see it if needed
+    _persist_verdict(
+        review={"verdict": "FAIL", "summary": f"Parse failure: {reason}"}
+    )
+    
+    print("[REVIEW] LLM returned invalid JSON → FAIL CLOSED")
+    print(f"[REVIEW] Reason: {reason}")
+    print("[REVIEW] Hint: often caused by an unescaped backslash in a file path within the diff — check for raw C:\\...-style paths.")
+    print("[REVIEW] Override: SKIP_AI_REVIEW=1 SKIP_REASON='...'")
+    
+    log_harness_event({
+        "event_type": "review_parse_failure",
+        "severity": "HIGH",
+        "payload": {
+            "reason": reason,
+            "override_available": "SKIP_AI_REVIEW=1 SKIP_REASON=..."
+        }
+    })
+    sys.exit(1)  # Always block the commit
+    return 1
+
+
 def load_config() -> Dict[str, Any]:
     """Load optional .ai-review-config.json from project root."""
     if CONFIG_FILE.exists():
@@ -1997,7 +2021,8 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         return _handle_api_unavailable(reason, changed_files, active_domains)
     except json.JSONDecodeError as e:
         reason = f"JSON parse error: {e}"
-        return _handle_api_unavailable(reason, changed_files, active_domains)
+        _handle_parse_failure(reason, changed_files, active_domains)
+        return 1
     except Exception as e:
         reason = str(e)
         return _handle_api_unavailable(reason, changed_files, active_domains)
