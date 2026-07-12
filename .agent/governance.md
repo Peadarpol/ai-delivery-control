@@ -334,7 +334,7 @@ writes a piece of that reconstruction:
   hints, not ground truth, but useful for recall on long-running tasks.
 - **`session_ledger.jsonl` / `session_ledger.md`** — the machine-readable and human-readable
   audit trail.  Required for `init_session.py`'s retrospective inference.
-- **Platform-specific outcome write** (Agent: `agent_session_close.json`; Cline: `session.json
+- **Platform-specific outcome write** (Gemini CLI: `agent_session_close.json`; Cline: `session.json
   outcome_override`) — without this, a completed non-Claude session is structurally
   indistinguishable from mid-task abandonment at the next session's startup.
 
