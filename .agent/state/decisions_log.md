@@ -153,8 +153,8 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 
 Decision: Approve the four MTF changes (AGENTS.md rule tables, governance.md §3.3, context-compaction.md Verification Findings slot, validate.py 6-heading check).
 Decider: Peter — explicit approval stated to the implementing agent on 2026-07-09, after review of the diffs.
-Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/09); two mechanical objections raised and retracted as paste artifacts; content endorsed. The pre-commit AI gate did not review this commit — it logged GATE_SKIPPED / EMPTY_DIFF (cause under investigation, HIB-062 family).
-Consequence: Governance rules and compaction protocol updated; the gate's blindness to .agent/ governance files is now a tracked finding.
+Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/09); two mechanical objections raised and retracted as paste artifacts; content endorsed. The pre-commit AI gate did not review this commit — it logged GATE_SKIPPED / EMPTY_DIFF.
+Consequence: Governance rules and compaction protocol updated; the gate's blindness to .agent/ governance files is now a tracked finding (cause under investigation, HIB-062 family).
 ## 2026-07-09: Dismiss FID-1 (CODE_QUALITY non-standard model name)
 - **Decision**: Dismiss finding FID-1 regarding the model string 'claude-sonnet-4-6'.
 - **Context**: The model string `claude-sonnet-4-6` is the correct alias in our internal provider routing layer.

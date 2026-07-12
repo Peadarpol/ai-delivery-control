@@ -203,10 +203,12 @@ def main():
         else:
             # HIB, BUG, T1 check (structural definition gating)
             is_found = False
+            # Compile the regex pattern once per ID instead of on every line
+            pattern = re.compile(rf"^\s*(?:\|\s*|[\-\*]\s*(?:\[[ xX]\]\s*)?|#+\s*)[\*\~_\[\]\s]*{re.escape(spec_id)}\b", re.IGNORECASE)
             for line in docs_lines:
                 # Require the ID to be formally defined (table row, list item (with optional checkbox), or heading)
                 # and tolerate inline markdown emphasis (**, _, ~~, []) around the ID.
-                if re.match(rf"^\s*(?:\|\s*|[\-\*]\s*(?:\[[ xX]\]\s*)?|#+\s*)[\*\~_\[\]\s]*{re.escape(spec_id)}\b", line, re.IGNORECASE):
+                if pattern.match(line):
                     is_found = True
                     break
             

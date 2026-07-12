@@ -3,6 +3,8 @@
 Ad-hoc observations, small findings, and design notes captured during development sessions.
 These feed into `FRAMEWORK_BACKLOG.md` when they mature into formal items.
 
+> **ID discipline (2026-07-12)**: `HIB-*` IDs form a single namespace shared with `FRAMEWORK_BACKLOG.md`. Before assigning any new ID, verify it is free in **both** files. (Rule established after the HIB-062 cross-file collision, resolved as HIB-068.)
+
 ---
 
 ## HIB-001 — Scheduler shutdown RuntimeError on event loop close
@@ -1111,6 +1113,8 @@ Proof cases from today's review log:
 - `GATE_SKIPPED / DIFF_TOO_LARGE_FAILOPEN`, session_id: "unknown", commit missing AI-Assisted trailers.
 - (Additional entries cited by the operator in the review log where large diffs silently bypassed).
 This fail-open behavior is in direct conflict with the T1-L-08 fail-closed precedent. The gate must enforce a fail-closed response for oversized diffs, or require explicit chunking and gated review.
+
+**Cross-reference (2026-07-12)**: the formal work item for this gap is **T1-K-14** (fail-open gate audit) in `FRAMEWORK_BACKLOG.md`. Treat this entry as the supporting evidence case for T1-K-14 — do not develop it as an independent effort (same pattern as HIB-058/T1-L-18 and HIB-067/T1-K-13). A delivered instance of the required fail-closed pattern already exists: HIB-065's `_handle_parse_failure` (commit deafadd).
 
 
 ## HIB-067 — Agent self-authorized --no-trace bypass twice in one session, including once during correction of the first bypass, despite a valid non-bypass path being available.

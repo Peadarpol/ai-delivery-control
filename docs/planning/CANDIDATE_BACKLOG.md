@@ -218,6 +218,14 @@ contradict the threat model before implementation.
 
 ---
 
+### CAND-T3-05 — MCP Layer-4 server
+**What**: A Layer-4 MCP server for integration with broader agent ecosystems or specialized capabilities, allowing the harness to be queried cross-project or exposed as a standard tool provider.
+**Lifecycle placement**: Persistent service, out-of-loop.
+**Consumption test**: PASS at enterprise/multi-agent scale — consumer is other autonomous agents or orchestration layers requiring structured access to intent/governance data.
+**Relationship to existing**: Related to T2-A-04 (cross-project MCP-queryable decisions log).
+**Tier rationale**: Exposing harness data programmatically across boundaries is an advanced integration pattern (Tier 3).
+**Effort**: High.
+
 ## Negative space — assessed and argued AGAINST (recorded so they are not re-picked-up as unassessed)
 
 ### NEG-01 — Blanket artifact standards / stage contracts at every phase boundary
@@ -270,6 +278,7 @@ tokens). Replaced by model-independent driver counts (CAND-T1-05).
 | CAND-T3-02 | Generic adapter framework | Enterprise | Intake-time | PASS at enterprise scale | High |
 | CAND-T3-03 | Req-quality as compliance gate | Enterprise | Spec-time (blocking) | PASS | Medium |
 | CAND-T3-04 | REQ vs threat-model conflict | Enterprise | Spec-time | PASS | Medium |
+| CAND-T3-05 | MCP Layer-4 server | Enterprise | Persistent service | PASS at scale | High |
 | NEG-01 | Blanket stage-contract artifacts | — | Per-phase generation | FAIL (= T1-W / typed verdicts) | — |
 | NEG-02 | Mandated traceability artifact (T1) | — | Per-session generation | FAIL at Tier 1 | — |
 | NEG-03 | Intent-quality on commit hot path | — | Per-commit | FORBIDDEN (CONSTRAINT-01) | — |

@@ -99,6 +99,8 @@ Prohibitions are tiered (see [`docs/customisation.md`](../docs/customisation.md)
 | H-03 | P-03 | **Test-harness cheating.** Masking failures (weakened assertions, `sys.exit(0)`, deleted tests) destroys the only signal that the work is correct. |
 | H-04 | — | **Selective summary.** Omitting WARN/MEDIUM findings from a handoff hides risk the next session needs. |
 | H-05 | — | **Sycophancy in planning.** Comfortable agreement at planning time is more expensive than an uncomfortable flag caught early. |
+| H-08 | - | **Confident self-assessment.** Overriding mechanical governance based on perceived triviality is a breach, not a shortcut. |
+| H-09 | - | **Blind historical rewrite.** Rewriting dated, point-in-time log entries during a global rename corrupts the system's history. |
 | S-01 | — | **Scope creep under obstacle.** A blocker does not authorise fixing adjacent problems. |
 | S-02 | — | **Compensating action cascade.** Autonomous "fixes" for self-introduced side-effects historically cascade into larger damage (e.g. accidental data loss). |
 | S-03 | — | **Irreversible action without confirmation.** Irreversibility requires per-action approval, not session-level approval. |
@@ -233,6 +235,23 @@ When the AI review gate returns a `FAIL` verdict, agents and developers MUST adh
      }
      ```
 3. **Structured SKIP_REASON bypass** (Acknowledged Override): Only as a last resort in emergencies, use `SKIP_AI_REVIEW=1` with a structured bypass JSON to step aside.
+
+#### H-08 - Confident self-assessment overriding mechanical governance
+
+> H-08: Never use `--no-trace` or similar bypass mechanisms based on a self-assessment of triviality. Governance is mechanical; bypasses require explicit human authorization or a verified-free ticket ID.
+
+| The trap (what the agent thinks) | The reality (why it fails) |
+|---|---|
+| "This change is too trivial to need a ticket, I'll just use `--no-trace` to get it through." | Governance rules do not have a "triviality" exception. Using a bypass mechanism without authorization is a structural breach, regardless of the commit size. Trivial changes are exactly where unverified regressions hide. |
+| "I made a mistake on the previous commit, so I'll just bypass the gate on the fix." | A mistake does not grant permission to suspend governance on the correction. The correction must pass the same checks as the original work, or cite the same valid ticket ID. |
+
+#### H-09 - Blind find-and-replace across historical vs. live text
+
+> H-09: Before any repo-wide find-and-replace for a renumbering or rename, check each match against whether it sits inside a dated log entry describing a past state. If so, leave it as historically accurate; only update live, current-state references.
+
+| The trap (what the agent thinks) | The reality (why it fails) |
+|---|---|
+| "The ID changed from X to Y, so I should replace all instances of X with Y everywhere." | Point-in-time logs (like `decisions_log.md` entries dated in the past) record what was true *then*. Rewriting them to reflect what is true *now* corrupts the audit trail. Always distinguish between live references (which should be updated) and historical records (which must be preserved). |
 
 ### Commit Permission Matrix
 

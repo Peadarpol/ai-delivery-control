@@ -77,7 +77,7 @@ Optional (populated on FAIL/WARN):
 - `blocking_concern`: string — the specific capability that failed (e.g. `"BRANCH_ISOLATION"`)
 - `issues`: array of `{severity, concern, location, description, remediation}`
 - `route_decision`: serialised RouteDecision
-- `token_usage`: dict
+- `token_usage`: dict (measures gate-invocation cost only, not total session cost)
 - `context_snapshot`: string
 
 Rebuttal records additionally require:
@@ -107,7 +107,7 @@ Required fields:
 - `outcome_source`: `"inferred"` | `"agent_override"` | `"human_override"`
 - `outcome_note`: string
 - `harness_version`: string (see FM8-02)
-- `token_usage`: object
+- `token_usage`: object (measures gate-invocation cost only, not total session cost)
 
 ~~**Known issue FM8-02**~~ **✅ Fixed v1.3.3**: `harness_version` is now read dynamically from `harness_version.txt` at write time. Version forensics reliable from v1.3.3 onward. Prior session ledger entries still carry `"2.0"` — treat as `"pre-1.3.3"` when cross-referencing.
 
@@ -124,7 +124,7 @@ Same cross-reference problem as FM8-04.
 Fields: `schema_version` (`"1.0"`), `session_id` (UUID v4), `start_time` (ISO 8601 UTC), `last_activity` (ISO 8601 UTC),
 `status` (`"ACTIVE"` | `"COMPLETED"`), `agent` (string), `session_kind` (`"code"` | `"analysis"` | `"planning"` | `"review"`, defaults to `"code"`. Correctable at close time. Precedence: `agent_session_close.json` -> `outcome_override` (in `session.json`) -> start-time value -> `"code"`), `task_magnitude`
 (`"micro"` | `"standard"` | `"major"`), `task_magnitude_source` (`"auto"` | `"agent_override"`),
-`token_usage` (dict with 8 integer fields), `outcome_override` (optional string),
+`token_usage` (dict with 8 integer fields, measures gate-invocation cost only, not total session cost), `outcome_override` (optional string),
 `outcome_override_source` (optional string), `outcome_override_note` (optional string)
 
 Planned additions (T1-N-01, undelivered): `parent_session_id`, `agent_role`
