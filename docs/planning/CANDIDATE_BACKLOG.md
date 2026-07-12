@@ -1,7 +1,6 @@
 # Candidate Backlog — Intent-Governance Extensions
 
-**Status**: ANALYSIS / COLLATION ONLY — no items accepted, no decisions made.
-**Created**: 2026-06-13
+**Status**: ITEMS PROMOTED — Candidates evaluated and selectively promoted to mainline roadmap (e.g., CAND-T1-01 to T1-L-16, CAND-T1-05 to T1-D-09). Remaining items explicitly pending.
 **Source**: Assessment of four extension pillars proposed in a ChatGPT conversation
 (traceability, artifact standards, interoperability/adapters, requirements quality checking),
 re-scored against the framework's actual shipped + scoped state.
@@ -61,7 +60,7 @@ none of them generate intent.
 
 ## Tier 1 — Individual (solo, multi-project, local-only)
 
-### CAND-T1-01 — Requirements quality: NFR-coverage check at spec-time
+### CAND-T1-01 - Requirements quality: NFR-coverage check at spec-time (Promoted to T1-L-16)
 **What**: Extend `check_spec.py` Pass 2 with a missing-non-functional-requirement check
 (security, availability, performance, auditability, accessibility, localization, scalability).
 Advisory output naming each absent NFR class, consistent with existing ADVISORY behaviour.
@@ -76,7 +75,7 @@ and complements **T1-L-14** (archetype-driven FM weighting, ✅ (v1.4.1)).
 **Tier rationale**: Strongest candidate even for a solo dev — pays for itself in avoided re-implementation.
 **Effort**: Low.
 
-### CAND-T1-02 — Requirements quality: intra-spec contradiction detection at spec-time
+### CAND-T1-02 - Requirements quality: intra-spec contradiction detection at spec-time (Pending)
 **What**: At spec validation, scan acceptance criteria + assumptions for opposed-polarity statements
 on the same subject (e.g. "orders editable after submission" vs "submitted orders immutable").
 Reuse the keyword-overlap polarity heuristic already in `distill_dream.py`'s contradiction checker.
@@ -89,7 +88,7 @@ to unpick) and the human approver (resolves before APPROVED).
 **Tier rationale**: Cheap, model-independent if implemented deterministically.
 **Effort**: Low.
 
-### CAND-T1-03 — Requirements quality: REQ-vs-ADR conflict check — SPEC-TIME ONLY
+### CAND-T1-03 - Requirements quality: REQ-vs-ADR conflict check - SPEC-TIME ONLY (Pending)
 **What**: At spec validation, check the spec's stated constraints against governing ADR domains
 (reuse the compiled wiki / ADR injection already built for the gate).
 **Lifecycle placement**: **Spec-time only.** Explicitly NOT at commit time.
@@ -102,7 +101,7 @@ this item.
 **Relationship to existing**: Reuses **T1-H-02** (ADR annotation + wiki injection, ✅).
 **Effort**: Low.
 
-### CAND-T1-04 — Traceability query layer (read-only, on-demand)
+### CAND-T1-04 - Traceability query layer (read-only, on-demand) (Pending)
 **What**: A `traceability_query.py` answering "what does REQ/SPEC-X satisfy?" and "what depends on
 SPEC-X?" by reading the existing SQLite index (`state_persistence.py`) joined through `git log`.
 Bidirectional navigation, invoked by a human, not auto-maintained.
@@ -114,7 +113,7 @@ means the bar is trivially met).
 **Tier rationale**: Free to users at any tier; safe to build whenever the read-side is confirmed.
 **Effort**: Low.
 
-### CAND-T1-05 — Model-independent driver counters in harness_health.py
+### CAND-T1-05 - Model-independent driver counters in harness_health.py (Promoted to T1-D-09)
 **What**: Add integer driver counts (NOT token metering) to `harness_health.py`: round-trips per
 delivered commit, harness-mandated documents per feature, rework-loop count (FAIL/redraft/rebuttal),
 and session-start context-surface size in lines/bytes.
