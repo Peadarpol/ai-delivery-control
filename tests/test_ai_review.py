@@ -6,6 +6,7 @@ Tests are additive to .agent/tests/test_ai_review_preflight.py (QA-03).
 """
 
 import json
+import sys
 import os
 import tempfile
 import datetime
@@ -231,7 +232,6 @@ class TestBug04And05Fixes:
     @pytest.fixture(autouse=True)
     def setup_paths(self):
         """Ensure all required script paths are in sys.path so imports succeed."""
-        import sys
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
         
@@ -365,7 +365,6 @@ class TestHighRiskCommitClassification:
     @pytest.fixture(autouse=True)
     def setup_paths(self):
         """Ensure all required script paths are in sys.path so imports succeed."""
-        import sys
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
         
@@ -766,7 +765,6 @@ class TestStructuredBypassAndRegression:
 
         # Mock import and call of infer_and_close_previous_session
         # Set up sys.path or direct import
-        import sys
         scripts_dir = Path(__file__).resolve().parent.parent / ".agent" / "scripts"
         sys.path.insert(0, str(scripts_dir))
         
@@ -1443,7 +1441,6 @@ class TestConfigDrivenLayerRouting:
 class TestTokenBudgetEnforcement:
     def test_token_usage_written_to_session_on_pass(self, ai_review, tmp_path):
         """Full review PASS verdict must increment session.json rolling token usage."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1508,7 +1505,6 @@ class TestTokenBudgetEnforcement:
 
     def test_token_budget_warn_at_80_percent(self, ai_review, tmp_path):
         """At 80% ceiling, a warning is printed to stderr."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1567,7 +1563,6 @@ class TestTokenBudgetEnforcement:
 
     def test_token_budget_halt_at_100_percent(self, ai_review, tmp_path):
         """At 100% ceiling, a HALT file is written with correct reason and session_id."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1630,7 +1625,6 @@ class TestTokenBudgetEnforcement:
 
     def test_token_write_fails_gracefully(self, ai_review, tmp_path):
         """If writing fails due to lock timeout, the gate logs a warning but continues."""
-        import json
         session_file = tmp_path / ".agent" / "state" / "session.json"
         session_file.parent.mkdir(parents=True, exist_ok=True)
         session_data = {
@@ -1883,7 +1877,6 @@ class TestParseFailureHandling:
     def test_json_decode_error_fails_closed(self, ai_review, tmp_path):
         """Test that a JSONDecodeError (like invalid escape) fails closed and emits the proper event, even on low-risk commits."""
         from unittest.mock import MagicMock, patch
-        import json
         
         mock_provider = MagicMock()
         mock_provider.name = 'mock-provider'
@@ -1924,7 +1917,6 @@ class TestParseFailureHandling:
     def test_json_decode_error_fails_closed_high_risk(self, ai_review, tmp_path):
         """Test that a JSONDecodeError fails closed on high-risk commits as well (uniformity)."""
         from unittest.mock import MagicMock, patch
-        import json
         
         mock_provider = MagicMock()
         mock_provider.name = 'mock-provider'

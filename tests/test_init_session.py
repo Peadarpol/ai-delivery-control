@@ -134,7 +134,6 @@ class TestInitSessionSpecAwareness:
         """outcome_override claims success but no commits exist -> downgraded to partial."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
         with open(session_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         data["outcome_override"] = "success"
@@ -157,7 +156,6 @@ class TestInitSessionSpecAwareness:
         """outcome_override claims success and commits exist -> success accepted."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
         with open(session_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         data["outcome_override"] = "success"
@@ -245,7 +243,6 @@ class TestInitSessionAgentClose:
         """agent_session_close claims success but no commits exist -> downgraded to partial."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
         close_file = session_file.parent / "agent_session_close.json"
         close_data = {
             "session_id": "test-session-123",
@@ -298,8 +295,6 @@ class TestInitSessionKind:
         """Default-to-code when session_kind is empty — regression, confirms nothing changes for existing behavior."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        from unittest.mock import patch
         import init_session
         with patch("init_session.SESSION_FILE", session_file), \
              patch("init_session.LEDGER_FILE", ledger_file), \
@@ -317,8 +312,6 @@ class TestInitSessionKind:
         """Invalid session kind prints warning and defaults to code."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        from unittest.mock import patch
         import init_session
         with patch("init_session.SESSION_FILE", session_file), \
              patch("init_session.LEDGER_FILE", ledger_file), \
@@ -339,8 +332,6 @@ class TestInitSessionKind:
         """analysis kind, no commits, no override -> partial, not abandoned."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        from unittest.mock import patch
         import init_session
         session_data = {
             "session_id": "test-session-123",
@@ -365,8 +356,6 @@ class TestInitSessionKind:
         """analysis kind, no commits, outcome_override: success -> accepted, stays success."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        from unittest.mock import patch
         import init_session
         session_data = {
             "session_id": "test-session-123",
@@ -393,8 +382,6 @@ class TestInitSessionKind:
         """code kind, no commits, outcome_override: success -> still downgraded to partial."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        from unittest.mock import patch
         import init_session
         session_data = {
             "session_id": "test-session-123",
@@ -421,8 +408,6 @@ class TestInitSessionKind:
         """agent_session_close claims success, no commits, but session is analysis -> accepted."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        from unittest.mock import patch
         import init_session
         session_data = {
             "session_id": "test-session-123",
@@ -456,8 +441,6 @@ class TestInitSessionKind:
         """Session starts code, closes via agent_session_close.json with session_kind: analysis + success -> accepted."""
         tmp_path, session_file, ledger_file = clean_state
         
-        import json
-        from unittest.mock import patch
         import init_session
         session_data = {
             "session_id": "test-session-123",
