@@ -293,7 +293,6 @@ class TestInitSessionAgentClose:
             assert "Agent close session_id mismatch" in captured.out
             assert close_file.exists()
 
-
 class TestInitSessionKind:
     def test_default_to_code(self, clean_state):
         """Default-to-code when session_kind is empty — regression, confirms nothing changes for existing behavior."""

@@ -515,8 +515,6 @@ def initialize_session(agent_name: str = "Harness", session_kind: str | None = N
         if magnitude_source == "auto":
             magnitude = classify_task_magnitude()
 
-
-
         if not session_kind:
             session_kind = os.environ.get("AGENT_SESSION_KIND")
             
@@ -533,7 +531,6 @@ def initialize_session(agent_name: str = "Harness", session_kind: str | None = N
             "last_activity": start_time,
             "status": "ACTIVE",
             "agent": agent_name,
-
             "task_magnitude": magnitude,
             "task_magnitude_source": magnitude_source,
             "session_kind": session_kind,
@@ -553,7 +550,6 @@ def initialize_session(agent_name: str = "Harness", session_kind: str | None = N
             json.dump(session_data, f, indent=4)
 
         print(f"[INIT] Session {session_id} initialized.")
-
         print(f"[MAGNITUDE] Task Magnitude Auto-Classified: {magnitude.upper()} (source: {magnitude_source})")
         if magnitude == "major":
             print("\n" + "=" * 80)
