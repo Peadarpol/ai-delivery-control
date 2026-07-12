@@ -569,7 +569,7 @@ class Installer:
             ".agent/state/*.lock",
             ".agent/config.yaml.migration_backup",
             ".agent/wiki/",
-            ".agent/state/gemini_session_close.json",
+            ".agent/state/agent_session_close.json",
             ".clinerules/hooks/",
         ]
 

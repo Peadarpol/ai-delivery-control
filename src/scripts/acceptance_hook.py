@@ -15,7 +15,7 @@ IMPORTANT — Claude Code only:
     close-out fidelity — that is separate from acceptance checking.
 
     If you add Gemini CLI support in the future, call this script from the
-    Gemini session-close sequence explicitly (e.g. in the gemini_session_close
+    Gemini session-close sequence explicitly (e.g. in the agent_session_close
     write step) rather than relying on a hook event that does not fire.
 
 Usage (invoked automatically by Claude Code):

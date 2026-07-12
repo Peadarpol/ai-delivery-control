@@ -11005,7 +11005,7 @@ V1_4_8 = {
     '.agent/templates/commit_message.txt': '865d5fee605c0f8e0a6a1547d2f633c132ee11cc4219a42f1bd5a52d12e460b1',
     '.agent/templates/feature_spec.md': 'd68ea99b0990520f0f1af984fb8bf1cedd397acac43a5ec291d8bc1db99ce119',
     '.agent/templates/gate_rebuttal_template.json': 'fa24a6cc591cfa9f2266a5d4028f0144bade9577de47684ebb734d20a18ea846',
-    '.agent/templates/gemini_session_close.md': '169f1e2fa4e61e5c5594fe0d02b34fc043eb6377725fcc898515fd9c69826f8e',
+    '.agent/templates/agent_session_close.md': '7cae0a909064aa266b0dbcbed7fc9109eadbbc3bc74cb505f9a8ed38b5629563',
     '.agent/workflows/architect.md': '85badccfd3966373c322e5d3553f60583c72b5f38556b78eb134e9e560ac87f0',
     '.agent/workflows/bug-fix.md': '2b79a838d387cdd7175ac04f01503b7089654a599cf5ff109cf9f90e714a2a2a',
     '.agent/workflows/business-analyst.md': 'ce2ed794c8fff46fbb2c5e63cee69ea9a11c7ddfc57364098362bf44284776ec',

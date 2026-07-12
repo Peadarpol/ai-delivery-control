@@ -99,7 +99,25 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         prev_start = prev_data.get("start_time")
         prev_agent = prev_data.get("agent", "Agent")
         
-        prev_session_kind = prev_data.get("session_kind", "code")
+        # HIB-GEMINI-01: Read agent_session_close.json early to resolve session_kind overrides
+        close_file = STATE_DIR / "agent_session_close.json"
+        close_data = None
+        if close_file.exists():
+            try:
+                temp_data = json.loads(close_file.read_text(encoding="utf-8"))
+                if temp_data.get("session_id") == prev_id:
+                    close_data = temp_data
+                else:
+                    print(f"[WARNING] Agent close session_id mismatch: {temp_data.get('session_id')} vs previous session {prev_id}")
+            except Exception as e:
+                print(f"[WARNING] Error reading agent close file: {e}")
+
+        # Resolve session_kind: close-time agent override -> close-time outcome_override (in session.json) -> start-time (in session.json) -> "code"
+        if close_data and "session_kind" in close_data:
+            prev_session_kind = close_data["session_kind"]
+        else:
+            prev_session_kind = prev_data.get("session_kind", "code")
+            
         expects_commit = (prev_session_kind == "code")
 
         outcome = "abandoned"
@@ -262,35 +280,26 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         except Exception:
             date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        # HIB-GEMINI-01: check for gemini_session_close.json
-        close_file = STATE_DIR / "gemini_session_close.json"
-        if close_file.exists():
+        if close_data:
+            claimed_outcome = close_data.get("outcome", outcome)
+            
+            # HIB-053: cross-check before accepting success claim
+            if claimed_outcome == "success" and expects_commit and not _override_success_has_commit(prev_start):
+                claimed_outcome = "partial"
+                close_note = (
+                    "agent_session_close claimed success but no commit found after session start. "
+                    "Downgraded to partial (HIB-053 write-before-verify guard)."
+                )
+            else:
+                close_note = close_data.get("outcome_note", note)
+            outcome = claimed_outcome
+            note = close_note
+            source = "agent_close"
             try:
-                close_data = json.loads(close_file.read_text(encoding="utf-8"))
-                if close_data.get("session_id") == prev_id:
-                    claimed_outcome = close_data.get("outcome", outcome)
-                    
-                    # HIB-053: cross-check before accepting success claim
-                    if claimed_outcome == "success" and expects_commit and not _override_success_has_commit(prev_start):
-                        claimed_outcome = "partial"
-                        close_note = (
-                            "gemini_session_close claimed success but no commit found after session start. "
-                            "Downgraded to partial (HIB-053 write-before-verify guard)."
-                        )
-                    else:
-                        close_note = close_data.get("outcome_note", note)
-                    outcome = claimed_outcome
-                    note = close_note
-                    source = "gemini_close"
-                    try:
-                        close_file.unlink()
-                        print(f"[SESSION] Gemini close file consumed — outcome: {outcome}")
-                    except Exception:
-                        pass
-                else:
-                    print(f"[WARNING] Gemini close session_id mismatch: {close_data.get('session_id')} vs previous session {prev_id}")
-            except Exception as e:
-                print(f"[WARNING] Error reading gemini close file: {e}")
+                close_file.unlink()
+                print(f"[SESSION] Agent close file consumed — outcome: {outcome}")
+            except Exception:
+                pass
 
         # Log to session_ledger.jsonl
         token_usage_stats = {

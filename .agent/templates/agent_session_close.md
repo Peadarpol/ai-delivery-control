@@ -1,6 +1,6 @@
-# Gemini CLI Session Close Checklist
+# Agent CLI Session Close Checklist
 
-Save this file as `.agent/state/gemini_session_close.json` before ending the session.
+Save this file as `.agent/state/agent_session_close.json` before ending the session.
 
 ```json
 {

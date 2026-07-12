@@ -27,7 +27,7 @@ rebuttal_pass.json
 .agent/state/session.json
 .agent/state/HALT
 .agent/state/*.lock
-.agent/state/gemini_session_close.json
+.agent/state/agent_session_close.json
 .agent/state/dream_proposals/
 .agent/state/config.yaml.migration_backup
 # Deliberately committable: decisions_log.md
