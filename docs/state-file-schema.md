@@ -122,7 +122,7 @@ Same cross-reference problem as FM8-04.
 **Readers**: `session_health.py`, `init_session.py`, `governance_check.py`, `check_spec.py`, `check_halt.py`, `audit_logger.py`
 
 Fields: `schema_version` (`"1.0"`), `session_id` (UUID v4), `start_time` (ISO 8601 UTC), `last_activity` (ISO 8601 UTC),
-`status` (`"ACTIVE"` | `"COMPLETED"`), `agent` (string), `model` (string), `cost_tier` (`"frontier"` | `"standard"` | `"local"` | `"unknown"`), `task_magnitude`
+`status` (`"ACTIVE"` | `"COMPLETED"`), `agent` (string), `model` (string), `cost_tier` (`"frontier"` | `"standard"` | `"local"` | `"unknown"`), `session_kind` (`"code"` | `"analysis"` | `"planning"` | `"review"`, defaults to `"code"`), `task_magnitude`
 (`"micro"` | `"standard"` | `"major"`), `task_magnitude_source` (`"auto"` | `"agent_override"`),
 `token_usage` (dict with 8 integer fields), `outcome_override` (optional string),
 `outcome_override_source` (optional string), `outcome_override_note` (optional string)

@@ -98,6 +98,9 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         prev_id = prev_data.get("session_id", "pre-session-init")
         prev_start = prev_data.get("start_time")
         prev_agent = prev_data.get("agent", "Agent")
+        
+        prev_session_kind = prev_data.get("session_kind", "code")
+        expects_commit = (prev_session_kind == "code")
 
         outcome = "abandoned"
         source = "inferred"
@@ -148,8 +151,9 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
             outcome = prev_data["outcome_override"]
             source = prev_data.get("outcome_override_source", "agent_override")
             note = prev_data.get("outcome_override_note", "Closed via explicit override.")
+            
             # HIB-053: cross-check before accepting success claim
-            if outcome == "success" and not _override_success_has_commit(prev_start):
+            if outcome == "success" and expects_commit and not _override_success_has_commit(prev_start):
                 outcome = "partial"
                 note = (
                     "outcome_override claimed success but no commit found after session start. "
@@ -241,10 +245,15 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
                         note = ("Uncommitted specification changes present but no commit found — "
                                 "work not persisted. Downgraded to partial (HIB-053b guard).")
                 else:
-                    # 3. No commits, no spec changes, and not escalated => abandoned
-                    outcome = "abandoned"
-                    note = "Session closed with no commits."
-                    action_str = "No active commits made. Session abandoned."
+                    # 3. No commits, no spec changes, and not escalated => check session kind
+                    if prev_session_kind != "code":
+                        outcome = "partial"
+                        note = f"Session closed with no commits. Outcome labeled partial (non-code session: {prev_session_kind})."
+                        action_str = f"No active commits made. Session labeled partial ({prev_session_kind})."
+                    else:
+                        outcome = "abandoned"
+                        note = "Session closed with no commits."
+                        action_str = "No active commits made. Session abandoned."
 
         # Format date for ledger: prev_start as YYYY-MM-DD HH:MM
         try:
@@ -260,8 +269,9 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
                 close_data = json.loads(close_file.read_text(encoding="utf-8"))
                 if close_data.get("session_id") == prev_id:
                     claimed_outcome = close_data.get("outcome", outcome)
+                    
                     # HIB-053: cross-check before accepting success claim
-                    if claimed_outcome == "success" and not _override_success_has_commit(prev_start):
+                    if claimed_outcome == "success" and expects_commit and not _override_success_has_commit(prev_start):
                         claimed_outcome = "partial"
                         close_note = (
                             "gemini_session_close claimed success but no commit found after session start. "
@@ -461,7 +471,7 @@ def _should_skip_background_tasks() -> bool:
             pass
     return False
 
-def initialize_session(agent_name: str = "Harness") -> str:
+def initialize_session(agent_name: str = "Harness", session_kind: str | None = None) -> str:
     """Initializes or updates the current session state."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -525,6 +535,11 @@ def initialize_session(agent_name: str = "Harness") -> str:
                 cost_tier = tier
                 break
 
+        if not session_kind:
+            session_kind = os.environ.get("AGENT_SESSION_KIND")
+        if not session_kind or session_kind not in ["code", "analysis", "planning", "review"]:
+            session_kind = "code"
+
         session_data = {
             "schema_version": "1.0",
             "session_id": session_id,
@@ -536,6 +551,7 @@ def initialize_session(agent_name: str = "Harness") -> str:
             "cost_tier": cost_tier,
             "task_magnitude": magnitude,
             "task_magnitude_source": magnitude_source,
+            "session_kind": session_kind,
             "token_usage": {
                 "input_tokens": 0,
                 "output_tokens": 0,
@@ -882,6 +898,13 @@ def main() -> None:
         default=None,
         help="Name of the agent running this session",
     )
+    parser.add_argument(
+        "--session-kind",
+        type=str,
+        default=None,
+        choices=["code", "analysis", "planning", "review"],
+        help="Kind of session (code, analysis, planning, review)",
+    )
     args = parser.parse_args()
 
     if args.hot_tier:
@@ -899,7 +922,7 @@ def main() -> None:
 
         # Determine agent name and initialize new session
         agent_name = args.agent or os.environ.get("AGENT_ID") or "Harness"
-        session_id = initialize_session(agent_name=agent_name)
+        session_id = initialize_session(agent_name=agent_name, session_kind=args.session_kind)
         _create_session_checkpoint(session_id)
 
         # Maybe run dream phase distillation
