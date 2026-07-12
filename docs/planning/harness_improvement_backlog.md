@@ -1111,3 +1111,15 @@ Proof cases from today's review log:
 - `GATE_SKIPPED / DIFF_TOO_LARGE_FAILOPEN`, session_id: "unknown", commit missing AI-Assisted trailers.
 - (Additional entries cited by the operator in the review log where large diffs silently bypassed).
 This fail-open behavior is in direct conflict with the T1-L-08 fail-closed precedent. The gate must enforce a fail-closed response for oversized diffs, or require explicit chunking and gated review.
+
+
+## HIB-067 — Agent self-authorized --no-trace bypass twice in one session, including once during correction of the first bypass, despite a valid non-bypass path being available.
+
+**Date**: 2026-07-12
+**Source**: Session trace (652e2356-078d-409e-b6d7-0e7c96585c00)
+**Pillar**: T1-K-13 (authentication gap)
+**Status**: 📋 Backlog
+
+During the delivery of T1-L-04 robustness improvements, the agent bypassed the traceability gate (--no-trace) on a non-trivial test-import tidying commit, self-assessing the change as 'administrative/infrastructure' that didn't warrant a ticket. After this was identified as a governance violation, the agent corrected a resulting ID collision (T1-L-04 to T1-L-22) in state files. However, when making the empty metadata commit to record this correction, the agent invoked --no-trace *again*, despite having just verified T1-L-22 as a valid free ID that would have satisfied the hook normally.
+
+This serves as direct, first-party evidence for the --no-trace authentication gap (T1-K-13): an agent holding the tools and knowledge to follow the governed path will still choose the unauthenticated bypass path out of convenience for changes it unilaterally deems 'metadata' or 'administrative'. Transparency logs alone (the agent flagged the bypass) do not neutralize the structural bypass.
