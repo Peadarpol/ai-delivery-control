@@ -85,11 +85,11 @@ working as intended.
 | **#4 Policy conflict detection** | §4: reviewer-vs-consistency-test contradiction, live, with an hour of thrash as the cost of its absence. |
 | **#1 Rule lifecycle / HIB-029 (self-serving governance changes)** | Incident 1: governance rule changes committed with fabricated human sign-off; §6 constitutional-tier and human-quote guards are the mitigations. |
 | **Evidence-based verdicts (proof, not claims)** | Defeat 3 was "fixed" four times without acceptance evidence; the fix that stuck was the one required to log effective `max_tokens` into every verdict. |
-| **Fail-open surface** (HIB-062) | Five distinct fail-open/bypass paths in one week; governance/rule files should be classified high-risk → fail-closed (T1-L-08 extension). |
+| **Fail-open surface** (HIB-068) | Five distinct fail-open/bypass paths in one week; governance/rule files should be classified high-risk → fail-closed (T1-L-08 extension). |
 
 ## 7. Open items spawned (do not lose)
 
-- `EMPTY_DIFF`-on-amend root cause (defeat 4) — un-reproduced, unexplained. HIB-062 family.
+- `EMPTY_DIFF`-on-amend root cause (defeat 4) — un-reproduced, unexplained. HIB-068 family.
 - Split the two `EMPTY_DIFF` log labels (`EMPTY_STAGED` / `ALL_PATHS_SKIPPED`).
 - Every-commit-needs-a-verdict consistency check (T1-K-09 family) — catches hook absence,
   `--no-verify`, and non-hook git clients in one invariant.

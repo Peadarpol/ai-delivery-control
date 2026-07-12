@@ -1099,7 +1099,7 @@ This is the same marker-drift class that v1.4.2's backlog-repair pass addressed 
 
 ---
 
-## HIB-062 — Large diffs failing open (DIFF_TOO_LARGE_FAILOPEN) is a critical gate design gap
+## HIB-068 — Large diffs failing open (DIFF_TOO_LARGE_FAILOPEN) is a critical gate design gap
 
 **Date**: 2026-07-08
 **Source**: Gate design gap

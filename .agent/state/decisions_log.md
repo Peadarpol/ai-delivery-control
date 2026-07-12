@@ -153,7 +153,7 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 
 Decision: Approve the four MTF changes (AGENTS.md rule tables, governance.md §3.3, context-compaction.md Verification Findings slot, validate.py 6-heading check).
 Decider: Peter — explicit approval stated to the implementing agent on 2026-07-09, after review of the diffs.
-Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/09); two mechanical objections raised and retracted as paste artifacts; content endorsed. The pre-commit AI gate did not review this commit — it logged GATE_SKIPPED / EMPTY_DIFF (cause under investigation, HIB-062 family).
+Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/09); two mechanical objections raised and retracted as paste artifacts; content endorsed. The pre-commit AI gate did not review this commit — it logged GATE_SKIPPED / EMPTY_DIFF (cause under investigation, HIB-068 family).
 Consequence: Governance rules and compaction protocol updated; the gate's blindness to .agent/ governance files is now a tracked finding.
 ## 2026-07-09: Dismiss FID-1 (CODE_QUALITY non-standard model name)
 - **Decision**: Dismiss finding FID-1 regarding the model string 'claude-sonnet-4-6'.
@@ -167,7 +167,8 @@ Consequence: Governance rules and compaction protocol updated; the gate's blindn
 - **Consequence**: The brace-extraction parser is retained, but it now raises detailed exceptions with the raw response attached, and the 4096-token config limit is properly applied to call_llm.
 
 ## 2026-07-10 (Session Close)
-- **Config Defaults Policy**: Established project-specific rule in eview_context_project.md that call sites must not pass default= for keys existing in the central DEFAULTS registry (harness_utils.py). Absent fallbacks are by design, relying on the registry.
+- **Config Defaults Policy**: Established project-specific rule in 
+eview_context_project.md that call sites must not pass default= for keys existing in the central DEFAULTS registry (harness_utils.py). Absent fallbacks are by design, relying on the registry.
 - **Fixture Hygiene**: Ensured test fixtures use 	mp_path and cleaned up legacy directories (	emp_test_git_repo, 	ests/test_reconciler_repo, 	ests/.agent).
 
 * **Ratification**: aa40ad2 committed via --no-verify due to verdict-log staging loop (gate writes .ai-review-log.jsonl during the commit that stages it) and traceability regex gap. Contents reviewed conversationally pre-commit. Ratified by Peter, 2026-07-10, quote: [I accept the bypass as a justified exception].

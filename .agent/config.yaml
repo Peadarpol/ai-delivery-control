@@ -4,7 +4,7 @@
 # so the co-change reconciler (T1-B-09) can distinguish boundary-crossing
 # co-change from within-boundary co-change.
 # Self-hosting config (2026-07-09): the gate now runs on this repo itself
-# (see HIB-062 remediation). Only review routing is required; budget tasks
+# (see HIB-068 remediation). Only review routing is required; budget tasks
 # remain unrouted until deliberately enabled.
 model_routing:
   review_provider: anthropic
