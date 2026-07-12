@@ -515,34 +515,7 @@ def initialize_session(agent_name: str = "Harness", session_kind: str | None = N
         if magnitude_source == "auto":
             magnitude = classify_task_magnitude()
 
-        model = os.environ.get("AGENT_MODEL")
-        if not model:
-            model_routing = get_harness_config("model_routing", default={})
-            model = model_routing.get("default_model") or model_routing.get("review_model") or "unknown"
-        
-        DEFAULT_MODEL_TIERS = {
-            "standard": ["flash", "lite", "mini", "haiku", "luna"],
-            "frontier": ["pro", "sonnet", "opus", "sol", "terra"],
-            "local": ["llama", "mistral", "qwen"]
-        }
-        model_tiers = get_harness_config("model_tiers", default=DEFAULT_MODEL_TIERS)
 
-        # Keyword overlap guard
-        seen_keywords = {}
-        for tier, keywords in model_tiers.items():
-            for kw in keywords:
-                if kw in seen_keywords:
-                    print(f"[WARNING] Model tier keyword overlap detected: '{kw}' is mapped to both '{seen_keywords[kw]}' and '{tier}'")
-                seen_keywords[kw] = tier
-
-        model_lower = model.lower()
-        cost_tier = "unknown"
-        # NOTE: This heuristic relies on family/tier keywords rather than exact strings.
-        # It requires periodic review as naming conventions shift (e.g. OpenAI's 5.6 Sol/Terra/Luna).
-        for tier, keywords in model_tiers.items():
-            if any(k in model_lower for k in keywords):
-                cost_tier = tier
-                break
 
         if not session_kind:
             session_kind = os.environ.get("AGENT_SESSION_KIND")
@@ -560,8 +533,7 @@ def initialize_session(agent_name: str = "Harness", session_kind: str | None = N
             "last_activity": start_time,
             "status": "ACTIVE",
             "agent": agent_name,
-            "model": model,
-            "cost_tier": cost_tier,
+
             "task_magnitude": magnitude,
             "task_magnitude_source": magnitude_source,
             "session_kind": session_kind,
@@ -581,7 +553,7 @@ def initialize_session(agent_name: str = "Harness", session_kind: str | None = N
             json.dump(session_data, f, indent=4)
 
         print(f"[INIT] Session {session_id} initialized.")
-        print(f"[MODEL] Active model: {model} (Tier: {cost_tier.upper()})")
+
         print(f"[MAGNITUDE] Task Magnitude Auto-Classified: {magnitude.upper()} (source: {magnitude_source})")
         if magnitude == "major":
             print("\n" + "=" * 80)

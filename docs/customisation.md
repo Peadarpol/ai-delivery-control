@@ -1,14 +1,13 @@
 # Customisation Guide
 
-Four surfaces let you tailor the harness to your project without modifying framework files.
-All four are preserved when you re-run the installer.
+Three surfaces let you tailor the harness to your project without modifying framework files.
+All three are preserved when you re-run the installer.
 
 | Surface | File | What it controls |
 |---|---|---|
 | **Review invariants** | `src/scripts/review_context_project.md` | What the AI gate checks in your codebase |
 | **Custom skills** | `.agent/skills/your-skill/SKILL.md` | New named behaviours for your domain |
 | **Architecture rules** | `.agent/config.yaml` → `architecture:` | Layer boundaries and forbidden patterns |
-| **Model tiers** | `.agent/config.yaml` → `model_tiers:` | Keywords mapping model names to cost tiers |
 
 ---
 
@@ -234,24 +233,7 @@ domain layer.
 
 ---
 
-## 4. Configuring Model Cost Tiers
-
-The harness automatically infers the model being used via the `AGENT_MODEL` environment variable (or falls back to `.agent/config.yaml`'s `model_routing`). It then maps this string to a cost tier (`frontier`, `standard`, `local`, `unknown`) for token-usage aggregation.
-
-Because model naming conventions change rapidly (e.g., OpenAI moving from the size-suffix `gpt-4o-mini` to `GPT-5.6 Sol/Terra/Luna`), the harness relies on a keyword heuristic mapped in `.agent/config.yaml`:
-
-```yaml
-model_tiers:
-  standard: ["flash", "lite", "mini", "haiku", "luna"]
-  frontier: ["pro", "sonnet", "opus", "sol", "terra"]
-  local: ["llama", "mistral", "qwen"]
-```
-
-> **Maintenance Note**: This configuration surface must be reviewed periodically as model providers alter their naming structures. If you adopt a new local model or a new flagship model whose name doesn't include any of the existing keywords, its token usage will be misclassified as `unknown` until you add its family keyword to the appropriate tier list.
-
----
-
-## 5. Prohibition Tiers (MTF)
+## 4. Prohibition Tiers (MTF)
 
 To keep the framework templates clean and maintainable, agent prohibitions are structured into a three-tier model:
 

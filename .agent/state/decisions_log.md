@@ -172,3 +172,8 @@ Consequence: Governance rules and compaction protocol updated; the gate's blindn
 
 * **Ratification**: aa40ad2 committed via --no-verify due to verdict-log staging loop (gate writes .ai-review-log.jsonl during the commit that stages it) and traceability regex gap. Contents reviewed conversationally pre-commit. Ratified by Peter, 2026-07-10, quote: [I accept the bypass as a justified exception].
 * **Record correction**: 2026-07-10: correction — the 2026-07-09 claim that Refs: T1-E-04 was 'handled perfectly by the Traceability Gate' was inaccurate. The hook's regex accepts only SPEC-\d+; commit 6743f1a passed because the hook did not enforce on it, not because it recognised the reference.
+
+## 2026-07-12: Removal of Model/Cost Tier Tracking (T1-B-13)
+- **Decision**: Removed model and cost tier tracking logic that was originally added in commit 76283ca.
+- **Context**: An audit revealed that the core input (driving-agent model via AGENT_MODEL) is undiscoverable for both Claude Code and Gemini CLI sessions. Furthermore, the downstream consumption of model and cost_tier data was zero (harness_health.py, distill_dream.py, state_persistence.py, and harness_utils.py do not read it).
+- **Consequence**: The feature was removed rather than patched to keep the harness lightweight. The model_tiers section was removed from .agent/config.yaml, and related lookup logic was stripped from init_session.py and state file schemas.

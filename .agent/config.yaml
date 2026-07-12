@@ -10,13 +10,6 @@ model_routing:
   review_provider: anthropic
   review_model: claude-sonnet-4-6
 
-# Mapping of model family keywords to cost tiers for budget tracking.
-# NOTE: This heuristic requires periodic review as model naming conventions shift
-# (e.g., OpenAI's Sol/Terra/Luna deviation from the standard size-suffix pattern).
-model_tiers:
-  standard: ["flash", "lite", "mini", "haiku", "luna"]
-  frontier: ["pro", "sonnet", "opus", "sol", "terra"]
-  local: ["llama", "mistral", "qwen"]
 
 project:
   name: "ai-delivery-control"

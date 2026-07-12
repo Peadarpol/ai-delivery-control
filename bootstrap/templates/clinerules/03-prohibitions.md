@@ -50,4 +50,4 @@ following without explicit user instruction in the current session.
 
 **Project-specific and pattern-conditional prohibitions** (Tier 2 / Tier 3) live in this
 project's own `.agent/AGENTS.md` under `## §4.2 — Project-Specific Rules` and
-`## §4.3 — Pattern-Conditional Rules`. See `docs/customisation.md` §5 for templates.
+`## §4.3 — Pattern-Conditional Rules`. See `docs/customisation.md` §4 for templates.
