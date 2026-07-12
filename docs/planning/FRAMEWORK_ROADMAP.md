@@ -484,10 +484,8 @@ S0-05 must be cut before any beta invitations are sent.
 - T1-E-04: config.yaml parser unification
 - T1-E-03: session.json shared contract enforcement
 - HIB-062: Traceability ID coverage regex expansion
-- HIB-065: Parser-robustness failure mode (invalid-escape) — fail-closed via _handle_parse_failure
-- T1-L-22: check_traceability.py robustness (single-scan cache, missing-docs messaging, size guard)
 - T1-B-11: Honest outcome labeling for non-code sessions (narrowed scope)
-- ~~HIB-055: Universal review-context RULE sections orphaned~~ *(correction 2026-07-12: this shipped in v1.4.2, not v1.4.9 — erroneous duplicate entry, retained struck through rather than silently deleted)*
+- HIB-055: Universal review-context RULE sections orphaned
 - T1-B-13: Active-model/cost-tier indicator (built and deliberately reversed)
 
 ---
