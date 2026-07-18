@@ -18,7 +18,7 @@ At the `commit-msg` hook stage during the very first commit in a repository, the
    - *Result*: Exits with non-zero code (`128`).
    - *Output*: `fatal: your current branch 'main' does not have any commits yet`
 4. **`git rev-parse --verify HEAD`**
-   - *Result*: Exits with non-zero code (`4`).
+   - *Result*: Exits with non-zero code (`128`).
    - *Output*: `fatal: Needed a single revision` (to stderr).
 
 ### Reliable Root-Commit Predicate
@@ -41,14 +41,25 @@ This check is highly deterministic and cross-platform.
 
 ## 2. Exemption Matrix Across Outer-Loop Modes
 
-We map whether the root-commit traceability exemption should be allowed across the three `outer_loop` governance postures:
+We map the behavior of the two bypass mechanisms across the three actual `outer_loop` governance modes defined in the project configuration:
 
-| Governance Mode | Exemption Allowed? | Rationale / Argument |
-| :--- | :--- | :--- |
-| **loose** | **Yes** | Standard developer speed posture; first commit does not require spec tracking. |
-| **contractual** | **Yes (Recommended)** | **The Onboarding Paradox**: Every new software project must start with a root commit. Forcing a spec validation check on the first commit creates a catch-22, as the spec validation script (`check_spec.py`) and environment themselves are typically introduced in the root commit. |
-| **contractual** | **No** | Strict alignment posture: even the root commit must match a spec defined outside git (e.g. in a parent wiki or task manager). *Cost*: adds substantial friction to bootstrapping. |
-| **strict** | **No** | Zero-exception policy. The root commit must contain an approved spec in the staged files that matches the traceability ID. |
+1. **Manual `--no-trace` Keyword Bypass**: The developer explicitly inputs a bypass override inside the commit message text.
+2. **Automatic Root-Commit Exemption**: The hook automatically detects a zero-commit repository state and bypasses checking.
+
+### First-Party Design Invariants
+The central project configuration template `config.yaml.template` defines explicit policy constraints for each mode:
+- **`discovery`**: exploratory projects, spec gate is advisory (exit 0).
+- **`incremental`** (DEFAULT): macro scope known, feature-by-feature delivery, spec gate blocks on structural failures.
+- **`contractual`**: strict compliance, spec gate is maximally strict. **"No bypass paths available."**
+
+### Mode Exemption Matrix
+
+| Governance Mode | Manual `--no-trace` Bypass Allowed? | Automatic Root-Commit Exemption Allowed? | Rationale / Argument |
+| :--- | :--- | :--- | :--- |
+| **discovery** | **Yes** | **Yes** | Low-rigidity exploratory mode. Spec gate does not block; bypasses are fully allowed. |
+| **incremental** | **Yes** | **Yes** | Default mode. Manual bypasses require a 10-character reason. Automatic root-commit exemption is allowed to resolve the bootstrapping catch-22 (installing harness configs/hooks without a pre-existing spec). |
+| **contractual** | **No** | **Yes (Recommended)** | **The Onboarding Paradox**: While the configuration explicitly states "No bypass paths available" (making manual `--no-trace` overrides prohibited), a brand new project cannot be bootstrapped without a root commit. Since the spec files and environment setup are introduced *in* the root commit, enforcing spec-traceability on commit #1 creates a logical deadlock. Therefore, the automatic root-commit check should still be allowed as an exceptional technical necessity, whereas manual `--no-trace` remains strictly blocked. |
+| **contractual** | **No** | **No** | Absolute compliance posture: even the root commit must match a spec defined outside Git. This requires the developer to manually stage and commit an approved spec file (matching the first commit message ID) inside the root commit. *Cost*: creates high friction during initial project onboarding. |
 
 ---
 
