@@ -1,6 +1,6 @@
 # SPEC-v1.4.9.1-first-commit-hotfix
 
-**Status**: DRAFT  
+**Status**: APPROVED (Option 1 Selected)  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.9.1  
 **Tracked under**: `T1-K-15` / `T1-B-15` / `T1-B-16` / `HIB-069` / `HIB-070` / `HIB-071` / `HIB-072`
@@ -96,5 +96,5 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 - Verify that E2E onboarding scenario executes cleanly:
   `poetry run python tests/e2e/run_e2e_verification.py`
 
-### [DECISION REQUIRED]
-* **Pydantic Fallback strategy**: Confirm Option 1 (Dynamic Graceful Fallback) is accepted over Option 2 (Prerequisite Declaration).
+### Resolved Decisions
+* **Pydantic Fallback strategy**: Resolved 2026-07-18. Option 1 (Dynamic Import with Graceful Fallback / Degradation) has been approved and selected for implementation.
