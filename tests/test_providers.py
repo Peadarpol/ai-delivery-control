@@ -219,3 +219,22 @@ class TestReviewProviderCallLlm:
         assert input_tok_true == input_tok_false
         assert output_tok_true == output_tok_false
 
+
+class TestProvidersRawCompletionRegression:
+    @pytest.mark.xfail(reason="HIB-069: raw_completion raises NameError due to missing _strip_json_fences", strict=True)
+    def test_anthropic_raw_completion_strips_fences(self, providers_mod):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "content": [{"text": "```json\n{\n  \"verdict\": \"PASS\"\n}\n```"}],
+            "usage": {"input_tokens": 10, "output_tokens": 20}
+        }).encode("utf-8")
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp), \
+             patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}):
+            p = providers_mod.AnthropicProvider()
+            res = p.raw_completion("sys", "user")
+            assert res == '{\n  "verdict": "PASS"\n}'
+
+
