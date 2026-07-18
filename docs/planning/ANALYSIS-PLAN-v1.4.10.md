@@ -1,7 +1,6 @@
 # ANALYSIS PLAN — First-Commit Defects (v1.4.9.1 / v1.4.10 split)
 
-**Status**: DRAFT v4 — all three decision points RESOLVED 2026-07-18; pending
-final human APPROVED sign-off. Three-release split formalised in
+**Status**: APPROVED. Three-release split formalised in
 `FRAMEWORK_ROADMAP.md` (v1.4.9.1, v1.4.10, v1.4.11), each with its own spec
 per standing practice (spec-first, docs before code).
 **Author**: Claude (adversarial review agent), on behalf of Peter Long
