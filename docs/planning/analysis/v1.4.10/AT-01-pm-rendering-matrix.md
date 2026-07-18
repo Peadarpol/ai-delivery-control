@@ -53,14 +53,15 @@ This matrix maps how virtual environment paths, script folder names, and python 
 | **Linux** | poetry | **Valid** (`poetry run`) | **Valid** (`poetry run`) | Poetry resolves env internally; OS invariant. |
 | **Windows** | pip + `.venv` | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: Global python runs; lacks pydantic/packages. |
 | **macOS** | pip + `.venv` | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: Global python runs; lacks pydantic/packages. |
-| **Linux** | pip + `.venv` | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: Global python runs; lacks pydantic/packages. |
-| **Windows/macOS/Linux** | conda | **Valid** (`python`) | **Broken** (global python) | **Out of Scope**: Conda environment path resolution in Scenario B resides outside the workspace root and requires a named global environment. Conda is treated as an active-only or global environment target for our scope. |
+| **Linux** | pip + `.venv` | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: Global python runs; lacks pyd| **Windows/macOS/Linux** | conda | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: In Scenario B, the global interpreter runs and lacks conda packages unless resolved. |
 
-### Conda Environment Support (Design Disposition)
+### Conda Environment Support (Design & Resolution Path)
 Conda manages python environments in a system-wide user directory (e.g. `C:\Users\username\.conda\envs\` or `/home/user/miniconda3/envs/`) rather than a workspace-local subfolder.
-- **Scenario A (Activated)**: Resolves correctly to the active Conda python executable (`python` maps to the conda environment bin path in `PATH`).
-- **Scenario B (Non-Activated)**: Pre-commit calls have no way of knowing the named conda environment name or conda root dynamically unless it is hardcoded or resolved via system-wide environment lookups.
-- **Decision**: Conda is designated out of scope for workspace-local path resolution. In a non-activated environment (Scenario B), Conda users must either run pre-commit via their activated shells, or configure their IDE/Git GUIs to run git commits with the correct activated environment wrapper.
+- **Scenario A (Activated)**: Resolves correctly because the active Conda python executable is mapped to `PATH`.
+- **Scenario B (Non-Activated)**: Pre-commit calls default to the system global Python, causing import failures.
+- **Resolution**: During `bootstrap/install.py` execution, if the target stack's package manager is `conda`, the installer can check the `CONDA_DEFAULT_ENV` or `CONDA_PREFIX` environment variables. If found, it records the active Conda environment name (e.g., `my-conda-env`) and dynamically renders the pre-commit prefix to:
+  `conda run -n {env_name} python`
+  This executes hooks within the isolated conda environment even from non-activated shells or graphical IDEs (Scenario B). If no active environment is detected at install time, it defaults to standard `python` with a setup warning.
 
 ### Layout Discrepancies
 For Scenario B to pass on standard `pip` projects, the hook must target the virtual environment interpreter explicitly:
@@ -74,7 +75,7 @@ For Scenario B to pass on standard `pip` projects, the hook must target the virt
 We compare two strategies for resolving python executable path and package manager prefix inconsistencies:
 
 ### Option A: Install-Time Prefix Rendering (Static Templates)
-The installer (`bootstrap/install.py`) detects target OS and virtual environment directories (`.venv`, `venv`, `env`), computes the interpreter prefix, and substitutes it into a placeholder (e.g. `[PROJECT_PYTHON_INTERPRETER]` or `[PROJECT_PM_RUN_PREFIX]`).
+The installer (`bootstrap/install.py`) detects target OS, package manager, and virtual environment directories (`.venv`, `venv`, `env`), computes the interpreter prefix, and substitutes it into a placeholder (e.g. `[PROJECT_PYTHON_PREFIX]` or `[PROJECT_PM_RUN_PREFIX]`).
 
 - **Pros**:
   - Pure declarative pre-commit configuration.
@@ -117,7 +118,7 @@ The rendering paths diverged because:
 ## 6. Recommendations & Action Plan
 
 ### Recommended Strategy
-We recommend **Option A: Install-Time Prefix Rendering** leveraging the installer to resolve both F1 and F-COLD-2. 
+We recommend **Option A: Install-Time Prefix Rendering** leveraging the installer to resolve both F1 and F-COLD-2.
 
 ### Rationale
 Option A keeps the pre-commit configuration declarative and simple. Since the virtual environment name and layout are determined at setup time, the installer can reliably write the correct platform-specific paths.
@@ -132,15 +133,30 @@ Option A keeps the pre-commit configuration declarative and simple. Since the vi
            venv_dir = name
            break
 
+   # Compute prefixes
    if self.package_manager == "pip" and venv_dir:
        if sys.platform == "win32":
            python_prefix = f"{venv_dir}/Scripts/python"
+           mypy_prefix = f"{venv_dir}/Scripts/mypy"
        else:
            python_prefix = f"{venv_dir}/bin/python"
+           mypy_prefix = f"{venv_dir}/bin/mypy"
+   elif self.package_manager == "conda":
+       conda_env = os.environ.get("CONDA_DEFAULT_ENV") or os.environ.get("CONDA_PREFIX")
+       if conda_env:
+           # If absolute path, use its basename
+           env_name = os.path.basename(conda_env)
+           python_prefix = f"conda run -n {env_name} python"
+           mypy_prefix = f"conda run -n {env_name} mypy"
+       else:
+           python_prefix = "python"
+           mypy_prefix = "mypy"
    else:
        # poetry run python / pipenv run python / global python
        python_prefix = f"{pm_run_prefix}python"
+       mypy_prefix = f"{pm_run_prefix}mypy"
    ```
 2. In `pre-commit-config.yaml.template`, replace:
    - `[PROJECT_PACKAGE_MANAGER] run python` ➔ `[PROJECT_PYTHON_PREFIX]`
-   - `[PROJECT_PACKAGE_MANAGER] run mypy` ➔ `[PROJECT_PM_RUN_PREFIX]mypy` (or resolve standard placeholders).
+   - `[PROJECT_PACKAGE_MANAGER] run mypy` ➔ `[PROJECT_MYPY_PREFIX]`
+3. Ensure the `Verify active repository` hook also uses `[PROJECT_PYTHON_PREFIX]` instead of hardcoded `python` for absolute pathing consistency.
