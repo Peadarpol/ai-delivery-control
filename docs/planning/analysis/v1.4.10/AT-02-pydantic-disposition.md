@@ -4,10 +4,30 @@ This document provides a detailed analysis of the Pydantic import-time crash def
 
 ## 1. Pydantic Usage Inventory
 
-Pydantic is imported at the top-level of [src/scripts/ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py#L33):
-`from pydantic import BaseModel, Field, ValidationError`
+Pydantic is imported in the following files across the repository:
 
-It is also used in three sub-modules: [route_decision.py](file:///c:/projects/ai-delivery-control/src/scripts/route_decision.py), [rebuttal.py](file:///c:/projects/ai-delivery-control/src/scripts/rebuttal.py), and [gate_context.py](file:///c:/projects/ai-delivery-control/src/scripts/gate_context.py).
+1. **[src/scripts/ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py#L33)**:
+   - Imports: `BaseModel`, `Field`, `ValidationError` (unprotected top-level import).
+   - Usage: Inherited by `ReviewVerdict` and `PlanOutput`.
+2. **[src/scripts/route_decision.py](file:///c:/projects/ai-delivery-control/src/scripts/route_decision.py#L12)**:
+   - Imports: `BaseModel`, `Field` (unprotected top-level import).
+   - Usage: Inherited by `RouteDecision`.
+3. **[src/scripts/rebuttal.py](file:///c:/projects/ai-delivery-control/src/scripts/rebuttal.py#L18)**:
+   - Imports: `BaseModel`, `Field`, `ValidationError` (unprotected top-level import).
+   - Usage: Inherited by rebuttal schemas.
+4. **[src/scripts/gate_context.py](file:///c:/projects/ai-delivery-control/src/scripts/gate_context.py#L17)**:
+   - Imports: `BaseModel`, `Field` (unprotected top-level import).
+5. **[.agent/scripts/acceptance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/acceptance_check.py#L14)**:
+   - Imports: `BaseModel` (unprotected top-level import).
+   - Usage: Inherited by `AcceptanceVerdict`.
+6. **[.agent/scripts/check_spec.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_spec.py#L33)**:
+   - Imports: `BaseModel`, `Field` (protected dynamic import).
+   - Usage: Wrapped in `try...except ImportError` with a zero-dependency fallback class block.
+
+### Defect Class Propagation (F2)
+The import-time crash defect is NOT unique to `ai_review.py`.
+- **`check_spec.py`** is guarded correctly. If Pydantic is missing, it falls back to a clean mock class block and runs successfully.
+- **`acceptance_check.py`** has the exact same top-level unprotected import pattern and shares the F2 crash risk. If Pydantic is not installed, the AI-driven acceptance gate crashes at load time, blocking commits on pre-push/post-commit. A robust v1.4.9.1 hotfix must fix the import layout in BOTH `ai_review.py` and `acceptance_check.py`.
 
 ### Pydantic Models & Fields Injected
 
@@ -61,24 +81,28 @@ Today, the top-level import of `pydantic` sits above the fail-open protection bl
 
 ---
 
-## 4. API Key Discovery & Unavailability Semantics (F-COLD-3)
+## 4. Malformed LLM Response Path Tracing
 
-We analyzed the current behavior of the review gate when the API provider key is:
-- **(a) Absent**:
-  - `providers.get_provider()` calls `is_available()`, which returns `False` because the environment variable `ANTHROPIC_API_KEY` (or equivalent) is empty.
-  - This raises a `RuntimeError` which is caught in `_run_review`'s try-catch and routes to `_handle_api_unavailable()`.
-  - For normal commits: fails open with a warning.
-  - For high-risk commits: fails closed and blocks.
-- **(b) Present but Unreachable/Invalid** (e.g. invalid key or network issue):
-  - `is_available()` returns `True` since the variable is set.
-  - The network request in `call_api_with_retry` fails and throws `HTTPError` (e.g., 401 Unauthorized or 403 Forbidden).
-  - This is also caught and routes to `_handle_api_unavailable()`, behaving identically to (a).
+We traced the behavior of the review gate when the LLM call succeeds but returns an invalid or schema-mismatched response:
 
-### User Experience Gap
-In the field session, the user attempted their first commit and faced a failure/warning because the key requirement was undiscoverable.
-- There is no check during the onboarding phase (`bootstrap/install.py`) or the validation phase (`bootstrap/validate.py`) checking if the keys are defined or valid.
-- The user is only notified of the missing key at commit time.
-- Preflight key verification should be added to the installer/validator to improve onboarding ergonomics.
+### Path A: Completely Malformed JSON (`json.JSONDecodeError`)
+If the model returns a response that cannot be parsed as valid JSON (even after brace-extraction in `_parse_json_response`):
+1. `_parse_json_response()` raises a `json.JSONDecodeError`.
+2. This is caught by the `except json.JSONDecodeError` block in `_run_review()`.
+3. It calls `_handle_parse_failure()`, logs `json_parse_failure` to `harness_events.jsonl`, writes the parse failure reason to `verdict.json`, and **uniformly fails closed** by returning exit code `1`.
+4. **Behavior**: Always blocks the commit, regardless of risk level.
+
+### Path B: Valid JSON but Schema Mismatch (`ValidationError`)
+If the model returns valid JSON, but the fields fail to validate against the `ReviewVerdict` model schema (e.g. missing `verdict` or invalid Literal value):
+1. Instantiation of `ReviewVerdict(**raw_review_dict)` raises a Pydantic `ValidationError`.
+2. This is caught by `except ValidationError as exc` at the bottom of the parsing block in `_run_review()`.
+3. It sets `fail_reason = f"ReviewVerdict validation failed: {exc}"` and delegates to `_handle_api_unavailable()`.
+4. **Behavior**:
+   - **Low-Risk Commit**: Fails open, logs the event, and allows the commit (exit code `0`).
+   - **High-Risk Commit**: Fails closed, logs the event, and blocks the commit (exit code `1`).
+
+### Summary of Path Divergences
+The gate treats a Pydantic validation failure as a transient provider error (failing open for low-risk commits), while treating raw JSON parse errors as complete engine failures (always failing closed). This represents an intentional safety posture choice, but should be documented clearly.
 
 ---
 
@@ -88,7 +112,7 @@ The framework documentation frequently claims "stdlib only" or "zero external de
 - **[getting-started.md](file:///c:/projects/ai-delivery-control/docs/getting-started.md#L11)**: "Python stdlib is required to run the harness regardless of your project's language."
 - **[CAPABILITY_INVENTORY.md](file:///c:/projects/ai-delivery-control/docs/planning/CAPABILITY_INVENTORY.md#L642)**: "`.agent/scripts/check_traceability.py` — stdlib-only commit-msg hook (zero external dependencies)"
 - **[sprint_1_implementation_plan.md](file:///c:/projects/ai-delivery-control/docs/archive/sprint_1_implementation_plan.md#L247)**: "Zero-Dependency Lightness: stdlib only"
-These statements are technically inaccurate as long as `ai_review.py` forces a top-level import of `pydantic`.
+These statements are technically inaccurate as long as `ai_review.py` and `acceptance_check.py` force top-level imports of `pydantic`.
 
 ---
 
