@@ -54,10 +54,11 @@ We design three mandatory preflight checks to detect silent environment gaps pri
 ### 2. Live API Key Preflight (F-COLD-3)
 * **Goal**: Confirm the configured LLM API key is present and actually has network reachability to the provider endpoint.
 * **Mechanism**:
-  - Retrieve the budget/review keys and providers from `.agent/config.yaml`.
-  - Run a cheap, low-token (e.g. `max_tokens=1`) connection test call to the provider endpoint.
-  - Catch `401 Unauthorized` (auth/key error) or connection timeouts, formatting a clear remediation guide:
-    `❌ [ERROR] Anthropic API Key is unreachable or invalid (status: 401). Verify ANTHROPIC_API_KEY environment variable.`
+  - Retrieve the review and budget providers and their configurations from `.agent/config.yaml`.
+  - Resolve the corresponding credentials (e.g. `ANTHROPIC_API_KEY` for Anthropic, `OPENAI_API_KEY` for OpenAI, or verify host port status for local Ollama endpoints).
+  - Run a cheap, low-token (e.g. `max_tokens=1`) connection test call to the active provider's API endpoint.
+  - Catch `401 Unauthorized` (auth/key error), connection timeouts, or DNS failures, formatting a clear, provider-neutral remediation guide:
+    `❌ [ERROR] Configured {Provider} API Key is unreachable or invalid (status: 401). Verify {KEY_NAME} environment variable or local server connection.`
 
 ### 3. venv Python Currency & Tooling Report (F-COLD-5)
 * **Goal**: Detect downlevel Python interpreters or outdated formatters in the local virtualenv.

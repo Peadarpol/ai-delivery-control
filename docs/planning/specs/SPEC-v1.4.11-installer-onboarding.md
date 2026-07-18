@@ -1,6 +1,6 @@
 # SPEC-v1.4.11-installer-onboarding
 
-**Status**: DRAFT  
+**Status**: APPROVED (Option A Selected)  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.11  
 **Tracked under**: `F7` / `F8` / `T1-K-17` / `F-COLD-1` / `F-COLD-2` / `F-COLD-3` / `F-COLD-5`
@@ -42,7 +42,7 @@ This release focuses on hardening the harness installation and onboarding onboar
 * **And** prints a warning instructing the user to run the script against an unrelated project.
 
 ### Scenario 2: Onboarding validation fails on unreachable API key (F-COLD-3)
-* **Given** an invalid or absent `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+* **Given** an invalid, absent, or unreachable credentials configuration for the active LLM provider (e.g., `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` when cloud routing is selected, or local connection failures when Ollama is selected)
 * **When** `bootstrap/validate.py` executes preflight connection tests
 * **Then** the validator fails the runnability check
 * **And** outputs precise key location and authorization troubleshooting cards.
@@ -78,5 +78,5 @@ This release focuses on hardening the harness installation and onboarding onboar
 - Run installer scaffold tests:
   `poetry run pytest tests/test_install.py`
 
-### [DECISION REQUIRED]
-* **Default-On Dry-Run**: Confirm Option A (Default-On with `--skip-validation` flag) is accepted over Option B (Opt-In validation).
+### Resolved Decisions
+* **Default-On Dry-Run**: Resolved 2026-07-18. Option A (Default-On with a `--skip-validation` flag) has been approved and selected for implementation.
