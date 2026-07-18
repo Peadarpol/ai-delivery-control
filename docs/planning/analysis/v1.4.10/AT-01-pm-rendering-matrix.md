@@ -7,26 +7,32 @@ This document provides a comprehensive analysis of the package manager rendering
 This matrix evaluates how the `[PROJECT_PACKAGE_MANAGER]` placeholder and command prefixes render across different package managers when applied to the pre-commit configuration template lines.
 
 ### Template Command Lines in Scope
-- **C1**: `entry: [PROJECT_PACKAGE_MANAGER] run mypy [PROJECT_SRC_PATH]/`
-- **C2**: `entry: [PROJECT_PACKAGE_MANAGER] run pytest --noconftest tests/quality/test_exception_standards.py`
-- **C3**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/skills/senior-architect/scripts/architecture_checks.py`
+There are 10 hook definition lines in `pre-commit-config.yaml.template` using the `[PROJECT_PACKAGE_MANAGER]` placeholder:
+- **C1**: `entry: [PROJECT_PACKAGE_MANAGER] run mypy [PROJECT_SRC_PATH]/` (Mypy type checks)
+- **C2**: `entry: [PROJECT_PACKAGE_MANAGER] run pytest --noconftest tests/quality/test_exception_standards.py` (Exception Standards checks)
+- **C3**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/skills/senior-architect/scripts/architecture_checks.py` (Clean Architecture checks)
+- **C4**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_skills_hygiene.py` (Skills Hygiene)
+- **C5**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/evals/behaviour_checks.py` (Agent Behavior Audit)
+- **C6**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/evals/regression_runner.py --verify-only` (Regression checks)
+- **C7**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/governance_check.py` (Governance check)
+- **C8**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/init_session.py --post-commit` (Session heartbeat)
+- **C9**: `entry: [PROJECT_PACKAGE_MANAGER] run python [PROJECT_SRC_PATH]/scripts/ai_review.py` (AI Adversarial Review)
+- **C10**: `entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_traceability.py` (Requirement Traceability)
 
 ### Rendering Matrix
 
 | PM / Tool | Template Command | Rendered Hook Entry | Valid? | Details / Action Required |
 | :--- | :--- | :--- | :--- | :--- |
-| **poetry** | C1 | `poetry run mypy src/` | **Yes** | Poetry correctly resolves to its internal virtual env. |
-| **poetry** | C2 | `poetry run pytest ...` | **Yes** | Standard Poetry execution path. |
-| **poetry** | C3 | `poetry run python ...` | **Yes** | Standard Poetry execution path. |
-| **pipenv** | C1 | `pipenv run mypy src/` | **Yes** | Pipenv correctly resolves execution path. |
-| **pipenv** | C2 | `pipenv run pytest ...` | **Yes** | Standard Pipenv execution path. |
-| **pipenv** | C3 | `pipenv run python ...` | **Yes** | Standard Pipenv execution path. |
-| **pip** | C1 | `pip run mypy src/` | **No** | **F1 Defect**: `pip` has no `run` command; pre-commit fails. |
-| **pip** | C2 | `pip run pytest ...` | **No** | **F1 Defect**: `pip` has no `run` command; pre-commit fails. |
-| **pip** | C3 | `pip run python ...` | **No** | **F1 Defect**: `pip` has no `run` command; pre-commit fails. |
-| **npm** | C1 | `npm run mypy src/` | **Yes** | Resolves if a `mypy` script is defined in `package.json`. |
-| **pnpm** | C1 | `pnpm run mypy src/` | **Yes** | Resolves if a `mypy` script is defined in `package.json`. |
-| **yarn** | C1 | `yarn run mypy src/` | **Yes** | Resolves if a `mypy` script is defined in `package.json`. |
+| **poetry** | C1–C2 | `poetry run <cmd>` | **Yes** | Poetry correctly resolves to its internal virtual env. |
+| **poetry** | C3–C10 | `poetry run python <script>` | **Yes** | Standard Poetry execution path. |
+| **pipenv** | C1–C2 | `pipenv run <cmd>` | **Yes** | Pipenv correctly resolves execution path. |
+| **pipenv** | C3–C10 | `pipenv run python <script>` | **Yes** | Standard Pipenv execution path. |
+| **pip** | C1–C2 | `pip run <cmd>` | **No** | **F1 Defect**: `pip` has no `run` command; pre-commit fails with `unknown command "run"`. |
+| **pip** | C3–C10 | `pip run python <script>` | **No** | **F1 Defect**: `pip` has no `run` command; pre-commit fails. |
+| **npm/pnpm/yarn** | C1–C10 | `<pm> run <cmd>` | **Yes** | Resolves correctly if scripts are defined in the target project's `package.json`. |
+
+> [!NOTE]
+> **Uniformity Check**: None of the 7 other python-based hooks (`C4`–`C10`) exhibit special-case command syntax or arguments that would deviate from the standard `[PROJECT_PACKAGE_MANAGER] run python <script>` structure. A blanket placeholder replacement of `[PROJECT_PACKAGE_MANAGER] run python` with a resolved virtual environment prefix is completely safe and robust for all Python invocations.
 
 ---
 
@@ -48,6 +54,13 @@ This matrix maps how virtual environment paths, script folder names, and python 
 | **Windows** | pip + `.venv` | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: Global python runs; lacks pydantic/packages. |
 | **macOS** | pip + `.venv` | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: Global python runs; lacks pydantic/packages. |
 | **Linux** | pip + `.venv` | **Valid** (`python`) | **Broken** (global python) | **F-COLD-2 Bug**: Global python runs; lacks pydantic/packages. |
+| **Windows/macOS/Linux** | conda | **Valid** (`python`) | **Broken** (global python) | **Out of Scope**: Conda environment path resolution in Scenario B resides outside the workspace root and requires a named global environment. Conda is treated as an active-only or global environment target for our scope. |
+
+### Conda Environment Support (Design Disposition)
+Conda manages python environments in a system-wide user directory (e.g. `C:\Users\username\.conda\envs\` or `/home/user/miniconda3/envs/`) rather than a workspace-local subfolder.
+- **Scenario A (Activated)**: Resolves correctly to the active Conda python executable (`python` maps to the conda environment bin path in `PATH`).
+- **Scenario B (Non-Activated)**: Pre-commit calls have no way of knowing the named conda environment name or conda root dynamically unless it is hardcoded or resolved via system-wide environment lookups.
+- **Decision**: Conda is designated out of scope for workspace-local path resolution. In a non-activated environment (Scenario B), Conda users must either run pre-commit via their activated shells, or configure their IDE/Git GUIs to run git commits with the correct activated environment wrapper.
 
 ### Layout Discrepancies
 For Scenario B to pass on standard `pip` projects, the hook must target the virtual environment interpreter explicitly:
