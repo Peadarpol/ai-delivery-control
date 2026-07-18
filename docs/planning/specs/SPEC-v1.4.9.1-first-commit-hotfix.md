@@ -1,6 +1,6 @@
 # SPEC-v1.4.9.1-first-commit-hotfix
 
-**Status**: APPROVED (Option 1 Selected)  
+**Status**: DRAFT  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.9.1  
 **Tracked under**: `T1-K-15` / `T1-B-15` / `T1-B-16` / `HIB-069` / `HIB-070` / `HIB-071` / `HIB-072`
@@ -24,11 +24,14 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 * **Bounded Scope**:
   - Replace hardcoded `[PROJECT_PACKAGE_MANAGER] run` commands in the pre-commit config template with dynamically resolved prefix path placeholders rendered at install time.
   - Relocate Pydantic imports inside target functions or wrap them in dynamic `try...except ImportError` check blocks in `ai_review.py` and `acceptance_check.py`.
-  - Fix fixed-depth parent path insertions and CWD-relative import vulnerabilities in framework skills and scripts.
+  - Fix parent path insertions and CWD-relative import vulnerability specifically in `architecture_checks.py` (the file that blocks the first commit). The remaining 10 vulnerable files identified in the AT-03 inventory (including `repo_map.py`, `init_session.py`, `harness_health.py`, etc.) are deferred to v1.4.11.
   - Re-introduce the regex-based `_strip_json_fences` helper in `providers.py` and cover it with unit tests.
 * **Out of Scope**:
   - Upgrading the validator to run dry-run preflights (deferred to v1.4.11).
   - Enforcing merge-time checks or authentication for `--no-trace` (deferred to v1.4.10).
+
+> [!NOTE]
+> **Conda Support Scope Decision [DECISION REQUIRED]**: Conda run-prefix rendering (`conda run -n {env_name}`) is proposed under Section 5. Peter must confirm if this should remain in the v1.4.9.1 hotfix or be deferred to v1.4.11 onboarding theme.
 
 ---
 
@@ -44,7 +47,7 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 ### Scenario 1: Onboarding on a bare pip project
 * **Given** a fresh git repository using a basic `pip` layout with an active `.venv`
 * **When** `bootstrap/install.py` is executed
-* **Then** the rendered `.pre-commit-config.yaml` contains platform-correct absolute paths to virtualenv tool paths (e.g. `.venv/Scripts/python` on Windows or `.venv/bin/python` on macOS)
+* **Then** the rendered `.pre-commit-config.yaml` contains platform-correct relative virtualenv paths to virtualenv tool paths (e.g. `.venv/Scripts/python` on Windows or `.venv/bin/python` on macOS)
 * **And** the first git commit completes successfully without raising `ModuleNotFoundError` or `unknown command` errors.
 
 ### Scenario 2: Markdown fence stripping executes cleanly
@@ -63,7 +66,7 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 
 #### [MODIFY] [install.py](file:///c:/projects/ai-delivery-control/bootstrap/install.py)
 - Detect OS layout and virtual environment name to dynamically compute prefix paths at install time (Option A from AT-01).
-- support Conda by checking `CONDA_DEFAULT_ENV` environment variable to render `conda run -n {env_name}`.
+- Support Conda by checking `CONDA_DEFAULT_ENV` environment variable to render `conda run -n {env_name}`.
 
 ### Component: Dependency Isolation
 #### [MODIFY] [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py)
@@ -92,9 +95,12 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 
 ### Automated Tests
 - Run the restored providers unit tests:
-  `poetry run pytest tests/test_providers.py -k "test_strip_json_fences"`
+  `.venv/bin/python -m pytest tests/test_providers.py -k "test_strip_json_fences"` (macOS/Linux) or `.venv\Scripts\python -m pytest tests/test_providers.py -k "test_strip_json_fences"` (Windows)
 - Verify that E2E onboarding scenario executes cleanly:
-  `poetry run python tests/e2e/run_e2e_verification.py`
+  `.venv/bin/python tests/e2e/run_e2e_verification.py` (macOS/Linux) or `.venv\Scripts\python tests/e2e/run_e2e_verification.py` (Windows)
 
-### Resolved Decisions
-* **Pydantic Fallback strategy**: Resolved 2026-07-18. Option 1 (Dynamic Import with Graceful Fallback / Degradation) has been approved and selected for implementation.
+---
+
+## 7. Resolved Decisions
+
+* **Pydantic Fallback strategy**: Option 1 (Dynamic Import with Graceful Fallback / Degradation) has been approved and selected for implementation.

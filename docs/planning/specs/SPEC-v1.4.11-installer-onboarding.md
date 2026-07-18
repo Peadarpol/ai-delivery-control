@@ -1,6 +1,6 @@
 # SPEC-v1.4.11-installer-onboarding
 
-**Status**: APPROVED (Option A Selected)  
+**Status**: DRAFT  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.11  
 **Tracked under**: `F7` / `F8` / `T1-K-17` / `F-COLD-1` / `F-COLD-2` / `F-COLD-3` / `F-COLD-5`
@@ -9,7 +9,7 @@
 
 ## 1. Goal & Context
 
-This release focuses on hardening the harness installation and onboarding onboarding experience. It ensures that the first pre-commit hook runs reliably on every supported platform (macOS, Windows, Linux) across diverse virtualenv managers (pip, poetry, conda), validates live API credentials before onboarding completes, prevents accidental installations inside the harness folder itself, and protects framework-owned files from project-level formatter mutations.
+This release focuses on hardening the harness installation and onboarding experience. It ensures that the first pre-commit hook runs reliably on every supported platform (macOS, Windows, Linux) across diverse virtualenv managers (pip, poetry, conda), validates live API credentials before onboarding completes, prevents accidental installations inside the harness folder itself, and protects framework-owned files from project-level formatter mutations.
 
 ---
 
@@ -48,10 +48,10 @@ This release focuses on hardening the harness installation and onboarding onboar
 * **And** outputs precise key location and authorization troubleshooting cards.
 
 ### Scenario 3: Temporary sandbox dry-run execution catches tool missing errors
-* **Given** the target environment lacks the `gitleaks` tool in its path
-* **When** `bootstrap/validate.py` is executed with dry-run check enabled
-* **Then** the sandbox execution fails on the gitleaks hook
-* **And** flags the exit code `127` as an infrastructure error, failing the validator.
+* **Given** the target environment lacks a required executable or interpreter for a configured hook (e.g., the `gitleaks` executable, which results in exit code `127`)
+* **When** `bootstrap/validate.py` executes the dry-run check
+* **Then** the validator identifies the non-zero exit code as an **Infrastructure Error** rather than a Content Violation
+* **And** fails the environment runnability validation cleanly.
 
 ---
 
@@ -62,7 +62,10 @@ This release focuses on hardening the harness installation and onboarding onboar
 - Refactor check runner to initialize a temporary git clone sandbox under `.agent/scratch/validate_sandbox/` (Option C from AT-08).
 - Implement wrong install target check at startup.
 - Implement live API preflight key validation using a mock low-token query.
-- Add version-checking metadata to compile black/ruff/python version currency reports.
+- **Python Currency & Tooling check (F-COLD-5)**:
+  - Detect the active virtual environment Python version and compare against system interpreters and a declared floor (minimum Python >= 3.10).
+  - Warn loudly before dependency installation if the interpreter is downlevel.
+  - Execute and parse tool version CLI checks (`black --version`, `ruff --version`, `mypy --version`) and report their resolved versions in the validator output.
 
 ### Component: Installer (F-COLD-2)
 #### [MODIFY] [install.py](file:///c:/projects/ai-delivery-control/bootstrap/install.py)
@@ -74,9 +77,13 @@ This release focuses on hardening the harness installation and onboarding onboar
 
 ### Automated Tests
 - Run validation suite:
-  `poetry run pytest tests/test_validate.py`
+  `.venv/bin/python -m pytest tests/test_validate.py` (macOS/Linux) or `.venv\Scripts\python -m pytest tests/test_validate.py` (Windows)
 - Run installer scaffold tests:
-  `poetry run pytest tests/test_install.py`
+  `.venv/bin/python -m pytest tests/test_install.py` (macOS/Linux) or `.venv\Scripts\python -m pytest tests/test_install.py` (Windows)
 
-### Resolved Decisions
-* **Default-On Dry-Run**: Resolved 2026-07-18. Option A (Default-On with a `--skip-validation` flag) has been approved and selected for implementation.
+---
+
+## 7. Resolved Decisions
+
+* **Default-On Dry-Run**: Option A (Default-On with a `--skip-validation` flag) has been approved and selected for implementation.
+* **Dry-Run Sandbox Strategy**: Option C (ephemeral git sandbox clone) has been selected in accordance with the AT-08 recommendation.
