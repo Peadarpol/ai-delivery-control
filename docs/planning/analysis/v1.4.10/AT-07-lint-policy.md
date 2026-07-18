@@ -90,19 +90,35 @@ We ran Ruff check against the harness repo's own `src/` and `.agent/` using GymB
 - **Total findings**: 75 errors.
 - **Fixable automatically**: 62 errors.
 
+### Per-Rule Statistics
+- **`I001` (unsorted-imports)**: 29 instances
+- **`F401` (unused-import)**: 25 instances
+- **`F841` (unused-variable)**: 6 instances
+- **`F541` (f-string-missing-placeholders)**: 4 instances
+- **`F821` (undefined-name)**: 4 instances
+- **`E731` (lambda-assignment)**: 2 instances
+- **`F811` (redefined-while-unused)**: 2 instances
+- **`F601` (multi-value-repeated-key-literal)**: 1 instance
+- **`F823` (undefined-local)**: 1 instance
+- **`TC006` (runtime-cast-value)**: 1 instance
+
 ### Classification
 
 #### Real Defects (Bugs)
-- **`F821` (Undefined name)** in `src/scripts/providers.py`:
-  - Lines 320, 434, 537 call undefined name `_strip_json_fences`. (Represents the F5 NameError regression).
-- **`F601` (Repeated dictionary key)** in `src/scripts/harness_utils.py`:
-  - Line 216 repeats key `"spec_gate"` in a dictionary.
+- **`F821` (Undefined name)**: 4 instances total
+  - `src/scripts/providers.py` (Lines 320, 434, 537): call undefined function `_strip_json_fences`. (F5 NameError regression).
+  - `.agent/scripts/cdr_ledger_validate.py` (Line 183): references `Path` in the type hint `path: str | Path` without importing it from `pathlib`.
+- **`F601` (Repeated dictionary key)**: 1 instance
+  - `src/scripts/harness_utils.py` (Line 216): repeats the `"spec_gate"` key literal inside a dictionary.
+- **`F823` (Undefined local)**: 1 instance
+  - `.agent/scripts/onboarding.py` (Line 59 & 65): accesses `sys` before a local `import sys` occurs on line 74. Due to Python scoping rules, this triggers a fatal `UnboundLocalError` crash.
 
 #### Style / Hygiene Noise
-- **`I001` (Import sorting)**: 62 instances of import blocks needing formatting/sorting.
-- **`F401` (Unused import)**: 10 instances of unused imports (e.g. `sys`, `time`, `typing.Optional`).
-- **`TC006` (Type cast string representation)**: Cast type expressions needing quotes.
-- **`F841` (Unused local variable)**: Line 194 of `state_persistence.py` assigns `token_usage` but does not use it.
+- **`I001` (Import sorting)**: 29 instances.
+- **`F401` (Unused import)**: 25 instances.
+- **`F841` (Unused local variable)**: 6 instances.
+- **`F541` (f-string missing placeholder)**: 4 instances.
+- **`E731`, `F811`, `TC006`**: Style and typing warnings.
 
 ### Recommendation
-Fix the real bugs (F821, F601) immediately in the v1.4.10 release. Defer the 62 style/hygiene noise items to the backlog as they do not affect gate execution correctness.
+Fix the real bugs (4x `F821`, 1x `F601`, 1x `F823`) immediately in the v1.4.10 release. Defer all style/hygiene noise items (`I001`, `F401`, `F841`, etc.) to the backlog as they do not affect gate execution correctness.
