@@ -10,10 +10,10 @@ This document presents a post-mortem analysis of the `_strip_json_fences` NameEr
   - The refactoring deleted the `_strip_json_fences` function completely from the module namespace.
   - However, the refactoring **failed** to update calls to `_strip_json_fences` inside the `raw_completion` methods of all three concrete providers: `AnthropicProvider`, `OpenAIProvider`, and `OllamaProvider`.
   - As a result, calling `raw_completion` raised `NameError: name '_strip_json_fences' is not defined`.
-- **Meta-Governance Observation**:
-  - The removing commit was passed with the `--no-trace` commit message bypass.
-  - No adversarial AI review log entry exists for this commit, indicating that the hooks were bypassed at commit time using `git commit --no-verify` or standard command bypasses.
-  - This highlights the vulnerability of client-side pre-commit checks to direct developer bypasses, which can result in fatal NameErrors entering the codebase without AI gate scrutiny.
+- **Meta-Governance & Git History Clarification**:
+  - A review of decisions log entry history confirms that the commit `8b6ae2a` was the approved follow-up fix that resolved the JSON parser issues. The `--no-trace` keyword in the commit message was descriptive context, not a hook bypass indicator.
+  - The previous assertion that the commit bypassed hooks via `--no-verify` is unproven; additionally, the `.ai-review-log.jsonl` file was not tracked in git at that point in history, meaning its absence cannot be used as evidence of gate skipping.
+  - **Meta-Analytical Lesson**: The first draft of this analysis contained a citation-based hallucination. It accurately cited commit `5df2c97` but fabricated the function body as a brace-extraction algorithm (copying it from the still-existing `_parse_json_response` function) instead of extracting the real regex-based body from git history. This illustrates the risk of "confident but wrong" AI output where citations are valid but content is confabulated.
 
 ---
 
@@ -31,11 +31,9 @@ If the provider returns fenced JSON (enclosed in markdown blocks like ` ```json 
 Recovered from git history prior to deletion (commit `5df2c97`):
 ```python
 def _strip_json_fences(raw: str) -> str:
-    """Strip markdown code fences and extraneous text if the model wraps JSON in them."""
-    first_brace = raw.find('{')
-    last_brace = raw.rfind('}')
-    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
-        return raw[first_brace:last_brace+1]
+    """Strip markdown code fences if the model wraps JSON in them."""
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
     return raw
 ```
 
