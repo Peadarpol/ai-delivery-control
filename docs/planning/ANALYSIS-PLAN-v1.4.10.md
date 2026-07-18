@@ -1,26 +1,34 @@
 # ANALYSIS PLAN — First-Commit Defects (v1.4.9.1 / v1.4.10 split)
 
-**Status**: DRAFT v2 — pending human approval
+**Status**: DRAFT v4 — all three decision points RESOLVED 2026-07-18; pending
+final human APPROVED sign-off. Three-release split formalised in
+`FRAMEWORK_ROADMAP.md` (v1.4.9.1, v1.4.10, v1.4.11), each with its own spec
+per standing practice (spec-first, docs before code).
 **Author**: Claude (adversarial review agent), on behalf of Peter Long
 **Executing agent**: Gemini (analysis only — see Ground Rules)
-**Feeds into**: `SPEC-v1.4.9.1-first-commit-hotfix.md` + inputs to the existing
-v1.4.10 Governance Hardening milestone
+**Feeds into**: `SPEC-v1.4.9.1-first-commit-hotfix.md`,
+`SPEC-v1.4.10-governance-hardening.md`, `SPEC-v1.4.11-installer-onboarding.md`
 **Baseline**: v1.4.9 (`3ecc771`, Release/v1.4.9)
 
 ---
 
-## 0. Scope Reconciliation with FRAMEWORK_ROADMAP (v2 revision)
+## 0. Scope Reconciliation with FRAMEWORK_ROADMAP (v4 — decisions resolved)
 
-`FRAMEWORK_ROADMAP.md` already defines **v1.4.10 — Governance Hardening** (T1-K-12,
-T1-K-13, T1-K-14+HIB-068, HIB-063, T1-L-20, HIB-ENV-02, T1-I-08, HIB-059, HIB-061),
-assembled deliberately from the v1.4.9 incident cluster. This plan therefore does
-NOT claim the v1.4.10 number for a defect release. Proposed shape (**[DECISION
-REQUIRED — release shape]**):
+**Input evidence documents** (all under `docs/planning/analysis/v1.4.10/`):
+`hib-collision-map-2026-07.md`, `incident-chain-2026-07-15.md`, and
+`cold-start-field-observations-2026-07-18.md` (five field findings, F-COLD-1…5,
+from a live first-time-user install session on macOS).
 
-- **v1.4.9.1 (hotfix, pre-demo critical path)**: F1, F2 (import relocation +
-  doc correction; dependency disposition may be interim), F3, F5. All are
-  root-cause-confirmed and need no new design vocabulary.
-- **v1.4.10 (Governance Hardening, as planned)** absorbs:
+`FRAMEWORK_ROADMAP.md` (as of 2026-07-18) now formally defines three releases
+from this workstream, each with its own spec document per standing practice:
+
+- **v1.4.9.1 — First-Commit Hotfix** (`SPEC-v1.4.9.1-first-commit-hotfix.md`):
+  F1, F2 (import relocation + doc correction; dependency disposition may be
+  interim), F3, F5. All root-cause-confirmed, no new design vocabulary needed.
+- **v1.4.10 — Governance Hardening** (`SPEC-v1.4.10-governance-hardening.md`),
+  as originally planned (T1-K-12, T1-K-13, T1-K-14+HIB-068, HIB-063, T1-L-20,
+  HIB-ENV-02, T1-I-08, HIB-059, HIB-061) **plus T1-L-21** (RESOLVED — see
+  below), absorbing:
   - F4 / AT-04 → **into T1-K-14's verdict taxonomy** (PASS / FAIL_OPEN /
     INCOMPLETE / SKIPPED-precondition must be ONE vocabulary, not two).
   - F2's infrastructure-failure-vs-verdict finding → T1-K-14 audit evidence.
@@ -30,15 +38,36 @@ REQUIRED — release shape]**):
     gate?) → T1-K-14 audit evidence.
   - HIB-061 is partially discharged by this plan's fresh-project reproduction —
     AT-06 must fold its observations into that ticket.
-- **v1.4.11 / v1.5 (installer & onboarding theme)**: F7 (lint policy), F8
-  (validator dry-run), genesis mode spec. Parked together deliberately.
+- **v1.4.11 — Installer & Onboarding Hardening**
+  (`SPEC-v1.4.11-installer-onboarding.md`), now a formally named milestone
+  (RESOLVED — see below): F7 (lint policy), F8 (validator dry-run), genesis
+  mode spec, plus five field observations — F-COLD-1 (wrong install target),
+  F-COLD-2 (macOS/venv path assumptions), F-COLD-3 (API key undiscoverable),
+  F-COLD-5 (stale venv Python silently downgrades tooling). Routing per the
+  field doc's summary table. Note: none of the five moves anything into
+  v1.4.9.1 — the hotfix scope is unchanged, confirming the original split
+  boundary.
 
-**Roadmap inconsistency to resolve regardless of shape**: T1-K-12 is BLOCKED on
-T1-L-21, which is absent from the v1.4.10 planned list. Either add T1-L-21 to the
-milestone or move T1-K-12 out. **[DECISION REQUIRED]**
+### Decisions (all RESOLVED 2026-07-18)
 
-Analysis tasks below are unchanged in content but their outputs now route to two
-spec destinations per the split above; AT-09 is updated accordingly.
+1. **Release shape**: RESOLVED — three-way split confirmed above, each release
+   gets its own spec document (auditability requirement, standing practice).
+2. **T1-K-12 / T1-L-21 dependency gap**: RESOLVED — T1-L-21 added to the
+   v1.4.10 planned-items list in `FRAMEWORK_ROADMAP.md`. Scope confirmed: T1-L-21
+   moves the hardcoded GymBase-shaped `high_risk_patterns` classifier out of
+   shared framework source into a per-installation, override-capable starter
+   (root-cause fix for HIB-064); T1-K-12 (merge-time sensitive-path
+   classification for local merges to main) reuses that classifier once it
+   exists and cannot be correctly built without it.
+3. **Retrofit mode (F-COLD-4)**: RESOLVED — logged as an unscheduled,
+   unscored placeholder under "Unscheduled — Under Consideration" in
+   `FRAMEWORK_ROADMAP.md`, pointing to the field doc's Finding 4. Not filed as
+   a HIB/T1 backlog item pending a scoping decision or a second observed
+   instance — AT-00 should not attempt to file it further.
+
+Analysis tasks below are unchanged in content but their outputs now route to
+three spec destinations per the resolved split above; AT-09 is updated
+accordingly.
 
 ---
 
@@ -98,6 +127,10 @@ Observed failure stack on first commit (fresh project, pip, no poetry, no pydant
   (dead-gate incident — pending AT-03 outcome may split into two HIBs).
 - F4, F6, F7, F8 are design defects, not incidents: file as backlog items
   (T1 series) in `FRAMEWORK_BACKLOG.md`.
+- *(v3)* File F-COLD-1, F-COLD-2, F-COLD-3, F-COLD-5 as backlog items
+  cross-referencing their target tasks per the field doc's routing table
+  (F-COLD-2 → AT-01; F-COLD-3 → AT-02 + AT-08; F-COLD-1, F-COLD-5 → AT-08).
+  Do NOT file F-COLD-4 — it awaits the retrofit-mode decision in §0.
 - Run `incident_to_eval.py` against the F5 HIB once AT-05 produces the failing test.
 **Output**: HIB entries + backlog rows + an ID map table at the top of
 `docs/planning/analysis/v1.4.10/ID-MAP.md`.
@@ -110,6 +143,17 @@ managers; confirm the defect class is confined to the pre-commit template.
 - `grep -rn "PROJECT_PACKAGE_MANAGER" bootstrap/templates/ bootstrap/install.py`.
 - Build a matrix: {pip, poetry, pipenv, npm, pnpm, yarn} × every template line using
   the placeholder → rendered command → valid? (Y/N, with the reason).
+- *(v3, F-COLD-2)* Add a second dimension: {Windows, macOS, Linux} × {venv,
+  poetry, pipenv, conda, none} — venv script layout (`Scripts/` vs `bin/`) and
+  interpreter-prefix assumptions crossed against every command-invoking template
+  line. Evidence: live macOS session required manual `.venv/bin/` prefixing of
+  harness script invocations. Two escaped bugs (F1, F-COLD-2) from the same
+  untested-dimension pattern.
+- *(v3)* Added design question: install-time prefix rendering vs runtime
+  interpreter resolution (`sys.executable` from Python hooks, or a small shim
+  probing `.venv/bin/python` → `.venv/Scripts/python.exe` → PATH fallback).
+  Runtime resolution survives venv moves/recreates; cost it against the
+  template approach explicitly.
 - Contrast with the `pm_run_prefix` logic at `bootstrap/install.py:374` (already
   correct for config.yaml rendering) — document why the two rendering paths diverged.
 - Blast radius: does `bootstrap/upgrade.py` re-render `.pre-commit-config.yaml` on
@@ -135,6 +179,11 @@ can choose between fallback, declared prerequisite, or vendored shim.
   SHOULD map to under existing semantics (fail-open for normal commits, fail-closed
   for high-risk patterns — cite `handle unavailability` path, ai_review.py ~line 790).
 - Check whether any OTHER harness script imports pydantic (grep the tree).
+- *(v3, F-COLD-3)* Inventory the missing-key and invalid-key paths: what does
+  `ai_review.py` do today when the provider API key is (a) absent and (b)
+  present but unreachable/invalid? Does observed behaviour match the designed
+  unavailability semantics, and what does the user actually see? (Field session:
+  the key requirement was undiscoverable until a human intervened.)
 - Reconcile with docs: list every place that claims "stdlib only"
   (`docs/getting-started.md`, README, wiki pages).
 **Output**: `AT-02-pydantic-disposition.md` with the usage inventory, the three
@@ -267,36 +316,55 @@ deepest analysis.
   classify reliably.
 - Runtime budget: measure first-run pre-commit environment installation cost;
   propose default-on vs opt-out flag with warning.
+- *(v3, F-COLD-1/3/5)* The dry-run design must include three named preflight
+  checks, all instances of "silent prerequisite failure that presence-only
+  validation can't see": (1) **wrong-install-target detection** — refuse to
+  install into the harness's own repo (F-COLD-1); (2) **API key present AND
+  reachable** — trivial live call, not env-var presence (F-COLD-3); (3) **venv
+  Python currency** — venv interpreter version vs system interpreters and a
+  harness-declared floor, plus resolved tool versions (`black --version` etc.)
+  in the validator's success report (F-COLD-5). Governing principle, carried
+  from §1: "ready" must mean the first commit will actually work.
 - e2e matrix feasibility: cost a CI matrix {pip, poetry} × {bare venv, full deps}
   against current `tests/e2e/run_e2e_verification.py`. Identify the minimum matrix
   that would have caught F1 and F2 (hypothesis: pip × bare venv alone catches both).
 **Output**: `AT-08-validator-dryrun-design.md` — this document becomes a section of
-the v1.4.10 spec (or is split to v1.5 if runtime findings make it heavy; present
-the evidence either way).
-**Human decision**: v1.4.10 scope inclusion vs deferral to v1.5; default-on vs
-opt-out.
+the v1.4.11 spec (installer & onboarding theme, per the resolved release shape
+in §0; no longer contingent on a v1.5 split decision).
+**Human decision**: default-on vs opt-out for the dry-run flag. (Scope
+inclusion in v1.4.11 is resolved — see §0.)
 
-### AT-09 — Consolidation and spec skeleton (two destinations)
-**Objective**: Assemble AT-01…AT-08 outputs per the §0 release split.
+### AT-09 — Consolidation and spec skeleton (three destinations)
+**Objective**: Assemble AT-01…AT-08 outputs per the §0 resolved release split.
 **Method**:
 - Produce `SPEC-v1.4.9.1-first-commit-hotfix.md` in DRAFT covering F1, F2
   (structural fix + interim dependency disposition), F3, F5: the acceptance
   sentence (§1) as umbrella Gherkin scenario, one section per finding referencing
-  its analysis artefact, `[DECISION REQUIRED]` blocks, and the AT-05 xfail tests
-  as the test plan anchor.
-- Produce `docs/planning/analysis/v1.4.10/GOVERNANCE-HARDENING-INPUTS.md`
-  packaging the AT-04 precondition taxonomy, AT-05 meta-governance evidence,
-  AT-06 root-commit analysis, and the fresh-project observations discharging
-  part of HIB-061 — addressed to the existing v1.4.10 milestone items
-  (T1-K-13, T1-K-14, HIB-061), NOT as a competing spec.
-- Update `FRAMEWORK_ROADMAP.md` DRAFT edit: insert v1.4.9.1 milestone entry;
-  record the T1-K-12/T1-L-21 dependency resolution once decided.
-- Explicitly list what is parked with pointers: genesis mode + F7 + F8
-  (v1.4.11/v1.5 installer & onboarding theme), `--no-trace` grammar change
-  (backlog), enforcement postures implementation (T1-G-18, unchanged),
-  style-only lint findings (backlog).
-**Output**: DRAFT hotfix spec + governance-hardening input package + roadmap edit.
-**Human decision**: all `[DECISION REQUIRED]` blocks, then spec APPROVED status.
+  its analysis artefact, remaining open questions as `[DECISION REQUIRED]`
+  blocks (the three plan-level decisions are resolved; task-level choices —
+  e.g. AT-01's fix strategy, AT-02's dependency option — are still live), and
+  the AT-05 xfail tests as the test plan anchor.
+- Produce `SPEC-v1.4.10-governance-hardening.md` in DRAFT covering T1-K-12,
+  T1-L-21, T1-K-13, T1-K-14+HIB-068, HIB-063, T1-L-20, HIB-ENV-02, T1-I-08,
+  HIB-059, HIB-061, packaging the AT-04 precondition taxonomy, AT-05
+  meta-governance evidence, and AT-06 root-commit analysis as supporting
+  sections rather than a separate inputs document.
+- Produce `SPEC-v1.4.11-installer-onboarding.md` in DRAFT covering F7, F8
+  (with its three named preflight checks), genesis mode, and F-COLD-1/2/3/5,
+  drawing on `cold-start-field-observations-2026-07-18.md` directly.
+- Update `FRAMEWORK_ROADMAP.md`: milestone entries for v1.4.9.1, v1.4.10
+  (T1-L-21 addition), and v1.4.11 are already landed (2026-07-18) — confirm no
+  drift between this plan's final scope and the roadmap before spec approval.
+- Explicitly list what remains parked with pointers: F-COLD-4 retrofit mode
+  (unscheduled, `FRAMEWORK_ROADMAP.md` "Unscheduled — Under Consideration"),
+  `--no-trace` grammar change (backlog), enforcement postures implementation
+  (T1-G-18, unchanged), style-only lint findings (backlog).
+**Output**: three DRAFT specs, ready for adversarial review by Claude and
+approval by Peter.
+**Human decision**: remaining task-level `[DECISION REQUIRED]` blocks per
+spec, then each spec's Status: APPROVED independently (they need not approve
+in lockstep — v1.4.9.1 can go APPROVED and start implementation while
+v1.4.10/v1.4.11 specs are still in review).
 
 ---
 
@@ -306,9 +374,10 @@ opt-out.
 - **Ordered**: AT-00 first (IDs); AT-04 benefits from AT-01's hook inventory;
   AT-08 last of the analyses (uses reproduction infrastructure insights from all);
   AT-09 strictly last.
-- **Pre-demo critical path** (guest session): AT-01, AT-02, AT-05 analyses are
-  sufficient to write targeted hotfix notes even before the full spec — flag to
-  human when those three are complete.
+- *(v3 status note)* The guest session occurred 2026-07-18 **before** any fixes
+  shipped; its findings are now input evidence (the field doc) rather than a
+  deadline. AT-01, AT-02, AT-05 remain the highest-priority trio — they feed the
+  v1.4.9.1 hotfix directly — but the "pre-demo" urgency framing no longer applies.
 - Estimated effort: AT-05 and AT-08 are the deep ones; the rest are 1–2 focused
   sessions each.
 
@@ -317,7 +386,12 @@ opt-out.
 This plan is complete when:
 1. Every AT output artefact exists under `docs/planning/analysis/v1.4.10/` with
    evidence citations.
-2. All HIBs/backlog IDs filed; F5 regression eval generated.
-3. The DRAFT spec exists with all decision points enumerated and no code changed.
-4. Claude has adversarially reviewed the spec; Peter has resolved decisions and
-   set Status: APPROVED. Implementation begins only after that gate.
+2. All HIBs/backlog IDs filed (including F-COLD-1/2/3/5; F-COLD-4 deliberately
+   excluded per the resolved retrofit-mode decision); F5 regression eval
+   generated.
+3. All three DRAFT specs exist (`SPEC-v1.4.9.1-first-commit-hotfix.md`,
+   `SPEC-v1.4.10-governance-hardening.md`, `SPEC-v1.4.11-installer-onboarding.md`)
+   with remaining task-level decision points enumerated and no code changed.
+4. Claude has adversarially reviewed each spec; Peter has resolved remaining
+   decisions and set each spec's Status: APPROVED independently. Implementation
+   of a given release begins only after that release's spec is APPROVED.

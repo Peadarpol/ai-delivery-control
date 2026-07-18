@@ -1,5 +1,11 @@
 # Decisions Log
 
+## 2026-07-18: Prioritise usability/onboarding hardening (v1.4.9.1/v1.4.10/v1.4.11) ahead of v1.5.x capability work
+
+- **Decision**: Deliberately sequence three usability-and-onboarding-hardening releases (v1.4.9.1 First-Commit Hotfix, v1.4.10 Governance Hardening + T1-L-21, v1.4.11 Installer & Onboarding Hardening) ahead of the previously-next-in-line v1.5.x series (Quality Signal Maturity, Tool ABC Foundation, Skill Chain completion). This is a deliberate departure from the existing roadmap ordering, not an oversight.
+- **Context**: Two independent evidence sources converged in the same week — a synthetic ground-up fresh-project reproduction (F1–F8: pip-run template bug, pydantic import crash, import-pathing defect, precondition-gate semantics, a live runtime regression, root-commit traceability friction, framework-file lint mutation, and a presence-only validator) and a live 90-minute cold-start observation session with an actual first-time user (F-COLD-1–5: wrong install target, cross-platform venv path assumptions, undiscoverable API key setup, no guided path for vibe-coded/ungoverned prototypes, and a silently downlevel toolchain from a stale venv Python). Both sources point to the same conclusion: the harness has real friction and defects at the adoption boundary that v1.5.x's capability work (recidivism tracking, plan grading, NFR coverage) would not address and would in fact be built on top of an unverified foundation.
+- **Consequence**: v1.5.0/v1.5.1/v1.5.2 remain fully scoped and unchanged in the roadmap but are deferred behind the three new releases. Rationale for future reference: a harness that reasons well about spec quality is not useful to an adopter who cannot get past a `pip run` error or a silent toolchain downgrade. Correctness-and-onboarding is being treated as a dependency of capability work, not a competing priority — the same "don't build on unverified ground" principle the harness enforces on every commit, applied here to its own roadmap. `FRAMEWORK_ROADMAP.md`'s "Target Release" header updated from v1.5.0 to v1.4.11 to reflect the new near-term target.
+
 ## 2026-07-09: [MTF-GOV] Approval of MTF governance rule changes
 
 Decision: Approve the four MTF changes (AGENTS.md rule tables, governance.md §3.3, context-compaction.md Verification Findings slot, validate.py 6-heading check).
@@ -172,7 +178,7 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Fixture Hygiene**: Ensured test fixtures use 	mp_path and cleaned up legacy directories (	emp_test_git_repo, 	ests/test_reconciler_repo, 	ests/.agent).
 
 * **Ratification**: aa40ad2 committed via --no-verify due to verdict-log staging loop (gate writes .ai-review-log.jsonl during the commit that stages it) and traceability regex gap. Contents reviewed conversationally pre-commit. Ratified by Peter, 2026-07-10, quote: [I accept the bypass as a justified exception].
-* **Record correction**: 2026-07-10: correction � the 2026-07-09 claim that Refs: T1-E-04 was 'handled perfectly by the Traceability Gate' was inaccurate. The hook's regex accepts only SPEC-\d+; commit 6743f1a passed because the hook did not enforce on it, not because it recognised the reference.
+* **Record correction**: 2026-07-10: correction � the 2026-07-09 claim that Refs: T1-E-04 was 'handled perfectly by the Traceability Gate' was inaccurate. The hook's regex accepts only SPEC-\d+; commit 6743f1a passed because the hook did not enforce on it, not because it recognised the reference.
 
 ## 2026-07-12: Removal of Model/Cost Tier Tracking (T1-B-13)
 - **Decision**: Removed model and cost tier tracking logic that was originally added in commit 76283ca.

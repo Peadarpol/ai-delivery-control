@@ -2,8 +2,8 @@
 
 **Status**: Active Development
 **Current Version**: 1.4.9
-**Target Release**: v1.5.0
-**Last Updated**: 2026-07-15
+**Target Release**: v1.4.11 (deliberately resequenced 2026-07-18 — usability/onboarding hardening prioritised ahead of v1.5.0; see decisions_log.md 2026-07-18)
+**Last Updated**: 2026-07-18 (v1.4.9.1/v1.4.11 milestones added; T1-L-21 added to v1.4.10; F-COLD-4 retrofit mode logged unscheduled)
 
 ---
 
@@ -492,12 +492,34 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
+### v1.4.9.1 — First-Commit Hotfix ⏳ PLANNED
+
+**Goal**: Fix the confirmed, root-caused defects that block or silently corrupt a
+brand-new project's first commit. Split out from Governance Hardening (below) to
+keep that milestone's policy-decision work from being delayed by mechanical
+fixes that need no design debate. See `SPEC-v1.4.9.1-first-commit-hotfix.md`
+(spec-first per standing practice) and `ANALYSIS-PLAN-v1.4.10.md` for the
+analysis this release is built from.
+
+**Planned items**:
+- F1: `pip run` template rendering bug — breaks ~8 `language: system` hooks on
+  pip-based projects.
+- F2: `ai_review.py` pydantic import crash bypasses fail-open (structural fix;
+  dependency disposition per AT-02).
+- F3: `architecture_checks.py` `ModuleNotFoundError: harness_utils` — import
+  pathing defect.
+- F5: `providers.raw_completion()` `NameError: _strip_json_fences` — runtime
+  regression, root cause confirmed (`8b6ae2a`, a `--no-trace` commit).
+
+---
+
 ### v1.4.10 — Governance Hardening ⏳ PLANNED (Upcoming)
 
 **Goal**: Close the authentication and bypass gaps surfaced during recent incidents, hardening the traceability gate against unauthenticated circumvention, and standardising the commit strategy for audit logs.
 
 **Planned items**:
 - T1-K-12: Verifiable session governance (Layer 2 of the T1-B-11 work) — depends on T1-L-21.
+- T1-L-21: `high_risk_patterns` override capability + documentation (added 2026-07-18 — T1-K-12's confirmed prerequisite; was previously absent from this milestone despite the dependency).
 - T1-K-13: --no-trace authentication gap closure (preventing unauthenticated bypass for self-assessed metadata).
 - T1-K-14: review_parse_failure schema regression guard (merged with HIB-068).
 - HIB-063: Audit-log commit strategy (resolving the pre-commit conflict loop for harness_events.jsonl).
@@ -506,6 +528,76 @@ S0-05 must be cut before any beta invitations are sent.
 - T1-I-08: Stash accumulation cleanup.
 - HIB-059: SQLite sessions table missing session_id column.
 - HIB-061: Confirm check_traceability.py alignment with new .agent/config.yaml.
+
+**Spec**: `SPEC-v1.4.10-governance-hardening.md` (spec-first per standing
+practice). Inputs: `GOVERNANCE-HARDENING-INPUTS.md` (AT-04/05/06 findings
+from `ANALYSIS-PLAN-v1.4.10.md`), `hib-collision-map-2026-07.md`,
+`incident-chain-2026-07-15.md`.
+
+---
+
+### v1.4.11 — Installer & Onboarding Hardening ⏳ PLANNED
+
+**Goal**: Close the silent and semi-silent failure modes a genuinely new user
+hits before or during their first install — distinct from v1.4.9.1's loud
+first-commit crashes, these are cases where the harness reports success while
+something is actually wrong or unclear. Formalised as its own milestone
+2026-07-18 after a live cold-start observation session surfaced five findings
+in ninety minutes, on top of the two design items (F7, F8) already parked here
+from the original v1.4.9 first-commit assessment.
+
+**The gap this addresses**: `bootstrap/validate.py` currently reports "0
+errors, 0 warnings" based on file presence, not on whether the harness will
+actually function correctly for this user, on this machine, right now. Field
+evidence (`cold-start-field-observations-2026-07-18.md`) shows this gap is not
+hypothetical: a real first-time user hit a wrong install target, macOS venv
+path failures, an undiscoverable API key requirement, and a silently
+downlevel toolchain from a stale `.venv` — all while the installer reported
+clean.
+
+**Planned items**:
+- F7: Framework-owned files being mutated by project formatters (black/ruff);
+  checksum drift risk.
+- F8: Validator dry-run redesign — presence-checking → runnability-checking.
+  Now scoped to include three named preflight checks (see below).
+- F-COLD-1: Wrong install-target detection (user cloned the harness's own
+  repo, expected it to function as their project) + "you are here" diagram in
+  getting-started.md/README (doc fix ships independently, no analysis needed).
+- F-COLD-2: Cross-platform path/interpreter assumptions — macOS `.venv/bin/`
+  vs Windows `Scripts/` — extends AT-01's rendering matrix with a
+  platform × venv-tool dimension.
+- F-COLD-3: Adversarial-review API key setup has no discoverable path —
+  installer feature + validator reachability check.
+- F-COLD-5: Stale venv Python silently downgrades enforcement tooling
+  (black/ruff/mypy resolve to years-old versions with no warning).
+- Genesis-mode spec (day-zero posture: behavioral rules on, artefact gates
+  arm on precondition, from the earlier genesis-mode discussion).
+
+**Spec**: `SPEC-v1.4.11-installer-onboarding.md` (spec-first per standing
+practice). Input: `cold-start-field-observations-2026-07-18.md`.
+
+---
+
+### Unscheduled — Under Consideration
+
+**F-COLD-4 — Retrofit mode** (identified 2026-07-18, live cold-start session):
+no guided path exists today for a user who arrives with working code but no
+requirements, architecture documentation, or backlog — the "vibe-coded
+prototype" entry point. Distinct from genesis mode (empty project, above) and
+from T1-G-18 brownfield postures (mature project with existing architecture
+and tests) — this is a third posture: real code, zero governance artefacts.
+Possible shape: a detection step, a reverse-engineering-first workflow (agent
+reads existing code, proposes a first-draft architecture doc and backlog for
+human review, rather than starting from a blank spec template), a
+`RETROFIT_BASELINE.md` artefact analogous to the CDR ledger's coupling
+snapshot but one level up (requirements/architecture rather than coupling
+debt), and the same staged `observe` → `ratchet` promotion already designed
+for brownfield/genesis. Deliberately unscheduled and unscored pending a second
+observed instance or a scoping decision — see
+`cold-start-field-observations-2026-07-18.md` Finding 4 for the full argument
+that this may be the modal adoption path rather than an edge case.
+
+---
 
 ### v1.5.0 — Quality Signal Maturity 📋 PLANNED (Q3 2026)
 
@@ -729,10 +821,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.4.10 (v1.4.9 shipped 2026-07-12)
+**Active milestone**: v1.4.9.1 (v1.4.9 shipped 2026-07-12)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 📋, v1.4.10 📋, v1.4.11 📋
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
