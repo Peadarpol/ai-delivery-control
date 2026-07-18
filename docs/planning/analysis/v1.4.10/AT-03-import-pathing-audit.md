@@ -21,6 +21,7 @@ We audited all Python scripts under `.agent/scripts/` and `.agent/skills/` that 
 | `skills/.../repo_map.py` | `parents[5] / "src" / "scripts"` | Project root `src/scripts/` | **Vulnerable**: Hardcodes `"src"` source root (fixed depth/folder) at line 12. |
 | `skills/.../architecture_checks.py` | `parents[5] / "src" / "scripts"` & `Path.cwd() / "src" / "scripts"` | Project root `src/scripts/` | **Vulnerable**: Dual vulnerability. Hardcodes `"src"` at line 10 (`parents[5]`) and includes a dynamic CWD-relative hardcode at line 631 (`Path.cwd() / "src" / "scripts"`). |
 | `skills/.../validate.py` (api-design) | `PROJECT_ROOT / "src" / "presentation" / "api"` | Project root `src/presentation` | **Vulnerable**: Hardcodes `"src"` source root at line 30. |
+| `scripts/harness_health.py` | `sys.path.append(os.getcwd())` | CWD (dynamic path resolution) | **Vulnerable (CWD drift)**: Relies on `sys.path.append(os.getcwd())` and `from src.scripts.harness_utils import _safe_git_env`. Does not hardcode `"src"` path string, but is fragile to CWD execution path changes. |
 
 ---
 

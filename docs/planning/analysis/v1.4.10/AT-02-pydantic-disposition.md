@@ -23,6 +23,10 @@ Pydantic is imported in the following files across the repository:
 6. **[.agent/scripts/check_spec.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_spec.py#L33)**:
    - Imports: `BaseModel`, `Field` (protected dynamic import).
    - Usage: Wrapped in `try...except ImportError` with a zero-dependency fallback class block.
+7. **[.agent/skills/universal/python-fastapi/examples/router_example.py](file:///c:/projects/ai-delivery-control/.agent/skills/universal/python-fastapi/examples/router_example.py)**:
+   - Usage: Example FastAPI router (non-production example).
+8. **[.agent/tests/test_ai_review_preflight.py](file:///c:/projects/ai-delivery-control/.agent/tests/test_ai_review_preflight.py)**:
+   - Usage: Preflight unit tests (non-production test module).
 
 ### Defect Class Propagation (F2)
 The import-time crash defect is NOT unique to `ai_review.py`.
