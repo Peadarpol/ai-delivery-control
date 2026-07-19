@@ -63,33 +63,35 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ### Component: Governance & Risk
 #### [MODIFY] [route_decision.py](file:///c:/projects/ai-delivery-control/src/scripts/route_decision.py)
-- **T1-L-21 (`high_risk_patterns` override)**: Refactor `_load_high_risk_patterns()` to support full key replacement from `.agent/config.yaml` rather than merging additively only. Decouple hardcoded defaults.
+- **T1-L-21 (`high_risk_patterns` override)**: Refactor `_load_high_risk_patterns()`, `classify_commit_risk()`, and `get_high_risk_files()` to support a replace-defaults override flag (`override_defaults: true`) under the `high_risk_patterns` config block in `.agent/config.yaml`. When set to true, do not prepend the hardcoded Python/GymBase defaults (`unit_of_work.py`, `base_repository.py`, `models.py`, `branch_isolation`, `authentication`, `schema_hardening`).
 - **T1-L-20 (decisions log schema)**: Research-only pass. No code or schema changes are introduced in this release.
 
-#### [MODIFY] [pre-commit-config.yaml.template](file:///c:/projects/ai-delivery-control/bootstrap/templates/pre-commit-config.yaml.template) and [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py)
-- **T1-K-12 (pre-local-merge sensitive-path check)**: Set up checks targeting local merges to `main` or `develop`. Refuse fast local merges if high-risk paths are altered, unless an explicit reason-logged override is provided by the developer.
+#### [MODIFY] [pre-commit-config.yaml.template](file:///c:/projects/ai-delivery-control/bootstrap/templates/pre-commit-config.yaml.template) and [.agent/scripts/check_traceability.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_traceability.py)
+- **T1-K-12 (pre-local-merge sensitive-path check)**: Set up a blocking gate check targeting local merges to `main` or `develop` at a blocking stage (e.g. at the `pre-commit` stage by verifying `.git/MERGE_HEAD` presence, or at `pre-push` stage to inspect local branch merge commits). Refuse the action if sensitive paths are altered, unless an explicit reason-logged human override is provided. Note: This blocking logic cannot run in `governance_check.py` since it is a non-blocking `post-commit` hook.
+- **Minor Clean-up in [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py)**: Remove the unreachable `print("✅ Governance check complete.")` statement in `check_commit_sequence` located after `return None` (line 130).
 
 ### Component: Requirement Traceability
 #### [MODIFY] [check_traceability.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_traceability.py)
 - **T1-K-13 (`--no-trace` verification)**: Refactor bypass checks to validate session metadata and accountable developer signature, stopping anonymous `--no-trace` commit message bypasses.
-- **HIB-061 / AT-06 (root commit exemption)**: Integrate mode-dependent exemption checks to permit initial project commits (discovery/genesis mode) while maintaining gating integrity on subsequent commits.
+- **T1-K-13.1 (backlog-ID verification hardening)**: Modify the ID verification loop to verify backlog references (such as `HIB-*`, `BUG-*`, or `T1-*`) against the committed document contents at `HEAD` (via `git show HEAD:docs/...` or equivalent) rather than reading directly from the working-tree files, preventing self-ratifying IDs introduced in the same commit.
+- **HIB-061 / AT-06 (root commit exemption)**: Integrate mode-dependent exemption checks. Explicitly handle initial project root commits containing code files in incremental mode (where `git rev-parse --verify HEAD` fails due to no existing commits), allowing them to pass the gate safely while maintaining strict validation on all subsequent commits.
 
 ### Component: Gate Diagnostics
 #### [MODIFY] [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py)
 - **T1-K-14 (fail-open gate audit)**: Update `DIFF_TOO_LARGE_FAILOPEN` and runtime exception boundaries to assert `FAIL_OPEN` or `INCOMPLETE` verdicts rather than defaulting to pass.
 
 ### Component: Session Lifecycle
-#### [MODIFY] [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py)
-- **HIB-063 (snapshot-based audit-log)**: Implement an untracked live logs strategy to avoid mid-commit git hooks conflict. The committed snapshot of the live logs (`harness_events.jsonl`, `.ai-review-log.jsonl`) is taken on clean session close as the primary cadence. Additionally, if a live log file size exceeds a predefined threshold mid-session, an early snapshot is taken to prevent unbounded accumulation during long-running sessions. The threshold mechanism mirrors the size-triggered archival pattern used by `decisions_log_archive.md` (threshold value TBD at implementation, following the `decisions_log_archive` precedent).
+#### [MODIFY] [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py), [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py), [init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py), and [.gitignore](file:///c:/projects/ai-delivery-control/.gitignore)
+- **HIB-063 (snapshot-based audit-log)**: Implement an untracked live logs strategy to avoid git hook conflicts. Enumerate all log-writer sites to ignore: `harness_events.jsonl` (written by `governance_check.py` and `init_session.py`) and `.ai-review-log.jsonl` (written by `ai_review.py`). Ignore these files in the project `.gitignore`. A committed snapshot of the live logs is taken on clean session close.
 
 #### [MODIFY] [init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py)
-- **HIB-ENV-02 (stashing preflight control)**: Prevent automated/silent stashing of uncommitted files at session startup. Verify dirty files exist, print diagnostic information, and require confirmation before stashing.
-- **T1-I-08 (session-start stash accumulation cleanup)**: On clean session close (successful or partial exit), drop the session-start checkpoint stash created for that session (`git stash drop stash@{N}`) by matching the session ID label.  
-  * **Ordering Constraint**: The stash must be dropped only *after* the session-close outcome is written to `session.json`, never before (a crash between close-write and stash-drop leaves a recoverable extra stash; a drop before close-write leaves no recovery path).
+- **HIB-ENV-02 (stashing preflight control)**: Prevent silent/unconditional stashing at session start in `_create_session_checkpoint()`. If stdin is not a TTY (programmatic agent execution), the fail-safe behavior is to NOT stash and log a warning (retaining the dirty working copy). If stdin is a TTY (interactive developer), prompt the operator before stashing.
+- **T1-I-08 (session-start stash accumulation cleanup)**: Refactor `infer_and_close_previous_session()` (which retrospectively closes the prior session at the start of the next session) to drop the session-start checkpoint stash matching the prior session's ID.
+  * **Ordering Constraint**: The stash drop MUST occur after the session-close outcome is successfully written to `session.json`.
 
 ### Component: Session Database
 #### [MODIFY] [state_persistence.py](file:///c:/projects/ai-delivery-control/src/scripts/state_persistence.py)
-- **HIB-059 (SQLite sessions table schema mismatch)**: Add the missing `session_id` column to the SQLite `sessions` table schema or align the insertion code. Correct the misleading "busy/locked" log output to print the actual schema error details when connection attempts fail.
+- **HIB-059 (SQLite schema drift detection & migration)**: Modify `_ensure_schema()` to detect database schema drift (e.g., verifying column presence via `PRAGMA table_info(sessions)` or checking a schema version table). On schema mismatch, execute an ALTER TABLE migration or safely DROP the stale index table and trigger the existing `rebuild_from_flat_files()` function. Update the SQLite `OperationalError` catch block in `sync_session_to_db` to distinguish true lock errors from schema mismatch errors and log details accordingly.
 
 ---
 
@@ -111,4 +113,11 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ## 8. Resolved Decisions
 
-* **HIB-063 (Audit-log snapshot cadence)**: Resolved 2026-07-19. Snapshot cadence is set to per-session-close as the primary trigger, with a size-based safety valve that triggers mid-session snapshots if log sizes exceed a threshold (threshold value TBD at implementation, following the `decisions_log_archive` precedent).
+* **HIB-063 (Audit-log snapshot cadence)**: Resolved 2026-07-19. Snapshot cadence is set to per-session-close as the primary trigger, with a size-based safety valve that triggers mid-session snapshots if log sizes exceed a threshold.
+* **T1-L-21 (High-Risk Override Design)**: [DECISION REQUIRED]
+  * **Option A**: Build a replace-flag mechanism keeping the defaults. The config loader reads `override_defaults: true` under `high_risk_patterns` in `config.yaml` to bypass defaults.
+  * **Option B**: Strip defaults down to genuinely language-neutral entries (e.g. `*/migrations/*`, `*/auth/*`, `*/security/*`) and remove the Python-idiom filenames entirely.
+* **T1-K-13 (Human Signature Verification)**: [DECISION REQUIRED]
+  * **Option A (Git identity)**: Validate the committing author against an authorized roster of developer usernames/emails using `git config user.name`/`user.email`.
+  * **Option B (Session Token)**: Verify a unique signature token written in `session.json` by the initiating agent/human.
+  * **Option C (Interactive Challenge)**: Prompt the committing operator interactively for verification.
