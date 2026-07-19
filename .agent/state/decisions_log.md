@@ -146,3 +146,7 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Context**: Installing the framework on clean pip projects without optional dependencies failed on load crashes or stashing conflicts.
 - **Consequence**: Clean pip onboarding works perfectly on all operating systems. All 29 E2E scenarios and unit tests pass cleanly.
 
+## 2026-07-20: Post-Merge Remediation of Onboarding Defects
+- **Decision**: Refactored Pydantic fallback stubs to use annotation-based field discovery to prevent callable-method collisions, standardizing the stubs across all 5 gating modules. Corrected context_loader to anchor search paths relative to PROJECT_ROOT, resolved E2E duplicate script maintenance hazards, added skip_paths merging support in load_config, and hardened module test reload teardowns.
+- **Context**: Adversarial review of commit 9938f24 highlighted code quality improvements, path vulnerabilities, and test reload issues.
+- **Consequence**: Full 32 unit tests and 29 E2E verification test suites pass successfully. Commit 267dad5 passed the adversarial review hook with no bypasses.
