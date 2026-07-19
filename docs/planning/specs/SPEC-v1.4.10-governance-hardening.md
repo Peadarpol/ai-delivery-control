@@ -3,7 +3,7 @@
 **Status**: DRAFT  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.10  
-**Tracked under**: `T1-K-12` / `T1-L-21` / `T1-K-13` / `T1-K-14` / `HIB-063` / `T1-L-20` / `HIB-ENV-02` / `T1-I-08` / `HIB-059` / `HIB-061`
+**Tracked under**: `T1-K-12` / `T1-L-21` / `T1-K-13` / `T1-K-14` / `HIB-063` / `T1-L-20` / `HIB-ENV-02` / `T1-I-08` / `HIB-059` / `HIB-061` / `T1-E-04`
 
 ---
 
@@ -24,6 +24,7 @@ The goal of this release is to harden the harness's self-governance and downstre
   - Drop the per-session `AUTO` checkpoint stash on clean close in `init_session.py` to avoid clutter (delivering `T1-I-08`).
   - Reconcile SQLite database schemas and fix misleading error messages (delivering `HIB-059`).
   - Integrity checks for root commits (delivering `HIB-061` / `AT-06`).
+  - Unify `config.yaml` parsing across ~20 files behind a single `harness_utils.py` loader contract (`load_harness_config`, `get_harness_config`), replacing hand-rolled regex/line parsers and inconsistent `yaml.safe_load` calls, and fixing the latent `HIB-061` defect in `check_traceability.py`'s config resolution path (delivering `T1-E-04`).
 * **Out of Scope**:
   - Implementation of enforcement postures (strict/ratchet/observe, tracked under `T1-G-18`).
   - Implementation of decisions_log structured schemas (tracked under `T1-L-20` research pass).
@@ -57,6 +58,12 @@ The goal of this release is to harden the harness's self-governance and downstre
 * **Then** the hook logs `verdict: SKIPPED-precondition` in `harness_events.jsonl`
 * **And** exits with code `0`.
 
+### Scenario 4: Config resolution precedence is consistent across consumers
+* **Given** a config file where an unrelated top-level `mode: ignore` key exists above the `outer_loop: {mode: strict}` block
+* **When** `check_traceability.py`, `acceptance_hook.py`, and `check_spec.py` each resolve their mode
+* **Then** all three return `strict` via the shared `get_harness_config()` path
+* **And** no consumer falls back to its own regex parsing.
+
 ---
 
 ## 5. Proposed Changes
@@ -74,6 +81,34 @@ The goal of this release is to harden the harness's self-governance and downstre
   1. **T1-K-12 check**: Sensitive-path modifications require a human override.
   2. **T1-K-13 check**: The `--no-trace` merge-gate aggregator.
 - **Minor Clean-up in [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py)**: Remove the unreachable `print("✅ Governance check complete.")` statement in `check_commit_sequence` located after `return None` (line 130).
+
+### Component: Configuration Loading (T1-E-04)
+#### [MODIFY] [harness_utils.py](file:///c:/projects/ai-delivery-control/src/scripts/harness_utils.py)
+- **DEFAULTS table**: Define a single dictionary of all harness config defaults. No call site redefines defaults locally.
+- **Lazy imports**: The `import yaml` statement must be lazy and try/except-guarded inside loading functions, not at module top-level (required for the no-PyYAML test path to actually exercise the fallback).
+- **load_yaml_with_fallback**: Implement `load_yaml_with_fallback(path) -> dict` as a generic YAML loader: no caching, no defaults — safe for non-config YAML consumers (e.g. `coupling_decisions.yaml`).
+- **load_harness_config**: Implement `load_harness_config(config_path=None) -> dict` using `load_yaml_with_fallback` under the hood.
+- **Caching Semantics**: Define a module-level `_config_cache` dict keyed by resolved path to parse the config once per process. Add `_reset_config_cache()` for test isolation.
+- **get_harness_config**: Implement `get_harness_config(section=None, key=None, default=None) -> Any`. Precedence chain: User Config Value → DEFAULTS table → caller's explicit default= argument → None.
+- **Fallback parser**: Implement an indentation-aware fallback parser supporting block scalars (`|` or `>`), extending the pattern in `bootstrap/migration_base.py:validate_yaml_config`. It must fail per-key with a logged warning (via `log_harness_event` + `stderr`), never silently defaulting the whole file.
+
+#### [MODIFY] Regex-parser call sites (replace with `get_harness_config()`):
+- **[acceptance_hook.py](file:///c:/projects/ai-delivery-control/src/scripts/acceptance_hook.py)**: `mode` and `specs_path` extraction.
+- **[check_traceability.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_traceability.py)**: See overlap note below.
+- **[acceptance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/acceptance_check.py)**: Hand-rolled config reading loop.
+- **[pm_scaffold.py](file:///c:/projects/ai-delivery-control/.agent/scripts/pm_scaffold.py)**: `get_specs_path()` regex logic.
+- **[check_spec.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_spec.py)**: `_load_outer_loop_mode` and main logic.
+- **[init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py)**: Regex loop parsing.
+- **[route_decision.py](file:///c:/projects/ai-delivery-control/src/scripts/route_decision.py)**: `_load_adr_capability_mappings()` regex loop.
+
+#### [MODIFY] Remaining yaml.safe_load callers (second commit, bulk classification pass):
+- Audit `ai_review.py`, `wiki_compile.py`, `retention_cleanup.py`, `circuit_breaker.py`, `harness_health.py`, `session_health.py`, `onboarding.py`, `providers.py`, `roster_builder.py`, `co_change_reconciler.py`, `wiki_lint.py`.
+- For `config.yaml` consumers: replace with `get_harness_config()` or `load_harness_config()`.
+- For non-config.yaml consumers (e.g. `coupling_decisions.yaml` in `co_change_reconciler.py`): replace with `load_yaml_with_fallback()`.
+
+### File-Overlap & Sequencing Risks
+- **[check_traceability.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_traceability.py)**: Touched by both `T1-K-13.1` and `T1-E-04` in this same release. `T1-K-13.1` modifies the backlog-ID verification logic to check against `git show HEAD:...` rather than the working tree. `T1-E-04` modifies the same file's config-resolution logic (specs_path/mode reading) and adds the `_setup_sys_path` bootstrap import fix. These are different functions in the same file — implement and test `T1-K-13.1` first (it's already sequenced after `T1-L-21` per §6), then apply `T1-E-04`'s config-loader refactor on top, and re-run both test suites together before committing. Do not let one change clobber the other.
+- **[ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py)**: Touched by both `T1-K-14` and `T1-E-04`'s bulk-refactor commit. `T1-K-14` changes fail-open verdict semantics; `T1-E-04` changes how it reads config. Same rule: sequence `T1-K-14` first, then apply the config-loader swap, then run the full test suite once more.
 
 ### Component: Requirement Traceability
 #### [MODIFY] [init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py)
@@ -129,6 +164,7 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 * **T1-K-12 Dependency**: Implementation of `T1-K-12` (pre-local-merge sensitive-path check) **must** occur after `T1-L-21` (override-capable classifier) has been successfully implemented and verified, as `T1-K-12` depends directly on reusing the generalized risk classifier.
 * **T1-K-13 Aggregator Dependency**: The `T1-K-13` merge-gate aggregator must be implemented using the same hook mechanism as `T1-K-12`. These must be built together, or sequence `T1-K-12` hook scaffolding first since the aggregator depends on it existing.
+* **T1-E-04 Sequencing**: The core loader (harness_utils.py additions) has no dependency on other v1.4.10 work and can be implemented first, in parallel with T1-L-21. However, the two regex-replacement call sites in check_traceability.py and ai_review.py must be applied after T1-K-13.1 and T1-K-14 respectively are complete and tested, per the overlap note above.
 
 ---
 
@@ -139,6 +175,14 @@ The goal of this release is to harden the harness's self-governance and downstre
   `.venv/bin/python -m pytest tests/test_framework_consistency.py` (macOS/Linux) or `.venv\Scripts\python -m pytest tests/test_framework_consistency.py` (Windows)
 - Run SQLite concurrency/locking safety suites:
   `.venv/bin/python -m pytest tests/test_session_health.py` (macOS/Linux) or `.venv\Scripts\python -m pytest tests/test_session_health.py` (Windows)
+
+### Additional Verification Test Coverage (T1-E-04)
+#### New tests/unit/test_config_loader.py:
+- **Fallback Parity Test**: Parse `bootstrap/templates/config.yaml.template` and `.agent/config.yaml` using both `yaml.safe_load` and the fallback parser. Assert the resulting dictionaries are identical.
+- **No-PyYAML Execution**: Monkeypatch `sys.modules["yaml"] = None` during test setup to explicitly verify the lazy import triggers `ImportError` and the fallback parser executes successfully in a clean environment.
+- **Caching**: Verify `load_harness_config` hits the cache, is correctly keyed by path, and `_reset_config_cache` clears it.
+- **Consumer Section Awareness (Scenario 4)**: Provide a config where an unrelated top-level `mode: ignore` exists above the `outer_loop: {mode: strict}` block. Test consumer behavior directly: Call the actual mode-resolution functions exported by `check_traceability.py`, `acceptance_hook.py`, and `check_spec.py` and verify they return `strict`.
+- **Self-Enforcing Defaults Rule**: Add a static grep-style test ensuring no consumer calls `get_harness_config(..., default=X)` for a key that already exists in the `DEFAULTS` table.
 
 ### Additional Verification Test Coverage (T1-L-21 & T1-K-13)
 * **Risk Classification Override (`T1-L-21`)**:
@@ -158,3 +202,4 @@ The goal of this release is to harden the harness's self-governance and downstre
 * **HIB-063 (Audit-log snapshot cadence)**: Resolved 2026-07-19. Snapshot cadence is set to per-session-close as the primary trigger, with a size-based safety valve that triggers mid-session snapshots if log sizes exceed a threshold.
 * **T1-L-21 (High-Risk Override Design)**: Resolved 2026-07-19. Option A is selected. The loader reads `override_defaults: true` under `high_risk_patterns` in `config.yaml` to bypass defaults and use user-defined lists only.
 * **T1-K-13 (Human Signature Verification & Enforcement)**: Resolved 2026-07-19. The session signature is captured once at interactive session start for attribution only. The merge-gate aggregator enforces check trace integrity pre-merge, requiring an explicit `--ack-no-trace "<reason>"` bypass confirmation at merge time. Other alternatives (such as real-time token exchange) were rejected due to unnecessary developer friction relative to risk, since the merge-to-main boundary represents the true trust threshold.
+* **T1-E-04 (Config Loader Design)**: Resolved prior to v1.4.10 folding. Fallback parser is indentation-aware with block-scalar support, extending bootstrap/migration_base.py's pattern. Precedence chain is User Config → DEFAULTS table → caller's explicit default= → None, with the DEFAULTS table strictly winning over caller-supplied defaults. Fails per-key with a logged warning, never silently drops the whole config.
