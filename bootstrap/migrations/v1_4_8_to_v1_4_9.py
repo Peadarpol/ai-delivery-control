@@ -44,7 +44,7 @@ class MigrationV1_4_8_to_V1_4_9(MigrationProtocol):
         for idx, line in enumerate(lines):
             if line.strip().startswith("#"):
                 continue
-            match = re.match(r'^()(version)(\s*:\s*)"([^"]+)"(.*)', line)
+            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
             if match:
                 lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
                 break
@@ -63,7 +63,7 @@ class MigrationV1_4_8_to_V1_4_9(MigrationProtocol):
         for idx, line in enumerate(lines):
             if line.strip().startswith("#"):
                 continue
-            match = re.match(r'^()(version)(\s*:\s*)"([^"]+)"(.*)', line)
+            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
             if match:
                 lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
                 break

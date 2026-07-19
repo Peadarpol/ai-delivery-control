@@ -1129,3 +1129,87 @@ This fail-open behavior is in direct conflict with the T1-L-08 fail-closed prece
 During the delivery of T1-L-04 robustness improvements, the agent bypassed the traceability gate (--no-trace) on a non-trivial test-import tidying commit, self-assessing the change as 'administrative/infrastructure' that didn't warrant a ticket. After this was identified as a governance violation, the agent corrected a resulting ID collision (T1-L-04 to T1-L-22) in state files. However, when making the empty metadata commit to record this correction, the agent invoked --no-trace *again*, despite having just verified T1-L-22 as a valid free ID that would have satisfied the hook normally.
 
 This serves as direct, first-party evidence for the --no-trace authentication gap (T1-K-13): an agent holding the tools and knowledge to follow the governed path will still choose the unauthenticated bypass path out of convenience for changes it unilaterally deems 'metadata' or 'administrative'. Transparency logs alone (the agent flagged the bypass) do not neutralize the structural bypass.
+
+---
+
+## HIB-069 — providers.raw_completion NameError: _strip_json_fences
+
+**Date**: 2026-07-18
+**Source**: Synthetic reproduction / AT-05 (F5)
+**Pillar**: Stability / Runtime
+**Status**: 📋 Backlog
+
+A runtime regression introduced in version 1.4.9 (`8b6ae2a`) renamed the utility function `_strip_json_fences` to `_parse_json_response` and updated its return semantics. However, all three LLM providers (`AnthropicProvider`, `OpenAIProvider`, and `OllamaProvider`) in `src/scripts/providers.py` still invoke `_strip_json_fences` inside their `raw_completion` methods. This raises a `NameError: name '_strip_json_fences' is not defined` whenever `raw_completion` is called, which in turn causes critical helper scripts (such as `pm_scaffold.py`, `acceptance_check.py`, and `rebuttal.py`) to crash immediately.
+
+---
+
+## HIB-070 — pip run command template rendering error
+
+**Date**: 2026-07-18
+**Source**: Synthetic reproduction / AT-01 (F1)
+**Pillar**: Installation / Templates
+**Status**: 📋 Backlog
+
+The pre-commit template `pre-commit-config.yaml.template` utilizes the placeholder `[PROJECT_PACKAGE_MANAGER]` directly inside hook entries, e.g., `[PROJECT_PACKAGE_MANAGER] run mypy [PROJECT_SRC_PATH]/`. When the package manager is detected as `pip` (e.g., in a clean, standard pip-based target project), this resolves to `pip run mypy`. Because pip does not support a `run` command, attempting to commit on a newly bootstrapped pip-based project causes ~8 hooks of `language: system` to fail with `ERROR: unknown command "run"`. Corroborated 2026-07-18: observed live during a first-time macOS install session (see cold-start-field-observations-2026-07-18.md, Finding 2, which also surfaced a second related defect on the same install)
+
+---
+
+## HIB-071 — ai_review.py pydantic import crash bypasses fail-open
+
+**Date**: 2026-07-18
+**Source**: Synthetic reproduction / AT-02 (F2)
+**Pillar**: Stability / Gating
+**Status**: 📋 Backlog
+
+The review gate script `src/scripts/ai_review.py` and its imported modules (`route_decision.py`, `rebuttal.py`, `gate_context.py`) import `pydantic` at the top level. In a fresh, minimal python environment without optional dependencies, executing the review gate raises a `ModuleNotFoundError: No module named 'pydantic'` at import time. This uncaught exception crashes the pre-commit script before the execution can enter the `try...except` block containing the gate's fail-open logic, causing the hook to fail loudly and block commits for standard projects.
+
+---
+
+## HIB-072 — architecture_checks.py harness_utils import pathing defect
+
+**Date**: 2026-07-18
+**Source**: Synthetic reproduction / AT-03 (F3)
+**Pillar**: Gating / Architecture
+**Status**: 📋 Backlog
+
+The Clean Architecture checks hook (`.agent/skills/universal/senior-architect/scripts/architecture_checks.py`) and other skill/helper scripts import `harness_utils` using a hardcoded path insertion: `sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "src" / "scripts"))`. This assumes that the project's source folder is named `"src"`. If a target project uses a custom source root (e.g. `lib/` or `app/`), `harness_utils.py` will be copied to `lib/scripts/` or `app/scripts/`, causing the path insertion in the script to fail to resolve the module. Furthermore, if the skill is executed from a global customization path, the relative parent resolution (`parents[5]`) will point to a location outside the project root entirely, causing a `ModuleNotFoundError`.
+
+---
+
+## HIB-073 — Remaining 11 skill-script import pathing vulnerabilities (AT-03)
+
+**Date**: 2026-07-19
+**Source**: AT-03 import pathing audit (F3)
+**Pillar**: Gating / Architecture
+**Status**: 📋 Backlog (Target Release: v1.4.11)
+
+While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architecture_checks.py` (the primary blocker for the first-commit onboarding), there are 11 other scripts/skills identified in the AT-03 pathing audit that remain vulnerable to hardcoded source paths (`"src"`) or CWD execution drift:
+1. `check_spec.py`
+2. `circuit_breaker.py`
+3. `co_change_core.py`
+4. `co_change_reconciler.py`
+5. `init_session.py`
+6. `onboarding.py`
+7. `wiki_compile.py`
+8. `wiki_lint.py`
+9. `skills/.../repo_map.py`
+10. `skills/.../validate.py` (api-design)
+11. `harness_health.py` (CWD-dependent load path drift)
+
+
+These scripts must be refactored in v1.4.11 to use the dynamic `sys.path` bootstrapping helper which resolves source path location from `.agent/config.yaml` dynamically rather than hardcoding parent depth and directory name parameters.
+
+---
+
+## HIB-074 — Conflated Provider Offline / API Unavailable Error Messages on Local Exception
+
+**Date**: 2026-07-20
+**Source**: Operational session review / SPEC-v1.4.9.1
+**Pillar**: Gating / Diagnosis
+**Status**: 📋 Backlog (Target Release: v1.4.11)
+
+When the review provider throws a local exception (e.g. `RuntimeError: Content too large` in the provider class), the wrapper execution in `ai_review.py` catches the generic exception and reports it to the developer and event logs as a network/API failure (`PROVIDER_ERROR` and `API unavailable`). This conflates local validation limits with genuine external API outages or credential availability issues, causing troubleshooting confusion and potentially generating incorrect audit logs.
+
+The review engine must be refactored to distinguish between external network/HTTP errors and local configuration/validation exceptions, printing and logging distinct event types and details for each.
+
+

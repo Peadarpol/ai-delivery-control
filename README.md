@@ -12,6 +12,18 @@ It works with any LLM-based coding agent that respects its hooks and conventions
 with the fullest integration today for Claude Code and Gemini CLI. It is free, runs
 entirely on your machine, and requires no server infrastructure.
 
+**Scope**: this framework governs Python projects. Its enforcement gates —
+adversarial code review, architecture-boundary checks, quality standards — are
+built around Python's tooling and conventions, validated over six months against
+a real Python/FastAPI codebase.
+
+This is deliberate. A governance layer is only as good as its grasp of how code
+in a specific language actually goes wrong, and that grasp does not generalise for
+free. The framework governs one language deeply rather than many superficially.
+
+Non-Python projects can still use the session lifecycle, requirement traceability,
+and workflow structure. The code-analysis gates assume Python.
+
 **GitHub topics**: `ai-delivery-control` · `agent-harness` · `harness-engineering` · `agentic-sdlc` · `governance` · `llm-governance`
 
 ---
@@ -182,9 +194,12 @@ Each skill contains guidance, examples and validation steps that run before work
 See docs/wiki/Skills.md for the complete catalogue.
 
 Stack-specific skills layer on top when the installer detects a matching stack.
-The framework currently ships with full support for **Python / FastAPI** and a stub for
-**Node.js / Express**. Other stacks work through the universal skills with manual
-configuration. Skills you customise are never overwritten on re-install.
+The framework ships with full support for Python / FastAPI. A Node.js /
+Express stub exists but is not a complete governance pack — the code-analysis
+gates (adversarial review, architecture checks, exception standards) are
+Python-specific. Non-Python projects get the universal skills, session structure,
+and traceability, but not the language-specific gate enforcement. Skills you
+customise are never overwritten on re-install.
 
 ---
 
@@ -255,8 +270,9 @@ python bootstrap/validate.py --project-path /path/to/your/project
 
 Full setup: [docs/getting-started.md](docs/getting-started.md)
 
-The installer detects your stack, copies framework files, wires pre-commit hooks,
-and runs the environment validation suite. Under ten minutes from zero to working.
+The installer detects your Python project layout, copies framework files, wires
+pre-commit hooks, and runs the environment validation suite. Under ten minutes
+from zero to working.
 
 **Runtime requirements**: Python 3.9+ (stdlib only — no pip dependencies). From
 v1.4.0, the harness writes a small SQLite index to `~/.aisdlc/harness.db` on first
@@ -296,6 +312,7 @@ Full security model and responsible disclosure: [`SECURITY.md`](SECURITY.md)
 
 ## What it does not do
 
+- Not a multi-language governance tool — the enforcement gates are Python-specific (see Scope)
 - Not a replacement for engineering judgement — ownership is more expensive than creation, and judgement about what deserves to exist remains human work
 - Not production monitoring or alerting
 - Not infrastructure provisioning

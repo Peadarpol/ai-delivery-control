@@ -305,7 +305,7 @@ def main():
     # Verifications
     has_budget_provider = "budget_provider:" in config_text
     has_budget_model = "budget_model:" in config_text
-    version_bumped = 'version: "1.4.7"' in config_text
+    version_bumped = 'version: "1.4.9"' in config_text
     session_token_budget_null = "session_token_budget: null" in config_text
     has_comments = "# local_provider comment" in config_text
     state_file_written = state_file.exists()
@@ -320,7 +320,7 @@ def main():
         print_err(f"Upgrade verification failed! Injections:\n"
                   f"  budget_provider: {has_budget_provider}\n"
                   f"  budget_model: {has_budget_model}\n"
-                  f"  version: 1.4.7: {version_bumped}\n"
+                  f"  version: 1.4.9: {version_bumped}\n"
                   f"  session_token_budget=null: {session_token_budget_null}\n"
                   f"  comment intact: {has_comments}\n"
                   f"  state file: {state_file_written}")
@@ -374,11 +374,11 @@ def main():
     gov_file.write_text("Modified governance contents!", encoding="utf-8")
     
     res = run_command([sys.executable, "bootstrap/upgrade.py", "--project-path", str(TEST_PROJECT), "--force", "--skip-preflight"])
-    sidecar_exists = (TEST_PROJECT / ".agent" / "governance.md.framework-v1.4.7").exists()
+    sidecar_exists = (TEST_PROJECT / ".agent" / "governance.md.framework-v1.4.9").exists()
     gov_preserved = gov_file.read_text(encoding="utf-8") == "Modified governance contents!"
     
     if sidecar_exists and gov_preserved:
-        print_ok("Conflict trigger successfully detected modifications, wrote framework-v1.4.7 sidecar, and preserved original file.")
+        print_ok("Conflict trigger successfully detected modifications, wrote framework-v1.4.9 sidecar, and preserved original file.")
     else:
         print_err(f"Conflict trigger failed! Sidecar exists: {sidecar_exists}, Original preserved: {gov_preserved}")
         failures += 1
@@ -408,12 +408,12 @@ def main():
     # 2. Modify config.yaml framework.version to 1.1.0
     config_file = TEST_PROJECT / ".agent" / "config.yaml"
     c_content = config_file.read_text(encoding="utf-8")
-    c_content = re.sub(r'version: "1.4.7"', 'version: "1.1.0"', c_content)
+    c_content = re.sub(r'version: "1.4.9"', 'version: "1.1.0"', c_content)
     config_file.write_text(c_content, encoding="utf-8")
     
     # 3. Run upgrade again, check if it triggers re-verify mode
     res = run_command([sys.executable, "bootstrap/upgrade.py", "--project-path", str(TEST_PROJECT), "--force", "--skip-preflight"])
-    if "Project is already at version 1.4.7. Entering non-destructive verification pass." in res.stdout:
+    if "Project is already at version 1.4.9. Entering non-destructive verification pass." in res.stdout:
         print_ok("Idempotency checks out: state file version took precedence and triggered re-verify mode.")
     else:
         print_err(f"Idempotency test failed! Output:\n{res.stdout}")
@@ -872,6 +872,8 @@ def migrate(config_path: Path) -> None:
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "harness_utils.py", TEST_PROJECT / "src" / "scripts" / "harness_utils.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "gate_context.py", TEST_PROJECT / "src" / "scripts" / "gate_context.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "state_persistence.py", TEST_PROJECT / "src" / "scripts" / "state_persistence.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "route_decision.py", TEST_PROJECT / "src" / "scripts" / "route_decision.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "rebuttal.py", TEST_PROJECT / "src" / "scripts" / "rebuttal.py")
     
     # Make sure session.json exists
     session_file = TEST_PROJECT / ".agent" / "state" / "session.json"
@@ -903,8 +905,6 @@ def migrate(config_path: Path) -> None:
 
     # Stage the file within the isolated TEST_PROJECT git repo
     res_add1 = subprocess.run(["git", "add", "tests/test_dummy.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
-    print(f"[DEBUG] git add thin output: rc={res_add1.returncode}, stdout={repr(res_add1.stdout)}, stderr={repr(res_add1.stderr)}")
-    
     res_thin = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
         capture_output=True,
@@ -922,8 +922,6 @@ def migrate(config_path: Path) -> None:
     high_risk_file.write_text("class DummyModel:\n" + "\n".join(f"    # dummy high risk {i}" for i in range(25)), encoding="utf-8")
     
     res_add2 = subprocess.run(["git", "add", "src/models.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
-    print(f"[DEBUG] git add strat output: rc={res_add2.returncode}, stdout={repr(res_add2.stdout)}, stderr={repr(res_add2.stderr)}")
-    
     res_strat = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
         capture_output=True,
@@ -971,6 +969,8 @@ def migrate(config_path: Path) -> None:
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "gate_context.py", TEST_PROJECT / "src" / "scripts" / "gate_context.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "state_persistence.py", TEST_PROJECT / "src" / "scripts" / "state_persistence.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "review_context_universal.md", TEST_PROJECT / "src" / "scripts" / "review_context_universal.md")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "route_decision.py", TEST_PROJECT / "src" / "scripts" / "route_decision.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "rebuttal.py", TEST_PROJECT / "src" / "scripts" / "rebuttal.py")
 
     # Make sure session.json exists
     session_file = TEST_PROJECT / ".agent" / "state" / "session.json"
@@ -1047,7 +1047,7 @@ class MockProvider:
             ]
         })
 
-def get_provider(provider_name=None, model=None):
+def get_provider(provider_name=None, model=None, tier=None, *args, **kwargs):
     return MockProvider()
 """
     (TEST_PROJECT / "src" / "scripts" / "providers.py").write_text(mock_providers_content, encoding="utf-8")
@@ -1081,9 +1081,6 @@ def get_provider(provider_name=None, model=None):
         errors="replace",
         cwd=str(TEST_PROJECT)
     )
-    print(f"[DEBUG] res_diff CompletedProcess: {res_diff}")
-    print(f"[DEBUG] res_diff stdout: {repr(res_diff.stdout)}")
-    print(f"[DEBUG] res_diff stderr: {repr(res_diff.stderr)}")
     diff_hash = root_ai_review._get_normalized_diff_hash(res_diff.stdout or "")
     
     # 2. Write gate_rebuttal.json
@@ -1424,7 +1421,7 @@ None.
     config_text_28 = (TEST_PROJECT / ".agent" / "config.yaml").read_text(encoding="utf-8")
     config_reverted = "local_provider:" in config_text_28 and "budget_provider_timeout_seconds" not in config_text_28
 
-    s28_pass = upgraded_ok and upgraded_version == "1.4.7" and downgrade_ok and downgraded_version == "1.1.0" and config_reverted
+    s28_pass = upgraded_ok and upgraded_version == "1.4.9" and downgrade_ok and downgraded_version == "1.1.0" and config_reverted
     if s28_pass:
         print_ok(
             f"Scenario 28 PASS: Downgrade lifecycle complete — "

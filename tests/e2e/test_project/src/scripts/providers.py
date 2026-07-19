@@ -27,6 +27,7 @@ import json
 import os
 import random
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -34,11 +35,19 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+try:
+    from harness_utils import get_harness_config
+except ImportError:
+    def get_harness_config(section, key=None, default=None):
+        if section == "model_routing" and key == "max_tokens":
+            return 4096
+        return default
+
 
 # ── Config defaults ───────────────────────────────────────────────────────────
 
-DEFAULT_TIMEOUT = int(os.environ.get("AI_REVIEW_TIMEOUT", "45"))
-DEFAULT_MODEL = os.environ.get("AI_REVIEW_MODEL", "claude-sonnet-4-20250514")
+DEFAULT_TIMEOUT = int(os.environ.get("AI_REVIEW_TIMEOUT", "60"))
+DEFAULT_MODEL = os.environ.get("AI_REVIEW_MODEL", "claude-sonnet-4-6")
 MAX_DIFF_CHARS = 200_000
 
 
@@ -65,6 +74,37 @@ def call_api_with_retry(
     raise last_error  # type: ignore[misc]
 
 
+class TruncationError(Exception):
+    """Raised when the LLM truncates the response due to token limits."""
+    pass
+
+
+def _parse_json_response(raw: str, stop_reason: str | None = None) -> Dict[str, Any]:
+    """Parse JSON response, falling back to brace extraction, and providing detailed errors."""
+    # Try parsing the raw response first just in case
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+        
+    first_brace = raw.find('{')
+    last_brace = raw.rfind('}')
+    
+    if first_brace != -1 and last_brace != -1 and first_brace <= last_brace:
+        extracted = raw[first_brace:last_brace+1]
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError as e:
+            if stop_reason in ("max_tokens", "length"):
+                raise TruncationError(f"Provider truncated response due to max_tokens limit. Raw response: {raw}") from e
+            raise json.JSONDecodeError(f"Extractable JSON parse failed: {e}. Raw response: {raw}", e.doc, e.pos) from e
+    
+    if stop_reason in ("max_tokens", "length"):
+        raise TruncationError(f"Provider truncated response due to max_tokens limit. Raw response: {raw}")
+
+    raise json.JSONDecodeError(f"Extractable JSON not found (no braces). Provider returned an error message or non-JSON. Raw response: {raw}", raw, 0)
+
+
 def _strip_json_fences(raw: str) -> str:
     """Strip markdown code fences if the model wraps JSON in them."""
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
@@ -88,7 +128,7 @@ class ReviewProvider(ABC):
     """
 
     @abstractmethod
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         """Send a review request and return parsed JSON response.
 
         Args:
@@ -105,6 +145,49 @@ class ReviewProvider(ABC):
             json.JSONDecodeError: If the LLM response is not valid JSON.
         """
         ...
+
+    @abstractmethod
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
+        """Send a completion request and return the raw text response from the LLM.
+
+        This method must also calculate and update self.last_token_usage.
+        """
+        ...
+
+    def call_llm(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 4096,
+        json_mode: bool = False,
+    ) -> tuple[str, int, int]:
+        """Call LLM and return (response_text, input_tokens, output_tokens) to support check_spec.py.
+
+        Note: json_mode is accepted for call-site parity with check_spec.py; actual JSON
+        formatting is determined per-provider (Ollama/OpenAI force it internally via
+        raw_completion, Anthropic relies on system_prompt instructions) and this flag is
+        currently a no-op. Do not assume passing json_mode=False changes behavior.
+        """
+        response = self.raw_completion(system_prompt, user_prompt, max_tokens=max_tokens)
+        usage = self.last_token_usage
+        return (
+            response,
+            usage.get("input_tokens", 0),
+            usage.get("output_tokens", 0),
+        )
+
+    @property
+    def last_token_usage(self) -> Dict[str, int]:
+        """Return thread-safe token usage of the last request."""
+        if not hasattr(self, "_local_state"):
+            self._local_state = threading.local()
+        return getattr(self._local_state, "last_token_usage", {})
+
+    @last_token_usage.setter
+    def last_token_usage(self, value: Dict[str, int]) -> None:
+        if not hasattr(self, "_local_state"):
+            self._local_state = threading.local()
+        self._local_state.last_token_usage = value
 
     @property
     @abstractmethod
@@ -141,6 +224,7 @@ class AnthropicProvider(ReviewProvider):
     def __init__(self, model: str | None = None):
         self._model = model or DEFAULT_MODEL
         self._api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens")
 
     @property
     def name(self) -> str:
@@ -153,7 +237,7 @@ class AnthropicProvider(ReviewProvider):
     def is_available(self) -> bool:
         return bool(self._api_key)
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         if not self._api_key:
             raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
 
@@ -166,7 +250,55 @@ class AnthropicProvider(ReviewProvider):
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
+                "system": system,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": user_content,
+                    }
+                ],
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": self._api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+
+        body = json.loads(call_api_with_retry(req).decode("utf-8"))
+        # Thread-safe token usage tracking
+        usage = body.get("usage", {})
+        self.last_token_usage = {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "reasoning_tokens": usage.get("thinking_tokens", 0),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+        }
+        raw = body["content"][0]["text"].strip()
+        stop_reason = body.get("stop_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
+
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
+        if not self._api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
+
+        if len(user_content) > MAX_DIFF_CHARS:
+            raise RuntimeError(
+                f"Content too large ({len(user_content):,} chars > "
+                f"{MAX_DIFF_CHARS:,}); skip guard should have caught this."
+            )
+
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user_content}],
             }
@@ -184,9 +316,15 @@ class AnthropicProvider(ReviewProvider):
         )
 
         body = json.loads(call_api_with_retry(req).decode("utf-8"))
+        usage = body.get("usage", {})
+        self.last_token_usage = {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "reasoning_tokens": usage.get("thinking_tokens", 0),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+        }
         raw = body["content"][0]["text"].strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        return _strip_json_fences(raw)
 
 
 # ── OpenAI-Compatible Provider ────────────────────────────────────────────────
@@ -209,6 +347,7 @@ class OpenAIProvider(ReviewProvider):
         self._base_url = os.environ.get(
             "OPENAI_BASE_URL", "https://api.openai.com/v1"
         ).rstrip("/")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens")
 
     @property
     def name(self) -> str:
@@ -221,14 +360,14 @@ class OpenAIProvider(ReviewProvider):
     def is_available(self) -> bool:
         return bool(self._api_key)
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY environment variable not set")
 
         payload = json.dumps(
             {
                 "model": self._model,
-                "max_tokens": 1024,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -248,9 +387,58 @@ class OpenAIProvider(ReviewProvider):
         )
 
         body = json.loads(call_api_with_retry(req).decode("utf-8"))
+        # Thread-safe token usage tracking
+        usage = body.get("usage", {})
+        completion_details = usage.get("completion_tokens_details", {})
+        reasoning = completion_details.get("reasoning_tokens", 0)
+        self.last_token_usage = {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+            "reasoning_tokens": reasoning,
+            "cache_read_input_tokens": 0,
+        }
         raw = body["choices"][0]["message"]["content"].strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        stop_reason = body["choices"][0].get("finish_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
+
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
+        if not self._api_key:
+            raise RuntimeError("OPENAI_API_KEY environment variable not set")
+
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_content},
+                ],
+                "response_format": {"type": "json_object"},
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{self._base_url}/chat/completions",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+            },
+            method="POST",
+        )
+
+        body = json.loads(call_api_with_retry(req).decode("utf-8"))
+        usage = body.get("usage", {})
+        completion_details = usage.get("completion_tokens_details", {})
+        reasoning = completion_details.get("reasoning_tokens", 0)
+        self.last_token_usage = {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+            "reasoning_tokens": reasoning,
+            "cache_read_input_tokens": 0,
+        }
+        raw = body["choices"][0]["message"]["content"].strip()
+        return _strip_json_fences(raw)
 
 
 # ── Ollama Provider ───────────────────────────────────────────────────────────
@@ -271,6 +459,7 @@ class OllamaProvider(ReviewProvider):
         self._base_url = os.environ.get(
             "OLLAMA_BASE_URL", "http://localhost:11434"
         ).rstrip("/")
+        self._max_tokens = get_harness_config("model_routing", "max_tokens")
 
     @property
     def name(self) -> str:
@@ -289,7 +478,7 @@ class OllamaProvider(ReviewProvider):
         except Exception:
             return False
 
-    def review(self, system: str, user_content: str) -> Dict[str, Any]:
+    def review(self, system: str, user_content: str, max_tokens: int | None = None) -> Dict[str, Any]:
         payload = json.dumps(
             {
                 "model": self._model,
@@ -297,7 +486,7 @@ class OllamaProvider(ReviewProvider):
                 "prompt": user_content,
                 "format": "json",
                 "stream": False,
-                "options": {"num_predict": 1024},
+                "options": {"num_predict": max_tokens if max_tokens is not None else (self._max_tokens or 4096)},
             }
         ).encode("utf-8")
 
@@ -312,9 +501,47 @@ class OllamaProvider(ReviewProvider):
         body = json.loads(
             call_api_with_retry(req, timeout=120, max_retries=2).decode("utf-8")
         )
+        # Thread-safe token usage tracking
+        self.last_token_usage = {
+            "input_tokens": body.get("prompt_eval_count", 0),
+            "output_tokens": body.get("eval_count", 0),
+            "reasoning_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
         raw = body.get("response", "{}").strip()
-        raw = _strip_json_fences(raw)
-        return json.loads(raw)
+        stop_reason = body.get("done_reason")
+        return _parse_json_response(raw, stop_reason=stop_reason)
+
+    def raw_completion(self, system: str, user_content: str, max_tokens: int | None = None) -> str:
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "system": system,
+                "prompt": user_content,
+                "format": "json",
+                "stream": False,
+                "options": {"num_predict": max_tokens if max_tokens is not None else self._max_tokens},
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{self._base_url}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        body = json.loads(
+            call_api_with_retry(req, timeout=120, max_retries=2).decode("utf-8")
+        )
+        self.last_token_usage = {
+            "input_tokens": body.get("prompt_eval_count", 0),
+            "output_tokens": body.get("eval_count", 0),
+            "reasoning_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+        raw = body.get("response", "{}").strip()
+        return _strip_json_fences(raw)
 
 
 # ── Provider Factory ──────────────────────────────────────────────────────────
@@ -351,14 +578,16 @@ def _read_config_provider() -> str | None:
 def get_provider(
     provider_name: str | None = None,
     model: str | None = None,
+    tier: str | None = None,
 ) -> ReviewProvider:
     """Factory function with availability verification.
 
     Resolution order:
       1. ``provider_name`` argument (explicit)
-      2. ``AI_REVIEW_PROVIDER`` environment variable
-      3. ``.agent/config.yaml`` ``ai_review.provider`` field
-      4. Default: ``"anthropic"``
+      2. ``tier`` argument (resolves provider and model from config model_routing)
+      3. ``AI_REVIEW_PROVIDER`` environment variable
+      4. ``.agent/config.yaml`` ``ai_review.provider`` field
+      5. Default: ``"anthropic"``
 
     SEC-01: Logs selected provider name in stdout for audit traceability.
     The ``verdict_tier`` field in ``ReviewVerdict`` captures cloud vs local.
@@ -369,6 +598,7 @@ def get_provider(
     Args:
         provider_name: Override the provider selection.
         model: Override the model name (provider-specific).
+        tier: Optional model tier (e.g. 'budget', 'review') to resolve from config.
 
     Returns:
         An initialised ``ReviewProvider`` instance.
@@ -377,6 +607,20 @@ def get_provider(
         RuntimeError: If the selected provider is not available (missing
                       API key, unreachable endpoint) or unknown.
     """
+    if tier:
+        try:
+            config_path = Path.cwd() / ".agent" / "config.yaml"
+            if config_path.exists():
+                content = config_path.read_text(encoding="utf-8")
+                p_match = re.search(rf"^\s*{tier}_provider:\s*([^\s\n#]+)", content, re.MULTILINE)
+                m_match = re.search(rf"^\s*{tier}_model:\s*([^\s\n#]+)", content, re.MULTILINE)
+                if p_match and not provider_name:
+                    provider_name = p_match.group(1).strip().strip("\"'")
+                if m_match and not model:
+                    model = m_match.group(1).strip().strip("\"'")
+        except Exception:
+            pass
+
     # 1. Resolve provider name
     name = (
         provider_name

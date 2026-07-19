@@ -3,11 +3,31 @@ import re
 import sys
 from pathlib import Path
 
-import sys
+def find_project_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
+            return parent
+    return Path.cwd()
+
+def _resolve_src_root_init(root: Path) -> str:
+    config_path = root / ".agent" / "config.yaml"
+    if config_path.exists():
+        try:
+            content = config_path.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                if "source_root:" in line:
+                    return line.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
+        except Exception:
+            pass
+    return "src"
+
 try:
     from harness_utils import _safe_git_env
 except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "src" / "scripts"))
+    _root = find_project_root()
+    _src_root = _resolve_src_root_init(_root)
+    sys.path.insert(0, str(_root / _src_root / "scripts"))
     from harness_utils import _safe_git_env
 
 # --- Fallback YAML Parser ---
@@ -120,7 +140,8 @@ def parse_yaml_fallback(content: str) -> dict:
 
 def load_config() -> dict:
     """Finds and parses .agent/config.yaml using PyYAML or the custom fallback parser."""
-    config_path = Path(".agent/config.yaml")
+    config_path = find_project_root() / ".agent" / "config.yaml"
+
     if not config_path.exists():
         return {}
     try:
@@ -628,7 +649,9 @@ def main():
     try:
         import subprocess
         import hashlib
-        sys.path.insert(0, str(Path.cwd() / "src" / "scripts"))
+        project_root = find_project_root()
+        src_root = paths_config.get("source_root", "src")
+        sys.path.insert(0, str(project_root / src_root / "scripts"))
         from gate_context import load_gate_context, write_gate_context, GateContext, ArchViolation
 
         # Get staged diff and changed files

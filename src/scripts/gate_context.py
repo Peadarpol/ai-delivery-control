@@ -14,7 +14,52 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Literal
-from pydantic import BaseModel, Field
+try:
+    from pydantic import BaseModel, Field
+    _pydantic_installed = True
+except ImportError:
+    _pydantic_installed = False
+    class FieldStub:
+        def __init__(self, default=None, default_factory=None, **kwargs):
+            self.default = default
+            self.default_factory = default_factory
+    def Field(default=None, default_factory=None, **kwargs):
+        return FieldStub(default, default_factory, **kwargs)
+    class BaseModel:
+        """NOTE: fallback stub does not validate Literal/type constraints — values are accepted as-is when Pydantic is absent."""
+        def __init__(self, **kwargs):
+            fields = {}
+            for cls in self.__class__.__mro__:
+                if hasattr(cls, "__annotations__"):
+                    for field_name in cls.__annotations__:
+                        if not field_name.startswith("_") and field_name not in fields:
+                            val = getattr(self.__class__, field_name, None)
+                            fields[field_name] = val
+            for k, val in fields.items():
+                if val is not None:
+                    if isinstance(val, FieldStub):
+                        if val.default_factory:
+                            setattr(self, k, val.default_factory())
+                        else:
+                            setattr(self, k, val.default)
+                    else:
+                        setattr(self, k, val)
+                else:
+                    setattr(self, k, None)
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+        def model_dump(self) -> Dict[str, Any]:
+            res = {}
+            for k, v in self.__dict__.items():
+                if isinstance(v, BaseModel):
+                    res[k] = v.model_dump()
+                elif isinstance(v, list):
+                    res[k] = [item.model_dump() if isinstance(item, BaseModel) else item for item in v]
+                else:
+                    res[k] = v
+            return res
+        def dict(self) -> Dict[str, Any]:
+            return self.model_dump()
 from harness_utils import PROJECT_ROOT
 
 class ArchViolation(BaseModel):
