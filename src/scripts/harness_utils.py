@@ -213,9 +213,6 @@ DEFAULTS = {
     "traceability": {
         "specs_path": "docs/planning/specs/",
     },
-    "spec_gate": {
-        "specs_path": "docs/planning/specs/",
-    },
     "acceptance_gate": {
         "base_branch": "main",
         "migration_paths": [

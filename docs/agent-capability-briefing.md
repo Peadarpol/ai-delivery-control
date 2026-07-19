@@ -1,7 +1,7 @@
 # AI Delivery Control — Agent Capability Briefing
 
-**Framework version**: v1.4.4
-**Last updated**: 2026-06-22
+**Framework version**: v1.4.9.1
+**Last updated**: 2026-07-20
 **Update trigger**: Update this document when a backlog item moves to ✅ delivered,
 when a capability is materially changed, or when a "not yet built" item ships.
 
@@ -361,6 +361,7 @@ exist when working in this project:
 - Skill deprecation mechanism (`T1-B-04`)
 - Governance file diff highlighting on upgrade (`T1-K-03`)
 - All Tier 3 enterprise infrastructure (PostgreSQL, SSO, RBAC, compliance mappings)
+- Config parser consumer rollout (`T1-E-04`) — foundation exists in `harness_utils.py` but actual consumer refactoring across ~20 files is still ⬜ (planned v1.4.10)
 
 Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
@@ -370,6 +371,12 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.4.9.1 | 2026-07-19 | Onboarding defects fixes for bare-pip/no-Pydantic environments (F1, F2, F3, F5); post-merge code-quality remediation (FID-1 to FID-6); updated framework checksums registry |
+| v1.4.9 | 2026-07-12 | Shipped configuration parser foundation in `harness_utils.py` (DEFAULTS, `load_harness_config()`, `get_harness_config()`) (`T1-E-04` foundation); `session.json` shared contract (`T1-E-03`); regex-based traceability ID checks (`HIB-062`); parser fail-closed on invalid escapes (`HIB-065`); `check_traceability.py` performance cache/size guard (`T1-L-22`); honest outcome labeling (`T1-B-11`) |
+| v1.4.8 | 2026-07-07 | Added CodeQL configurations; regenerated checksums registry for version 1.4.3 and 1.4.4 |
+| v1.4.7 | 2026-07-07 | Fixed `validate.py` pre-commit PATH validation check on Windows via `sys.executable` fallback check (HIB-046) |
+| v1.4.6 | 2026-07-07 | Integrated reconciler with coupling decision records (CDRs); schema, pilot migration, and reconciler classification (Undeclared/Escalated/Tolerated/Accepted) with hub-scope exemption fix |
+| v1.4.5 | 2026-07-06 | Decomposed `ai_review.py` into five helper modules (`roster_builder`, `context_loader`, `route_decision`, `rebuttal`, `gate_context`) to resolve structural coupling and circular imports |
 | v1.4.4 | 2026-06-22 | Integration release — five unmerged branches recovered; BUG-04/05 (PASS verdict logging, ADR routing); T1-K-05a (subprocess env sanitisation via `_safe_git_env()`); T1-L-12 (SpecGradeCard per-criterion feedback); T1-L-13 (ADR decision block enforcement); T1-L-14 (system archetype classification A1-A6); T1-K-11 (stale branch detection in harness_health.py); 372 tests; 643 checksum files |
 | v1.4.3 | 2026-06-22 | Prohibition table restructured into H/S/C/G four-series universal tier with project-specific (§4.2) and pattern-conditional (§4.3) sub-tiers (T1-K-10); `AGENTS.md §4` declared canonical single source of truth across all governance surfaces; consistency gate added (T1-K-09): workflow slug resolution, H/S/C/G label assertions, blocked_commands header currency; architecture_checks.py fail-loud on zero files scanned (T1-K-08); H-series procedural reframing + stale P-series cleanup (T1-M-14); nine new universal prohibitions with evidence base from 2025-2026 incident research |
 | v1.4.0 | 2026-06-13 | GateContext shared typed data bus across pre-commit hook chain (T1-G-13); evidence gathering injecting pytest_collect_status and todo_delta into LLM context (T1-G-11); capability calibration per-capability TP/FP weight adjustment (T1-G-14); EXTRACTED/INFERRED/AMBIGUOUS co-change confidence tiers (T1-H-10); SQLite cross-project state persistence write layer (T1-D-01); Claude Code Stop hook acceptance gate (T1-L-05a) |

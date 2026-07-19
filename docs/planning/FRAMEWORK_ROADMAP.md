@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.9
+**Current Version**: 1.4.9.1
 **Target Release**: v1.4.11 (deliberately resequenced 2026-07-18 — usability/onboarding hardening prioritised ahead of v1.5.0; see decisions_log.md 2026-07-18)
-**Last Updated**: 2026-07-18 (v1.4.9.1/v1.4.11 milestones added; T1-L-21 added to v1.4.10; F-COLD-4 retrofit mode logged unscheduled)
+**Last Updated**: 2026-07-20 (v1.4.9.1 shipped; T1-E-04 correction; T1-E-04 rollout folded into v1.4.10)
 
 ---
 
@@ -481,7 +481,7 @@ S0-05 must be cut before any beta invitations are sent.
 **Goal**: System consolidation, scope repair, traceability hardening, and parser unification.
 
 **Delivered items**:
-- T1-E-04: config.yaml parser unification
+- ~~T1-E-04: config.yaml parser unification~~ *(correction 2026-07-20: only the harness_utils.py foundation — DEFAULTS table, load_harness_config(), get_harness_config() — landed in v1.4.9. Consumer rollout across ~20 files was never completed; this is now scoped as remaining v1.4.10 work. See SPEC-config-loader.md, folded into SPEC-v1.4.10-governance-hardening.md.)*
 - T1-E-03: session.json shared contract enforcement
 - HIB-062: Traceability ID coverage regex expansion
 - HIB-065: Parser-robustness failure mode (invalid-escape) — fail-closed via _handle_parse_failure
@@ -492,24 +492,14 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
-### v1.4.9.1 — First-Commit Hotfix ⏳ PLANNED
+### v1.4.9.1 — First-Commit Hotfix ✅ SHIPPED (2026-07-19)
 
-**Goal**: Fix the confirmed, root-caused defects that block or silently corrupt a
-brand-new project's first commit. Split out from Governance Hardening (below) to
-keep that milestone's policy-decision work from being delayed by mechanical
-fixes that need no design debate. See `SPEC-v1.4.9.1-first-commit-hotfix.md`
-(spec-first per standing practice) and `ANALYSIS-PLAN-v1.4.10.md` for the
-analysis this release is built from.
+**Goal**: Fix the confirmed, root-caused defects that block or silently corrupt a brand-new project's first commit. Split out from Governance Hardening (below) to keep that milestone's policy-decision work from being delayed by mechanical fixes that need no design debate. See `SPEC-v1.4.9.1-first-commit-hotfix.md` (spec-first per standing practice).
 
-**Planned items**:
-- F1: `pip run` template rendering bug — breaks ~8 `language: system` hooks on
-  pip-based projects.
-- F2: `ai_review.py` pydantic import crash bypasses fail-open (structural fix;
-  dependency disposition per AT-02).
-- F3: `architecture_checks.py` `ModuleNotFoundError: harness_utils` — import
-  pathing defect.
-- F5: `providers.raw_completion()` `NameError: _strip_json_fences` — runtime
-  regression, root cause confirmed (`8b6ae2a`, a `--no-trace` commit).
+**Delivered items**:
+- F1 (installer PM/venv detection), F2 (Pydantic fallback + 3-stage precedence), F3 (CWD-relative path fix), F5 (_strip_json_fences restore) — commit `9938f24`
+- FID-1 through FID-6 post-merge remediation — commit `267dad5`
+- HIB-069 (checksums size-ceiling fix) and HIB-074 (error-mislabeling defect, filed for follow-up) noted as related items surfaced during delivery
 
 ---
 
@@ -528,6 +518,7 @@ analysis this release is built from.
 - T1-I-08: Stash accumulation cleanup.
 - HIB-059: SQLite sessions table missing session_id column.
 - HIB-061: Confirm check_traceability.py alignment with new .agent/config.yaml.
+- T1-E-04: Complete config.yaml parser unification rollout — foundation delivered v1.4.9, consumer migration across ~20 files (route_decision.py, check_traceability.py, acceptance_check.py, acceptance_hook.py, pm_scaffold.py, init_session.py, + 11 bulk-audit files) completing here. Fixes HIB-061.
 
 **Spec**: `SPEC-v1.4.10-governance-hardening.md` (spec-first per standing
 practice). Inputs: `GOVERNANCE-HARDENING-INPUTS.md` (AT-04/05/06 findings
@@ -821,10 +812,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.4.9.1 (v1.4.9 shipped 2026-07-12)
+**Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 📋, v1.4.10 📋, v1.4.11 📋
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ⏳, v1.4.11 📋
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
@@ -957,9 +948,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.10 (v1.4.9 shipped 2026-07-12)
+**Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ⏳
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 
