@@ -63,6 +63,12 @@ Estimated effort: 2-3 hours total.*
 > T1-A series fully delivered and archived. Final item T1-A-09
 > (AGENTS.md split) delivered in v1.3.1. See
 > FRAMEWORK_BACKLOG_ARCHIVE.md §T1-A for full history.
+>
+> **Reopened Extraction Theme**: Addressed as a reopened extraction-theme item for a demand-driven architectural concern:
+
+| ID | Item | Description | Effort | Status |
+|----|------|-------------|--------|--------|
+| T1-A-08 | **Extract language-general core from Python-specific governance packs** | Problem: The harness is Python-first (see decisions_log 2026-07-19). Its hard-enforcement gates are Python-bound: architecture_checks.py (Python AST), ai_review.py / acceptance_check.py (pydantic), the exception-standards hook (pytest), and the pre-commit language: system hooks (Python interpreter + mypy). A genuinely language-general core already exists but is not cleanly separated from the Python-specific machinery: session lifecycle, requirement traceability, the HARD STOP git protocol, the audit/event ledger, session recovery, and the H/S/C/G prohibition series are all language-agnostic. Proposed: architecturally separate the language-general core from the Python-specific "governance pack" so that (a) the language-general spine can govern any project's session lifecycle and traceability today, and (b) a future second language (TypeScript, Go, etc.) becomes a bounded, fundable "language pack" — a new AST analyzer, review context, and quality-gate set — rather than a fork of the whole harness. Explicitly demand-driven: do NOT build speculatively. This item exists so the architectural boundary is a conscious design target, and so that if a real second-language user appears, the work is scoped rather than discovered. Related: decisions_log 2026-07-19 (Python-first scope decision); F-COLD-4 (retrofit mode — same unscheduled/demand-driven treatment); the stack-pack mechanism (bootstrap/install.py) is the existing seed of the language-pack concept. | TBD | ⬜ Unscheduled / unscored |
 
 ---
 
