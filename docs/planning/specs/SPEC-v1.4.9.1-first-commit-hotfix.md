@@ -33,8 +33,8 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 > [!NOTE]
 > **Conda Support Scope Decision**: Conda run-prefix rendering is deferred to v1.4.11 (installer/onboarding theme) per Peter's decision 2026-07-19. The hotfix covers pip and poetry prefix rendering only.
 
-> [!IMPORTANT]
-> **Pydantic Fallback strategy [DECISION REQUIRED]**: When Pydantic is absent and the stub fallback is used, `ai_review.py` performs no schema validation of the LLM verdict (the `ReviewVerdict(...)` construction and `ValidationError` handling become no-ops). This is an acceptable degradation for the fail-open-on-fresh-pip goal, but it is a real reduction in gate rigor. Peter must confirm if this trade-off is acceptable, or whether Pydantic should instead be a declared hard prerequisite (AT-02 Option: declared prerequisite) rather than an optional fallback.
+> [!NOTE]
+> **Pydantic Fallback strategy**: Resolved 2026-07-19. Option A (graceful degradation with dynamic import stub fallback) is selected to avoid first-run installer friction, on the condition that a highly visible warning is printed to stderr on every execution when degraded.
 
 ---
 
@@ -76,9 +76,11 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 #### [MODIFY] [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py)
 - Wrap top-level `pydantic` imports in a dynamic fallback check block to fail-open gracefully on standard commits if missing (Option 1 from AT-02).
 - **Class Load Crash Prevention (Stub Pattern)**: Provide stub fallback definitions for `BaseModel`, `Field`, and `ValidationError` in the `except ImportError:` branch, mirroring the reference pattern in `.agent/scripts/check_spec.py` lines 32–43, to ensure class definitions (e.g. `class ReviewVerdict(BaseModel)`) succeed when Pydantic is absent.
+- **Mandatory Visible Warning**: When the stub fallback path is active (Pydantic is absent), the gate must print a highly visible warning to stderr on every execution: `⚠️ [GATE] Running without schema validation — pydantic not installed. Verdict integrity checks are disabled. Install pydantic to restore full gate rigor.`
 
 #### [MODIFY] [acceptance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/acceptance_check.py)
 - Move Pydantic imports inside functions or use dynamic try/except fallback blocks with the identical BaseModel stub pattern to prevent load crashes on `class AcceptanceVerdict(BaseModel)` when the acceptance hook fires.
+- **Mandatory Visible Warning**: When the stub fallback path is active, the hook must print a highly visible warning to stderr on every execution: `⚠️ [GATE] Running without schema validation — pydantic not installed. Verdict integrity checks are disabled. Install pydantic to restore full gate rigor.`
 
 ### Component: Path Insertion & Forensics
 #### [MODIFY] [architecture_checks.py](file:///c:/projects/ai-delivery-control/.agent/skills/universal/senior-architect/scripts/architecture_checks.py)
@@ -109,4 +111,4 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 
 ## 7. Resolved Decisions
 
-* **Pydantic Fallback strategy**: Option 1 (Dynamic Import with Graceful Fallback / Degradation) has been approved and selected for implementation.
+* **Pydantic Fallback strategy**: Option A (graceful degradation with dynamic import stub fallback and mandatory per-run warning) — resolved 2026-07-19.
