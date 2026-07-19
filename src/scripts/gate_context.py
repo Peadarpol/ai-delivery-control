@@ -14,7 +14,44 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Literal
-from pydantic import BaseModel, Field
+try:
+    from pydantic import BaseModel, Field
+    _pydantic_installed = True
+except ImportError:
+    _pydantic_installed = False
+    class FieldStub:
+        def __init__(self, default=None, default_factory=None, **kwargs):
+            self.default = default
+            self.default_factory = default_factory
+    def Field(default=None, default_factory=None, **kwargs):
+        return FieldStub(default, default_factory, **kwargs)
+    class BaseModel:
+        def __init__(self, **kwargs):
+            for k in dir(self.__class__):
+                if not k.startswith("_"):
+                    val = getattr(self.__class__, k)
+                    if not callable(val):
+                        if isinstance(val, FieldStub):
+                            if val.default_factory:
+                                setattr(self, k, val.default_factory())
+                            else:
+                                setattr(self, k, val.default)
+                        else:
+                            setattr(self, k, val)
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+        def model_dump(self) -> Dict[str, Any]:
+            res = {}
+            for k, v in self.__dict__.items():
+                if isinstance(v, BaseModel):
+                    res[k] = v.model_dump()
+                elif isinstance(v, list):
+                    res[k] = [item.model_dump() if isinstance(item, BaseModel) else item for item in v]
+                else:
+                    res[k] = v
+            return res
+        def dict(self) -> Dict[str, Any]:
+            return self.model_dump()
 from harness_utils import PROJECT_ROOT
 
 class ArchViolation(BaseModel):

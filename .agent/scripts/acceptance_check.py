@@ -11,7 +11,22 @@ import json
 import subprocess
 from pathlib import Path
 from typing import List, Literal
-from pydantic import BaseModel
+try:
+    from pydantic import BaseModel
+    _pydantic_installed = True
+except ImportError:
+    _pydantic_installed = False
+    class BaseModel:
+        def __init__(self, **kwargs):
+            for k in dir(self.__class__):
+                if not k.startswith("_"):
+                    val = getattr(self.__class__, k)
+                    if not callable(val):
+                        setattr(self, k, val)
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+        def model_dump(self):
+            return self.__dict__
 
 # Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
 if __name__ == "__main__":
@@ -100,15 +115,26 @@ def load_config() -> dict:
     return config
 
 def get_git_diff(base_branch: str) -> str:
-    """Retrieve git diff from base_branch to HEAD."""
-    res = subprocess.run(
+    """Retrieve git diff from base_branch to HEAD, including staged changes."""
+    res_branch = subprocess.run(
         ["git", "diff", f"{base_branch}...HEAD"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
         shell=False
     )
-    return res.stdout
+    res_staged = subprocess.run(
+        ["git", "diff", "--cached"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+        shell=False
+    )
+    return (res_branch.stdout or "") + "\n" + (res_staged.stdout or "")
 
 def check_migrations_in_diff(diff_stdout: str, migration_paths: List[str]) -> bool:
     """Check if any migration files are in the diff."""
@@ -122,6 +148,67 @@ def check_migrations_in_diff(diff_stdout: str, migration_paths: List[str]) -> bo
     return False
 
 def main():
+    # ── Check Pydantic dynamic import status (3-stage precedence rule) ──
+    if not _pydantic_installed:
+        # Stage 1: CI Enforcement (Unconditional Check)
+        is_ci = os.environ.get("CI", "").lower() in ("true", "1")
+        if is_ci:
+            print("\033[91;1m❌ [ACCEPTANCE_GATE FATAL] critical dependency 'pydantic' is missing in CI environment. Gating rigor cannot be verified.\033[0m", file=sys.stderr)
+            sys.exit(1)
+            
+        # Stage 2: Audit Logging (Unconditional Log)
+        try:
+            log_action(
+                action_type="spec_acceptance_gate",
+                status="fail",
+                details={"reason": "Pydantic is absent. Running with stub fallback models. Schema validation disabled."}
+            )
+        except Exception:
+            pass
+
+        # Stage 3: Visual stderr Warning (Conditional Print)
+        silence_warning = False
+        try:
+            config_path = Path(".agent/config.yaml")
+            if config_path.exists():
+                content = config_path.read_text(encoding="utf-8")
+                for line in content.splitlines():
+                    if "silence_pydantic_warning" in line:
+                        val = line.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
+                        if val.lower() in ("true", "1"):
+                            silence_warning = True
+                            break
+        except Exception:
+            pass
+
+        if not silence_warning:
+            pm = "pip"
+            try:
+                config_path = Path(".agent/config.yaml")
+                if config_path.exists():
+                    content = config_path.read_text(encoding="utf-8")
+                    for line in content.splitlines():
+                        if "package_manager" in line:
+                            val = line.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
+                            if val:
+                                pm = val.lower()
+                                break
+            except Exception:
+                pass
+
+            if pm == "poetry":
+                remediation = "poetry add pydantic --group dev"
+            elif pm == "pipenv":
+                remediation = "pipenv install --dev pydantic"
+            else:
+                remediation = "pip install pydantic"
+
+            print("\n\033[93m" + "=" * 60 + "\033[0m", file=sys.stderr)
+            print("\033[93;1m⚠️  [ACCEPTANCE_GATE WARNING] Running without schema validation — pydantic not installed.\033[0m", file=sys.stderr)
+            print("  Verdict integrity checks are disabled.", file=sys.stderr)
+            print(f"  Remediation: Run '{remediation}' to restore full gate rigor.", file=sys.stderr)
+            print("\033[93m" + "=" * 60 + "\033[0m\n", file=sys.stderr)
+
     import argparse
     parser = argparse.ArgumentParser(description="AI-driven spec acceptance gate.")
     parser.add_argument("--spec", help="SPEC-XXX ID to verify.")

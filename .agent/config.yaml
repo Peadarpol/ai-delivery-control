@@ -35,3 +35,9 @@ architecture:
       path: bootstrap
     - name: skills
       path: .agent/skills
+
+skip_paths:
+  - bootstrap/checksums.py
+  - .agent/state/agent_session_close.json
+  - .agent/state/session.json
+

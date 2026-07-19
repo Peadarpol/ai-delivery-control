@@ -872,6 +872,8 @@ def migrate(config_path: Path) -> None:
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "harness_utils.py", TEST_PROJECT / "src" / "scripts" / "harness_utils.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "gate_context.py", TEST_PROJECT / "src" / "scripts" / "gate_context.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "state_persistence.py", TEST_PROJECT / "src" / "scripts" / "state_persistence.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "route_decision.py", TEST_PROJECT / "src" / "scripts" / "route_decision.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "rebuttal.py", TEST_PROJECT / "src" / "scripts" / "rebuttal.py")
     
     # Make sure session.json exists
     session_file = TEST_PROJECT / ".agent" / "state" / "session.json"
@@ -903,7 +905,7 @@ def migrate(config_path: Path) -> None:
 
     # Stage the file within the isolated TEST_PROJECT git repo
     res_add1 = subprocess.run(["git", "add", "tests/test_dummy.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
-    print(f"[DEBUG] git add thin output: rc={res_add1.returncode}, stdout={repr(res_add1.stdout)}, stderr={repr(res_add1.stderr)}")
+    
     
     res_thin = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
@@ -922,7 +924,7 @@ def migrate(config_path: Path) -> None:
     high_risk_file.write_text("class DummyModel:\n" + "\n".join(f"    # dummy high risk {i}" for i in range(25)), encoding="utf-8")
     
     res_add2 = subprocess.run(["git", "add", "src/models.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
-    print(f"[DEBUG] git add strat output: rc={res_add2.returncode}, stdout={repr(res_add2.stdout)}, stderr={repr(res_add2.stderr)}")
+    
     
     res_strat = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
@@ -971,6 +973,8 @@ def migrate(config_path: Path) -> None:
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "gate_context.py", TEST_PROJECT / "src" / "scripts" / "gate_context.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "state_persistence.py", TEST_PROJECT / "src" / "scripts" / "state_persistence.py")
     shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "review_context_universal.md", TEST_PROJECT / "src" / "scripts" / "review_context_universal.md")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "route_decision.py", TEST_PROJECT / "src" / "scripts" / "route_decision.py")
+    shutil.copy2(WORKSPACE_ROOT / "src" / "scripts" / "rebuttal.py", TEST_PROJECT / "src" / "scripts" / "rebuttal.py")
 
     # Make sure session.json exists
     session_file = TEST_PROJECT / ".agent" / "state" / "session.json"
@@ -1047,7 +1051,7 @@ class MockProvider:
             ]
         })
 
-def get_provider(provider_name=None, model=None):
+def get_provider(provider_name=None, model=None, tier=None, *args, **kwargs):
     return MockProvider()
 """
     (TEST_PROJECT / "src" / "scripts" / "providers.py").write_text(mock_providers_content, encoding="utf-8")
@@ -1081,9 +1085,6 @@ def get_provider(provider_name=None, model=None):
         errors="replace",
         cwd=str(TEST_PROJECT)
     )
-    print(f"[DEBUG] res_diff CompletedProcess: {res_diff}")
-    print(f"[DEBUG] res_diff stdout: {repr(res_diff.stdout)}")
-    print(f"[DEBUG] res_diff stderr: {repr(res_diff.stderr)}")
     diff_hash = root_ai_review._get_normalized_diff_hash(res_diff.stdout or "")
     
     # 2. Write gate_rebuttal.json

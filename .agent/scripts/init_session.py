@@ -918,6 +918,8 @@ def main() -> None:
 
 def _create_session_checkpoint(session_id: str) -> None:
     """Create a recoverable git stash at session start. Non-fatal if stash fails."""
+    if not (Path.cwd() / ".git").exists():
+        return
     try:
         result = subprocess.run(
             ["git", "stash", "push", "--include-untracked",

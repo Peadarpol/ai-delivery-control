@@ -134,7 +134,7 @@ def _load_outer_loop_mode() -> str:
 
     Returns 'incremental' on any failure, missing key, or unrecognised value.
     """
-    from src.scripts.harness_utils import get_harness_config
+    from harness_utils import get_harness_config
     mode_val = get_harness_config("outer_loop", "mode")
     if mode_val is None:
         mode_val = "incremental"

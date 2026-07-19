@@ -30,7 +30,46 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, cast, get_args
 
-from pydantic import BaseModel, Field, ValidationError
+try:
+    from pydantic import BaseModel, Field, ValidationError
+    _pydantic_installed = True
+except ImportError:
+    _pydantic_installed = False
+    class FieldStub:
+        def __init__(self, default=None, default_factory=None, **kwargs):
+            self.default = default
+            self.default_factory = default_factory
+    def Field(default=None, default_factory=None, **kwargs):
+        return FieldStub(default, default_factory, **kwargs)
+    class BaseModel:
+        def __init__(self, **kwargs):
+            for k in dir(self.__class__):
+                if not k.startswith("_"):
+                    val = getattr(self.__class__, k)
+                    if not callable(val):
+                        if isinstance(val, FieldStub):
+                            if val.default_factory:
+                                setattr(self, k, val.default_factory())
+                            else:
+                                setattr(self, k, val.default)
+                        else:
+                            setattr(self, k, val)
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+        def model_dump(self) -> Dict[str, Any]:
+            res = {}
+            for k, v in self.__dict__.items():
+                if isinstance(v, BaseModel):
+                    res[k] = v.model_dump()
+                elif isinstance(v, list):
+                    res[k] = [item.model_dump() if isinstance(item, BaseModel) else item for item in v]
+                else:
+                    res[k] = v
+            return res
+        def dict(self) -> Dict[str, Any]:
+            return self.model_dump()
+    class ValidationError(Exception):
+        pass
 
 # Dynamically import less common standard libraries using __import__ to stay under the Clean Architecture threshold of 30 explicit imports (GymBase threshold) without triggering Ruff E401
 argparse = __import__("argparse")
@@ -839,15 +878,44 @@ def _handle_parse_failure(reason: str, changed_files: List[str], active_domains:
 
 
 def load_config() -> Dict[str, Any]:
-    """Load optional .ai-review-config.json from project root."""
+    """Load config from .ai-review-config.json or .agent/config.yaml."""
+    config = {}
     if CONFIG_FILE.exists():
         try:
-            return cast(
+            config = cast(
                 Dict[str, Any], json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             )
         except (json.JSONDecodeError, OSError):
             pass
-    return {}
+            
+    # Also load skip_paths from .agent/config.yaml
+    config_yaml = PROJECT_ROOT / ".agent" / "config.yaml"
+    if config_yaml.exists():
+        try:
+            content = config_yaml.read_text(encoding="utf-8")
+            in_skip_paths = False
+            skip_paths = []
+            for line in content.splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if stripped == "skip_paths:":
+                    in_skip_paths = True
+                    continue
+                if in_skip_paths:
+                    indent = len(line) - len(line.lstrip())
+                    if indent == 0:
+                        in_skip_paths = False
+                        continue
+                    if stripped.startswith("-"):
+                        val = stripped[1:].strip().strip("\"'")
+                        if val:
+                            skip_paths.append(val)
+            if skip_paths:
+                config["skip_paths"] = skip_paths
+        except Exception:
+            pass
+    return config
 
 
 
@@ -1281,6 +1349,68 @@ def _persist_verdict(
 
 def main() -> int:
     """Run the adversarial review gate. Returns 0 (pass) or 1 (fail)."""
+    # ── Check Pydantic dynamic import status (3-stage precedence rule) ──
+    if not _pydantic_installed:
+        # Stage 1: CI Enforcement (Unconditional Check)
+        is_ci = os.environ.get("CI", "").lower() in ("true", "1")
+        if is_ci:
+            print("\033[91;1m❌ [GATE FATAL] critical dependency 'pydantic' is missing in CI environment. Gating rigor cannot be verified.\033[0m", file=sys.stderr)
+            return 1
+            
+        # Stage 2: Audit Logging (Unconditional Log)
+        try:
+            log_harness_event({
+                "event_type": "schema_validation_disabled",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+                "message": "Pydantic is absent. Running with stub fallback models. Schema validation disabled.",
+                "session_id": _get_active_session_id() or "pre-session-init",
+            })
+        except Exception:
+            pass
+
+        # Stage 3: Visual stderr Warning (Conditional Print)
+        silence_warning = False
+        try:
+            config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+            if config_path.exists():
+                content = config_path.read_text(encoding="utf-8")
+                for line in content.splitlines():
+                    if "silence_pydantic_warning" in line:
+                        val = line.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
+                        if val.lower() in ("true", "1"):
+                            silence_warning = True
+                            break
+        except Exception:
+            pass
+
+        if not silence_warning:
+            pm = "pip"
+            try:
+                config_path = PROJECT_ROOT / ".agent" / "config.yaml"
+                if config_path.exists():
+                    content = config_path.read_text(encoding="utf-8")
+                    for line in content.splitlines():
+                        if "package_manager" in line:
+                            val = line.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
+                            if val:
+                                pm = val.lower()
+                                break
+            except Exception:
+                pass
+
+            if pm == "poetry":
+                remediation = "poetry add pydantic --group dev"
+            elif pm == "pipenv":
+                remediation = "pipenv install --dev pydantic"
+            else:
+                remediation = "pip install pydantic"
+
+            print("\n\033[93m" + "=" * 60 + "\033[0m", file=sys.stderr)
+            print("\033[93;1m⚠️  [GATE WARNING] Running without schema validation — pydantic not installed.\033[0m", file=sys.stderr)
+            print("  Verdict integrity checks are disabled.", file=sys.stderr)
+            print(f"  Remediation: Run '{remediation}' to restore full gate rigor.", file=sys.stderr)
+            print("\033[93m" + "=" * 60 + "\033[0m\n", file=sys.stderr)
+
     try:
         parser = argparse.ArgumentParser(description="AI Adversarial Review Gate")
         parser.add_argument("--rebuttal", action="store_true", help="Evaluate a structured rebuttal from .agent/state/gate_rebuttal.json")

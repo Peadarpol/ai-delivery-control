@@ -71,7 +71,6 @@ def main():
     print(f"Pre-commit: {pre_commit_ver}")
     
     # 2. Parse config.yaml
-    import sys
     scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
     if str(scripts_path) not in sys.path:
         sys.path.insert(0, str(scripts_path))

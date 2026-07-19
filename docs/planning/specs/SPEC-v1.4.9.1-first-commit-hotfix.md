@@ -1,6 +1,6 @@
 # SPEC-v1.4.9.1-first-commit-hotfix
 
-**Status**: DRAFT  
+**Status**: APPROVED  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.9.1  
 **Tracked under**: `T1-K-15` / `T1-B-15` / `T1-B-16` / `HIB-069` / `HIB-070` / `HIB-071` / `HIB-072`
@@ -126,3 +126,4 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 * **Pydantic Fallback strategy**: Option A (graceful degradation with dynamic import stub fallback and mandatory per-run warning) — resolved 2026-07-19.
 * **Precedence Rule & CI Posture**: Resolved 2026-07-19. Fail-closed posture is enforced under CI environments unconditionally. Audit logs are written unconditionally. The config flag `silence_pydantic_warning` only silences terminal stdout/stderr warnings.
 * **Dynamic Remediation Wording**: Resolved 2026-07-19. Dynamic package manager commands are suggested based on tech_stack.package_manager configuration.
+* **Staged Diff Inclusion in Spec Acceptance Gate**: Resolved 2026-07-19. To close a coverage gap where staged, uncommitted migration files were bypassed by the spec acceptance gate checks, `acceptance_check.py`'s `get_git_diff()` is updated to evaluate both branch diffs and staged index changes (`git diff --cached`).

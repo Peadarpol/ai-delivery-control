@@ -105,6 +105,13 @@ def _parse_json_response(raw: str, stop_reason: str | None = None) -> Dict[str, 
     raise json.JSONDecodeError(f"Extractable JSON not found (no braces). Provider returned an error message or non-JSON. Raw response: {raw}", raw, 0)
 
 
+def _strip_json_fences(raw: str) -> str:
+    """Strip markdown code fences if the model wraps JSON in them."""
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+    return raw
+
+
 # ── Abstract Base ─────────────────────────────────────────────────────────────
 
 

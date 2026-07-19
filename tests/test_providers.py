@@ -221,7 +221,6 @@ class TestReviewProviderCallLlm:
 
 
 class TestProvidersRawCompletionRegression:
-    @pytest.mark.xfail(reason="HIB-069: raw_completion raises NameError due to missing _strip_json_fences", strict=True)
     def test_anthropic_raw_completion_strips_fences(self, providers_mod):
         mock_resp = MagicMock()
         mock_resp.read.return_value = json.dumps({

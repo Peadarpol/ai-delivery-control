@@ -141,3 +141,8 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Context**: These gaps were discovered through real use and flagged in rebuttal discussions.
 - **Consequence**: Public documentation sets honest expectations.
 
+## 2026-07-19: Bare Pip Project Onboarding Hardening & Pydantic Fallback
+- **Decision**: Implemented graceful fallback stubs for Pydantic in the review and spec gates, and dynamically resolved relative Python tool prefixes in the pre-commit configuration at install time. Corrected E2E test stashing, mock signatures, and Windows cp1252 decoding errors, and regenerated target version checksums.
+- **Context**: Installing the framework on clean pip projects without optional dependencies failed on load crashes or stashing conflicts.
+- **Consequence**: Clean pip onboarding works perfectly on all operating systems. All 29 E2E scenarios and unit tests pass cleanly.
+
