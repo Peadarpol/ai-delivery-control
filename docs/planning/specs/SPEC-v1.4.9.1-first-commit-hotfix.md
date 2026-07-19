@@ -31,7 +31,7 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
   - Enforcing merge-time checks or authentication for `--no-trace` (deferred to v1.4.10).
 
 > [!NOTE]
-> **Conda Support Scope Decision [DECISION REQUIRED]**: Conda run-prefix rendering (`conda run -n {env_name}`) is proposed under Section 5. Peter must confirm if this should remain in the v1.4.9.1 hotfix or be deferred to v1.4.11 onboarding theme.
+> **Conda Support Scope Decision**: Conda run-prefix rendering is deferred to v1.4.11 (installer/onboarding theme) per Peter's decision 2026-07-19. The hotfix covers pip and poetry prefix rendering only.
 
 ---
 
@@ -66,7 +66,6 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 
 #### [MODIFY] [install.py](file:///c:/projects/ai-delivery-control/bootstrap/install.py)
 - Detect OS layout and virtual environment name to dynamically compute prefix paths at install time (Option A from AT-01).
-- Support Conda by checking `CONDA_DEFAULT_ENV` environment variable to render `conda run -n {env_name}`.
 
 ### Component: Dependency Isolation
 #### [MODIFY] [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py)

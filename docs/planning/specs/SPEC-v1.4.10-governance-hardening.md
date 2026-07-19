@@ -80,11 +80,12 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ### Component: Session Lifecycle
 #### [MODIFY] [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py)
-- **HIB-063 (snapshot-based audit-log)**: Implement an untracked live logs strategy to avoid mid-commit git hooks conflict. Snapshot event logs (`harness_events.jsonl`) at session check-in / close to commit them.
+- **HIB-063 (snapshot-based audit-log)**: Implement an untracked live logs strategy to avoid mid-commit git hooks conflict. The committed snapshot of the live logs (`harness_events.jsonl`, `.ai-review-log.jsonl`) is taken on clean session close as the primary cadence. Additionally, if a live log file size exceeds a predefined threshold mid-session, an early snapshot is taken to prevent unbounded accumulation during long-running sessions. The threshold mechanism mirrors the size-triggered archival pattern used by `decisions_log_archive.md` (threshold value TBD at implementation, following the `decisions_log_archive` precedent).
 
 #### [MODIFY] [init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py)
 - **HIB-ENV-02 (stashing preflight control)**: Prevent automated/silent stashing of uncommitted files at session startup. Verify dirty files exist, print diagnostic information, and require confirmation before stashing.
-- **T1-I-08 (session-start stash accumulation cleanup)**: On clean session close (successful or partial exit), drop the session-start checkpoint stash created for that session (`git stash drop stash@{N}`) by matching the session ID label.
+- **T1-I-08 (session-start stash accumulation cleanup)**: On clean session close (successful or partial exit), drop the session-start checkpoint stash created for that session (`git stash drop stash@{N}`) by matching the session ID label.  
+  * **Ordering Constraint**: The stash must be dropped only *after* the session-close outcome is written to `session.json`, never before (a crash between close-write and stash-drop leaves a recoverable extra stash; a drop before close-write leaves no recovery path).
 
 ### Component: Session Database
 #### [MODIFY] [state_persistence.py](file:///c:/projects/ai-delivery-control/src/scripts/state_persistence.py)
@@ -108,6 +109,6 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ---
 
-## 8. Decisions & Open Questions
+## 8. Resolved Decisions
 
-* **HIB-063 (Audit-log snapshot cadence) [DECISION REQUIRED]**: Peter must select the preferred snapshot-commit cadence (e.g. daily, per-session, or per-milestone).
+* **HIB-063 (Audit-log snapshot cadence)**: Resolved 2026-07-19. Snapshot cadence is set to per-session-close as the primary trigger, with a size-based safety valve that triggers mid-session snapshots if log sizes exceed a threshold (threshold value TBD at implementation, following the `decisions_log_archive` precedent).

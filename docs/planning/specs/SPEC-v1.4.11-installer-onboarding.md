@@ -20,6 +20,7 @@ This release focuses on hardening the harness installation and onboarding experi
   - Add wrong-install-target checking to `bootstrap/install.py` (delivering `F-COLD-1`).
   - Add connection-preflight checks for configured API keys (delivering `F-COLD-3`).
   - Implement venv path layout resolution and Python version checks (delivering `F-COLD-2`, `F-COLD-5`).
+  - Add Conda run-prefix rendering (`conda run -n {env_name}`) via `CONDA_DEFAULT_ENV` detection (deferred from v1.4.9.1 hotfix).
   - Add template exclude patterns for `black`, `ruff`, and `mypy` configurations to shield framework-owned folders (delivering `F7`).
 * **Out of Scope**:
   - Retrofitting existing non-governed repositories (F-COLD-4).
@@ -49,7 +50,7 @@ This release focuses on hardening the harness installation and onboarding experi
 
 ### Scenario 3: Temporary sandbox dry-run execution catches tool missing errors
 * **Given** the target environment lacks a required executable or interpreter for a configured hook (e.g., the `gitleaks` executable, which results in exit code `127`)
-* **When** `bootstrap/validate.py` executes the dry-run check
+* **When** `bootstrap/validate.py` executes the dry-run check (invoking pre-commit via python -m pre_commit or .venv/bin/pre-commit / .venv\Scripts\pre-commit)
 * **Then** the validator identifies the non-zero exit code as an **Infrastructure Error** rather than a Content Violation
 * **And** fails the environment runnability validation cleanly.
 
@@ -59,7 +60,8 @@ This release focuses on hardening the harness installation and onboarding experi
 
 ### Component: Onboarding (F8, F-COLD-1, F-COLD-3, F-COLD-5)
 #### [MODIFY] [validate.py](file:///c:/projects/ai-delivery-control/bootstrap/validate.py)
-- Refactor check runner to initialize a temporary git clone sandbox under `.agent/scratch/validate_sandbox/` (Option C from AT-08).
+- Refactor check runner to initialize a temporary git clone sandbox under `.agent/scratch/validate_sandbox/` (Option C from AT-08). 
+  - **Sandbox Invocation Safety**: The sandbox must invoke pre-commit via `python -m pre_commit` (or interpreter-relative `.venv/bin/pre-commit` / `.venv\Scripts\pre-commit`) rather than bare `pre-commit` (Rationale: the validator must not contain the same unverified-PATH assumption class (F1) it is designed to detect).
 - Implement wrong install target check at startup.
 - Implement live API preflight key validation using a mock low-token query.
 - **Python Currency & Tooling check (F-COLD-5)**:
@@ -70,6 +72,7 @@ This release focuses on hardening the harness installation and onboarding experi
 ### Component: Installer (F-COLD-2)
 #### [MODIFY] [install.py](file:///c:/projects/ai-delivery-control/bootstrap/install.py)
 - Update platform-specific prefix rendering path to map `Scripts/` vs `bin/` virtualenv folders, rendering them into `.pre-commit-config.yaml`.
+- Add Conda run-prefix rendering (`conda run -n {env_name}`) detected via `CONDA_DEFAULT_ENV` environment variable (deferred from v1.4.9.1).
 
 ---
 
