@@ -68,19 +68,26 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
 - Substitute hardcoded package manager run prefixes with `[PROJECT_PYTHON_PREFIX]` and `[PROJECT_MYPY_PREFIX]`.
 
 #### [MODIFY] [install.py](file:///c:/projects/ai-delivery-control/bootstrap/install.py)
-- Detect OS layout and virtual environment name to dynamically compute prefix paths at install time (Option A from AT-01).
-- **F1 Replacements Integration**: Add `[PROJECT_PYTHON_PREFIX]` and `[PROJECT_MYPY_PREFIX]` (and any other new prefix placeholders introduced) as keys in the `replacements` dict inside `scaffold_configurations()`, computed from the existing `pm_run_prefix` variable (which is already correctly empty-string for pip). Template hooks using `[PROJECT_PACKAGE_MANAGER] run <cmd>` must switch to a prefix placeholder that resolves to `pm_run_prefix` + command.
-- **Dead Code Cleanup / Reconciliation**: `scaffold_configurations()` step 6 currently contains a `pc_content.replace('cmd /c ', '')` post-processing step for non-Windows, but the current template contains no `cmd /c` tokens (representing dead code operating on a template that changed underneath it). The F1 fix must either remove this dead stripping step or reconcile it with the new prefix approach.
+- **F1 PM Detection & Prefix Scaffolding (Unified Routine)**: Refactor stack detection into a single ordered evaluation sequence in `scaffold_configurations()` to compute OS-correct relative virtualenv tool path prefixes:
+  1. If Poetry is active -> use `poetry run python` and `poetry run mypy`.
+  2. If Pipenv is active -> use `pipenv run python` and `pipenv run mypy`.
+  3. Otherwise (standard pip), scan the project root directory for `.venv`, `venv`, or `env` (in that exact order).
+     * If found: compute the resolved path to the python interpreter per OS (e.g. `.venv/Scripts/python` / `.venv/Scripts/mypy` on Windows, `.venv/bin/python` / `.venv/bin/mypy` on macOS/Linux).
+     * If none found: fall back to system `python` / `mypy` and log a prominent install-time onboarding warning.
+- **Replacements Integration**: Add `[PROJECT_PYTHON_PREFIX]` and `[PROJECT_MYPY_PREFIX]` as replacements in `scaffold_configurations()`, matching the computed values from the unified routine.
+- **Dead Code Cleanup**: Remove the legacy non-Windows post-processing step (`pc_content.replace('cmd /c ', '')`) as it is no longer required under the dynamic prefix rendering design.
 
-### Component: Dependency Isolation
-#### [MODIFY] [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py)
-- Wrap top-level `pydantic` imports in a dynamic fallback check block to fail-open gracefully on standard commits if missing (Option 1 from AT-02).
-- **Class Load Crash Prevention (Stub Pattern)**: Provide stub fallback definitions for `BaseModel`, `Field`, and `ValidationError` in the `except ImportError:` branch, mirroring the reference pattern in `.agent/scripts/check_spec.py` lines 32–43, to ensure class definitions (e.g. `class ReviewVerdict(BaseModel)`) succeed when Pydantic is absent.
-- **Mandatory Visible Warning**: When the stub fallback path is active (Pydantic is absent), the gate must print a highly visible warning to stderr on every execution: `⚠️ [GATE] Running without schema validation — pydantic not installed. Verdict integrity checks are disabled. Install pydantic to restore full gate rigor.`
-
-#### [MODIFY] [acceptance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/acceptance_check.py)
-- Move Pydantic imports inside functions or use dynamic try/except fallback blocks with the identical BaseModel stub pattern to prevent load crashes on `class AcceptanceVerdict(BaseModel)` when the acceptance hook fires.
-- **Mandatory Visible Warning**: When the stub fallback path is active, the hook must print a highly visible warning to stderr on every execution: `⚠️ [GATE] Running without schema validation — pydantic not installed. Verdict integrity checks are disabled. Install pydantic to restore full gate rigor.`
+### Component: Dependency Isolation & Auditing
+#### [MODIFY] [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py) and [acceptance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/acceptance_check.py)
+- Move Pydantic imports inside functions or use dynamic try/except fallback blocks with identical BaseModel/Field/ValidationError stub patterns to prevent load crashes when Pydantic is absent.
+- **CI-Check / Audit-Log / Silence-Flag Precedence Rule**: Implement the following execution precedence when Pydantic is absent:
+  1. **CI Enforcement (Unconditional Check)**: Check if `CI` environment variable is set (`CI=true` or `CI=1`). If so, the gate must fail-closed (print a fatal error and exit with code `1`), regardless of any config flags. The silence flag must never override CI gate enforcement.
+  2. **Audit Logging (Unconditional Log)**: If not in CI, write a `schema_validation_disabled` observation to the local audit log (`harness_events.jsonl`) unconditionally. This audit trail entry is mandatory and cannot be suppressed by config flags.
+  3. **Visual stderr Warning (Conditional Print)**: Check the `.agent/config.yaml` configuration for `silence_pydantic_warning` under the tech_stack or general config. If `silence_pydantic_warning: true` is set, suppress printing the warning banner to stderr. Otherwise, print a highly visible warning block.
+- **Dynamic PM Remediation Wording**: When printing the warning banner to `stderr` or logging it, read the persisted package manager from `.agent/config.yaml` (`tech_stack.package_manager`) and suggest the correct command dynamically:
+  * For `poetry` -> suggest `poetry add pydantic --group dev`
+  * For `pipenv` -> suggest `pipenv install --dev pydantic`
+  * For `pip` -> suggest `pip install pydantic`
 
 ### Component: Path Insertion & Forensics
 #### [MODIFY] [architecture_checks.py](file:///c:/projects/ai-delivery-control/.agent/skills/universal/senior-architect/scripts/architecture_checks.py)
@@ -106,9 +113,16 @@ This hotfix addresses four critical issues blocking clean onboarding on default 
   `.venv/bin/python -m pytest tests/test_providers.py -k "test_strip_json_fences"` (macOS/Linux) or `.venv\Scripts\python -m pytest tests/test_providers.py -k "test_strip_json_fences"` (Windows)
 - Verify that E2E onboarding scenario executes cleanly:
   `.venv/bin/python tests/e2e/run_e2e_verification.py` (macOS/Linux) or `.venv\Scripts\python tests/e2e/run_e2e_verification.py` (Windows)
+- Add a new unit test in `tests/unit/test_ai_review.py` and `tests/unit/test_acceptance_hook.py` that mocks `import pydantic` to raise `ImportError` and verifies:
+  1. Successful class instantiation of the stubs.
+  2. Fallback execution exits with code `1` under `CI=true`.
+  3. Fallback execution logs a `schema_validation_disabled` event to `harness_events.jsonl` under local development.
+  4. The warning banner is printed to stderr when `silence_pydantic_warning` is false/absent, and is silenced when the flag is true.
 
 ---
 
 ## 7. Resolved Decisions
 
 * **Pydantic Fallback strategy**: Option A (graceful degradation with dynamic import stub fallback and mandatory per-run warning) — resolved 2026-07-19.
+* **Precedence Rule & CI Posture**: Resolved 2026-07-19. Fail-closed posture is enforced under CI environments unconditionally. Audit logs are written unconditionally. The config flag `silence_pydantic_warning` only silences terminal stdout/stderr warnings.
+* **Dynamic Remediation Wording**: Resolved 2026-07-19. Dynamic package manager commands are suggested based on tech_stack.package_manager configuration.
