@@ -1199,3 +1199,17 @@ While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architec
 
 These scripts must be refactored in v1.4.11 to use the dynamic `sys.path` bootstrapping helper which resolves source path location from `.agent/config.yaml` dynamically rather than hardcoding parent depth and directory name parameters.
 
+---
+
+## HIB-074 — Conflated Provider Offline / API Unavailable Error Messages on Local Exception
+
+**Date**: 2026-07-20
+**Source**: Operational session review / SPEC-v1.4.9.1
+**Pillar**: Gating / Diagnosis
+**Status**: 📋 Backlog (Target Release: v1.4.11)
+
+When the review provider throws a local exception (e.g. `RuntimeError: Content too large` in the provider class), the wrapper execution in `ai_review.py` catches the generic exception and reports it to the developer and event logs as a network/API failure (`PROVIDER_ERROR` and `API unavailable`). This conflates local validation limits with genuine external API outages or credential availability issues, causing troubleshooting confusion and potentially generating incorrect audit logs.
+
+The review engine must be refactored to distinguish between external network/HTTP errors and local configuration/validation exceptions, printing and logging distinct event types and details for each.
+
+
