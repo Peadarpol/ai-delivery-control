@@ -9,7 +9,7 @@
 
 ## 1. Goal & Context
 
-The goal of this release is to harden the harness's self-governance and downstream validation mechanics. Specifically, it closes gaps around unauthenticated bypasses, hardcoded risk classifications, silent fail-opens on large diffs/crashes, and unsafe stashing at session start.
+The goal of this release is to harden the harness's self-governance and downstream validation mechanics. Specifically, it closes gaps around unauthenticated bypasses, hardcoded risk classifications, silent fail-opens on large diffs/crashes, database schema mismatches, and unsafe stashing at session start.
 
 ---
 
@@ -21,10 +21,12 @@ The goal of this release is to harden the harness's self-governance and downstre
   - Secure the `--no-trace` option by validating the session metadata and human signature rather than allowing anonymous bypasses (delivering `T1-K-13`).
   - Audit all gate fail-open points (such as `DIFF_TOO_LARGE_FAILOPEN`) to ensure the system reports `FAIL_OPEN` or `INCOMPLETE` rather than masking failures as `PASS` (delivering `T1-K-14`).
   - Implement a safe-stash preflight routine during `init_session.py` to prompt the operator before stashing dirty files (delivering `HIB-ENV-02`).
-  - Integrate Skip-With-Advisory preconditions (AT-04) and Root-Commit Traceability Exemptions (AT-06) into the core gate runtime.
+  - Drop the per-session `AUTO` checkpoint stash on clean close in `init_session.py` to avoid clutter (delivering `T1-I-08`).
+  - Reconcile SQLite database schemas and fix misleading error messages (delivering `HIB-059`).
+  - Integrity checks for root commits (delivering `HIB-061` / `AT-06`).
 * **Out of Scope**:
-  - Rewriting the command-line grammar for pre-commit arguments.
-  - Adding deep Starlark-based policy rules.
+  - Implementation of enforcement postures (strict/ratchet/observe, tracked under `T1-G-18`).
+  - Implementation of decisions_log structured schemas (tracked under `T1-L-20` research pass).
 
 ---
 
@@ -62,7 +64,7 @@ The goal of this release is to harden the harness's self-governance and downstre
 ### Component: Governance & Risk
 #### [MODIFY] [route_decision.py](file:///c:/projects/ai-delivery-control/src/scripts/route_decision.py)
 - **T1-L-21 (`high_risk_patterns` override)**: Refactor `_load_high_risk_patterns()` to support full key replacement from `.agent/config.yaml` rather than merging additively only. Decouple hardcoded defaults.
-- **T1-L-20 (posture configuration)**: Implement configuration routing for enforcement postures (`lean`, `standard`, `thorough`, `exhaustive`) to scale check intensity and review model routing.
+- **T1-L-20 (decisions log schema)**: Research-only pass. No code or schema changes are introduced in this release.
 
 #### [MODIFY] [pre-commit-config.yaml.template](file:///c:/projects/ai-delivery-control/bootstrap/templates/pre-commit-config.yaml.template) and [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py)
 - **T1-K-12 (pre-local-merge sensitive-path check)**: Set up checks targeting local merges to `main` or `develop`. Refuse fast local merges if high-risk paths are altered, unless an explicit reason-logged override is provided by the developer.
@@ -78,17 +80,15 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ### Component: Session Lifecycle
 #### [MODIFY] [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py)
-- **HIB-063 (snapshot-based audit-log)**: Implement automated checks to capture session event logs (`harness_events.jsonl`) and snapshot them at commit time, tracking changes and preventing bypasses.
+- **HIB-063 (snapshot-based audit-log)**: Implement an untracked live logs strategy to avoid mid-commit git hooks conflict. Snapshot event logs (`harness_events.jsonl`) at session check-in / close to commit them.
 
 #### [MODIFY] [init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py)
-- **HIB-ENV-02 (stashing preflight control)**: Prevent automated/silent stashing of uncommitted files at session startup. Verify dirty files exist, print diagnostic information, and require confirmation before executing `git stash`.
-
-#### [MODIFY] [state_persistence.py](file:///c:/projects/ai-delivery-control/src/scripts/state_persistence.py) and [NEW] [.agent/state/lessons_learned_schema.json](file:///c:/projects/ai-delivery-control/.agent/state/lessons_learned_schema.json)
-- **T1-I-08 (session lessons index schema)**: Implement indexing and compaction workflows to extract post-mortem lessons learned from session trajectories.
+- **HIB-ENV-02 (stashing preflight control)**: Prevent automated/silent stashing of uncommitted files at session startup. Verify dirty files exist, print diagnostic information, and require confirmation before stashing.
+- **T1-I-08 (session-start stash accumulation cleanup)**: On clean session close (successful or partial exit), drop the session-start checkpoint stash created for that session (`git stash drop stash@{N}`) by matching the session ID label.
 
 ### Component: Session Database
 #### [MODIFY] [state_persistence.py](file:///c:/projects/ai-delivery-control/src/scripts/state_persistence.py)
-- **HIB-059 (SQLite thread safety)**: Harden connection management by introducing concurrency locks and enabling Write-Ahead Logging (WAL) mode to protect the SQLite database from thread lock faults.
+- **HIB-059 (SQLite sessions table schema mismatch)**: Add the missing `session_id` column to the SQLite `sessions` table schema or align the insertion code. Correct the misleading "busy/locked" log output to print the actual schema error details when connection attempts fail.
 
 ---
 
@@ -108,6 +108,6 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ---
 
-## 8. Resolved Decisions
+## 8. Decisions & Open Questions
 
-* None in this draft.
+* **HIB-063 (Audit-log snapshot cadence) [DECISION REQUIRED]**: Peter must select the preferred snapshot-commit cadence (e.g. daily, per-session, or per-milestone).
