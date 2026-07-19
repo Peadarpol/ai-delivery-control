@@ -905,8 +905,6 @@ def migrate(config_path: Path) -> None:
 
     # Stage the file within the isolated TEST_PROJECT git repo
     res_add1 = subprocess.run(["git", "add", "tests/test_dummy.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
-    
-    
     res_thin = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
         capture_output=True,
@@ -924,8 +922,6 @@ def migrate(config_path: Path) -> None:
     high_risk_file.write_text("class DummyModel:\n" + "\n".join(f"    # dummy high risk {i}" for i in range(25)), encoding="utf-8")
     
     res_add2 = subprocess.run(["git", "add", "src/models.py"], capture_output=True, text=True, cwd=str(TEST_PROJECT))
-    
-    
     res_strat = subprocess.run(
         [sys.executable, "src/scripts/ai_review.py"],
         capture_output=True,

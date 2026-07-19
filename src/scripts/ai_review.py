@@ -42,18 +42,26 @@ except ImportError:
     def Field(default=None, default_factory=None, **kwargs):
         return FieldStub(default, default_factory, **kwargs)
     class BaseModel:
+        """NOTE: fallback stub does not validate Literal/type constraints — values are accepted as-is when Pydantic is absent."""
         def __init__(self, **kwargs):
-            for k in dir(self.__class__):
-                if not k.startswith("_"):
-                    val = getattr(self.__class__, k)
-                    if not callable(val):
-                        if isinstance(val, FieldStub):
-                            if val.default_factory:
-                                setattr(self, k, val.default_factory())
-                            else:
-                                setattr(self, k, val.default)
+            fields = {}
+            for cls in self.__class__.__mro__:
+                if hasattr(cls, "__annotations__"):
+                    for field_name in cls.__annotations__:
+                        if not field_name.startswith("_") and field_name not in fields:
+                            val = getattr(self.__class__, field_name, None)
+                            fields[field_name] = val
+            for k, val in fields.items():
+                if val is not None:
+                    if isinstance(val, FieldStub):
+                        if val.default_factory:
+                            setattr(self, k, val.default_factory())
                         else:
-                            setattr(self, k, val)
+                            setattr(self, k, val.default)
+                    else:
+                        setattr(self, k, val)
+                else:
+                    setattr(self, k, None)
             for k, v in kwargs.items():
                 setattr(self, k, v)
         def model_dump(self) -> Dict[str, Any]:
@@ -912,7 +920,8 @@ def load_config() -> Dict[str, Any]:
                         if val:
                             skip_paths.append(val)
             if skip_paths:
-                config["skip_paths"] = skip_paths
+                # Merge: JSON first, YAML second, deduplication preserves first occurrence.
+                config["skip_paths"] = list(dict.fromkeys(config.get("skip_paths", []) + skip_paths))
         except Exception:
             pass
     return config

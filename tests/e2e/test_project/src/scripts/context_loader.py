@@ -60,7 +60,12 @@ def get_adr_context(changed_files: list[str]) -> tuple[str, list[str], list[str]
     Returns:
         tuple (adr_context_string, active_domains, policy_notes)
     """
-    from harness_utils import _setup_sys_path
+    try:
+        from harness_utils import _setup_sys_path
+    except ImportError:
+        import sys
+        sys.path.insert(0, str(PROJECT_ROOT / "src" / "scripts"))
+        from harness_utils import _setup_sys_path
     _setup_sys_path()
 
     # 1. Compute PageRank scores
@@ -72,8 +77,9 @@ def get_adr_context(changed_files: list[str]) -> tuple[str, list[str], list[str]
     # 2. Extract and whitelist annotations across all files
     domain_to_max_score = {}
 
-    for path in Path("src").rglob("*.py"):
-        filepath_str = str(path).replace("\\", "/")
+    for path in (PROJECT_ROOT / "src").rglob("*.py"):
+        rel_path = path.relative_to(PROJECT_ROOT)
+        filepath_str = str(rel_path).replace("\\", "/")
         domains = extract_adr_annotations(str(path))
         for domain in domains:
             if domain not in DOMAIN_REGISTRY:
