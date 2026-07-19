@@ -58,6 +58,9 @@ We replace the direct `pytest` invocation in the template with a lightweight Pyt
 import sys
 import subprocess
 from pathlib import Path
+
+# Bootstrap: add src/scripts to path before harness_utils import
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
 from harness_utils import log_harness_event  # Or direct json write
 
 TEST_PATH = Path("tests/quality/test_exception_standards.py")
