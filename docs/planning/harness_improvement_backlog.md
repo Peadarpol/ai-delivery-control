@@ -1173,3 +1173,28 @@ The review gate script `src/scripts/ai_review.py` and its imported modules (`rou
 **Status**: 📋 Backlog
 
 The Clean Architecture checks hook (`.agent/skills/universal/senior-architect/scripts/architecture_checks.py`) and other skill/helper scripts import `harness_utils` using a hardcoded path insertion: `sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "src" / "scripts"))`. This assumes that the project's source folder is named `"src"`. If a target project uses a custom source root (e.g. `lib/` or `app/`), `harness_utils.py` will be copied to `lib/scripts/` or `app/scripts/`, causing the path insertion in the script to fail to resolve the module. Furthermore, if the skill is executed from a global customization path, the relative parent resolution (`parents[5]`) will point to a location outside the project root entirely, causing a `ModuleNotFoundError`.
+
+---
+
+## HIB-073 — Remaining 10 skill-script import pathing vulnerabilities (AT-03)
+
+**Date**: 2026-07-19
+**Source**: AT-03 import pathing audit (F3)
+**Pillar**: Gating / Architecture
+**Status**: 📋 Backlog (Target Release: v1.4.11)
+
+While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architecture_checks.py` (the primary blocker for the first-commit onboarding), there are 10 other scripts/skills identified in the AT-03 pathing audit that remain vulnerable to hardcoded source paths (`"src"`) or CWD execution drift:
+1. `check_spec.py`
+2. `circuit_breaker.py`
+3. `co_change_core.py`
+4. `co_change_reconciler.py`
+5. `init_session.py`
+6. `onboarding.py`
+7. `wiki_compile.py`
+8. `wiki_lint.py`
+9. `skills/.../repo_map.py`
+10. `skills/.../validate.py` (api-design)
+11. `harness_health.py` (CWD-dependent load path drift)
+
+These scripts must be refactored in v1.4.11 to use the dynamic `sys.path` bootstrapping helper which resolves source path location from `.agent/config.yaml` dynamically rather than hardcoding parent depth and directory name parameters.
+
