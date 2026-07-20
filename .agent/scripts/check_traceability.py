@@ -313,8 +313,17 @@ def main():
                 if archive_file.exists():
                     spec_file = archive_file
                 else:
-                    print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
-                    sys.exit(1)
+                    # Check for wildcard match for versioned spec files (e.g., SPEC-v1.4.10-governance-hardening.md)
+                    matches = list(specs_path.glob(f"{spec_id}*.md")) or list(specs_path.glob(f"{spec_id.lower()}*.md"))
+                    if not matches:
+                        arch_dir = specs_path / "archive"
+                        if arch_dir.exists():
+                            matches = list(arch_dir.glob(f"{spec_id}*.md")) or list(arch_dir.glob(f"{spec_id.lower()}*.md"))
+                    if matches:
+                        spec_file = matches[0]
+                    else:
+                        print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
+                        sys.exit(1)
                 
             # Parse status
             spec_content = spec_file.read_text(encoding="utf-8")

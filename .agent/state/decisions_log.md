@@ -1,19 +1,4 @@
 # Decisions Log
-## 2026-05-30: Automated Outer Loop Spec Gating & BDD Governance (v1.2.0)
-- **Decision**: Implemented automated spec quality gating (`check_spec.py`) enforcing BDD specifications structures, Gherkin word boundaries, lenient assumptions presence, and adversarial LLM quality checks (soft/hard gates). Consolidated shared path setups, session locks, and Windows UTF-8 stream wrapping into `src/scripts/harness_utils.py` and updated `init_session.py` to prevent redundant wrapping.
-- **Context**: BDD specifications lacked structured quality gating, while multiple bootstrap utilities duplicated stdout/stderr stream wrapping logic, causing double-wrapping crashes under Windows subprocesses.
-- **Consequence**: All 26/26 E2E scenarios and 154 unit tests pass successfully, delivering robust and automated spec governance.
-
-## 2026-05-30: Hardened Outer Loop Lifecycle Gating & Backlog Scaffolding (v1.3.0)
-- **Decision**: Designed the blueprints for Sprint 1 of the v1.3.0 milestone incorporating ten major multi-persona hardening invariants (exempting merges, standard library traceability, schema creep gating, double-anchored commit messages, CI/offline warnings, PM checklist backups, XML sanitization, C4 decoupled providers, isolated E2E sandboxes, terminal box cards).
-- **Context**: Rigorous security, developer ergonomics, and pipeline integration must be achieved simultaneously to prevent friction from causing hook circumvention.
-- **Consequence**: Delivers robust, enterprise-grade traceability and gating checks with zero developer friction and extremely high reliability.
-
-## 2026-06-02: Applied Consolidated Backlog and Roadmap Updates
-- **Decision**: Applied the consolidated June 2026 backlog updates (Sprint 0, T1-B, T1-G, T1-L, T1-M, and T1-N items) to `FRAMEWORK_BACKLOG.md` and the milestone pre-sprint gate/strategic context additions to `FRAMEWORK_ROADMAP.md`.
-- **Context**: Keeping documentation in sync with consolidated research findings and plan refinements is necessary before starting Sprint 1 implementation.
-- **Consequence**: Ground truth documentation is updated for developers and agents. All 184 tests pass.
-
 ## 2026-06-02: Added S0-24 and BUG-11 through BUG-13 to Backlog
 - **Decision**: Added S0-24 (De-GymBase-ify functional code), BUG-11 (distill_dream.py reads wrong field), BUG-12 (wiki compile cold-start failure), and BUG-13 (E2E test project runs stale ai_review.py) to `FRAMEWORK_BACKLOG.md` and synced `FRAMEWORK_ROADMAP.md` milestone planned items.
 - **Context**: Resolving GymBase hardcoding, dream phase pattern domain detection, cold-start wiki failure cooldown issues, and E2E review script drift is essential for broad framework adoption and robustness.
@@ -156,3 +141,8 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: Refactored Pydantic fallback stubs to use annotation-based field discovery to prevent callable-method collisions, standardizing the stubs across all 5 gating modules. Corrected context_loader to anchor search paths relative to PROJECT_ROOT, resolved E2E duplicate script maintenance hazards, added skip_paths merging support in load_config, and hardened module test reload teardowns.
 - **Context**: Adversarial review of commit 9938f24 highlighted code quality improvements, path vulnerabilities, and test reload issues.
 - **Consequence**: Full 32 unit tests and 29 E2E verification test suites pass successfully. Commit 267dad5 passed the adversarial review hook with no bypasses.
+
+## 2026-07-20: v1.4.10 Release Mechanics — Checksums & Version Bump
+- **Decision**: Regenerated bootstrap/checksums.py for version 1.4.10 and bumped harness_version.txt.
+- **Context**: These steps were missed during the initial v1.4.10 implementation session and caught during pre-merge review.
+- **Consequence**: bootstrap/upgrade.py's pre-flight checksum validation (HIB-037) can now correctly validate v1.4.10 installations instead of comparing against stale v1.4.9 hashes.

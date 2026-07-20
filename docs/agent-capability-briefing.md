@@ -1,6 +1,6 @@
 # AI Delivery Control — Agent Capability Briefing
 
-**Framework version**: v1.4.9.1
+**Framework version**: v1.4.10
 **Last updated**: 2026-07-20
 **Update trigger**: Update this document when a backlog item moves to ✅ delivered,
 when a capability is materially changed, or when a "not yet built" item ships.
@@ -361,7 +361,6 @@ exist when working in this project:
 - Skill deprecation mechanism (`T1-B-04`)
 - Governance file diff highlighting on upgrade (`T1-K-03`)
 - All Tier 3 enterprise infrastructure (PostgreSQL, SSO, RBAC, compliance mappings)
-- Config parser consumer rollout (`T1-E-04`) — foundation exists in `harness_utils.py` but actual consumer refactoring across ~20 files is still ⬜ (planned v1.4.10)
 
 Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
@@ -371,6 +370,7 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.4.10 | 2026-07-20 | Unified config parser rollout across all consumers (`T1-E-04`); dynamic risk-classification `override_defaults` + fail-closed protection (`T1-L-21`); root-commit exemption, versioned spec-ID regex & merge-gate aggregator (`T1-K-12`/`T1-K-13`); TTY-aware session-start recovery stashing (`HIB-ENV-02`/`T1-I-08`); SQLite schema drift auto-migration (`HIB-059`); fail-open audit taxonomy (`T1-K-14`); live log snapshotting on close (`HIB-063`); exception standards wrapper (`T1-K-15`/`AT-04`); append-only decisions log `record_decision()` & `archive_old_decisions()` helpers (`T1-L-20`) |
 | v1.4.9.1 | 2026-07-19 | Onboarding defects fixes for bare-pip/no-Pydantic environments (F1, F2, F3, F5); post-merge code-quality remediation (FID-1 to FID-6); updated framework checksums registry |
 | v1.4.9 | 2026-07-12 | Shipped configuration parser foundation in `harness_utils.py` (DEFAULTS, `load_harness_config()`, `get_harness_config()`) (`T1-E-04` foundation); `session.json` shared contract (`T1-E-03`); regex-based traceability ID checks (`HIB-062`); parser fail-closed on invalid escapes (`HIB-065`); `check_traceability.py` performance cache/size guard (`T1-L-22`); honest outcome labeling (`T1-B-11`) |
 | v1.4.8 | 2026-07-07 | Added CodeQL configurations; regenerated checksums registry for version 1.4.3 and 1.4.4 |

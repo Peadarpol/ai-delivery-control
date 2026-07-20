@@ -109,6 +109,22 @@ traceability:
         harness_utils._reset_config_cache()
 
 
+def test_init_session_custom_specs_path_via_config_loader(tmp_path):
+    """Verify init_session uses get_harness_config to resolve custom spec_gate.specs_path."""
+    config_content = """spec_gate:
+  specs_path: custom/specs/dir
+"""
+    tmp_config = tmp_path / "config.yaml"
+    tmp_config.write_text(config_content, encoding="utf-8")
+
+    harness_utils._reset_config_cache()
+    try:
+        resolved_path = harness_utils.get_harness_config("spec_gate", "specs_path", config_path=tmp_config)
+        assert resolved_path == "custom/specs/dir"
+    finally:
+        harness_utils._reset_config_cache()
+
+
 def test_self_enforcing_defaults_rule_static_scan():
     """Static test checking no consumer passes an explicit default for a key already in DEFAULTS."""
     defaults = harness_utils.DEFAULTS

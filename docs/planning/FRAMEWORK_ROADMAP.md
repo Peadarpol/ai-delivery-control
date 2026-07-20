@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.9.1
+**Current Version**: 1.4.10
 **Target Release**: v1.4.11 (deliberately resequenced 2026-07-18 — usability/onboarding hardening prioritised ahead of v1.5.0; see decisions_log.md 2026-07-18)
-**Last Updated**: 2026-07-20 (v1.4.9.1 shipped; T1-E-04 correction; T1-E-04 rollout folded into v1.4.10)
+**Last Updated**: 2026-07-20 (v1.4.10 shipped; governance hardening, config parser unification rollout & decisions log discipline)
 
 ---
 
@@ -503,22 +503,22 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
-### v1.4.10 — Governance Hardening ⏳ PLANNED (Upcoming)
+### v1.4.10 — Governance Hardening ✅ SHIPPED (2026-07-20)
 
-**Goal**: Close the authentication and bypass gaps surfaced during recent incidents, hardening the traceability gate against unauthenticated circumvention, and standardising the commit strategy for audit logs.
+**Goal**: Hardened requirement traceability and merge governance, completed unified configuration parser rollout across all consumers, established append-only decisions log discipline with O(1) backdating guard, fixed SQLite schema drift, and added live log snapshotting.
 
-**Planned items**:
-- T1-K-12: Verifiable session governance (Layer 2 of the T1-B-11 work) — depends on T1-L-21.
-- T1-L-21: `high_risk_patterns` override capability + documentation (added 2026-07-18 — T1-K-12's confirmed prerequisite; was previously absent from this milestone despite the dependency).
-- T1-K-13: --no-trace authentication gap closure (preventing unauthenticated bypass for self-assessed metadata).
-- T1-K-14: review_parse_failure schema regression guard (merged with HIB-068).
-- HIB-063: Audit-log commit strategy (resolving the pre-commit conflict loop for harness_events.jsonl).
-- T1-L-20: Research pass for ID-verification against dual backlogs (riding along).
-- HIB-ENV-02: init_session.py stashes uncommitted work without warning.
-- T1-I-08: Stash accumulation cleanup.
-- HIB-059: SQLite sessions table missing session_id column.
-- HIB-061: Confirm check_traceability.py alignment with new .agent/config.yaml.
-- T1-E-04: Complete config.yaml parser unification rollout — foundation delivered v1.4.9, consumer migration across ~20 files (route_decision.py, check_traceability.py, acceptance_check.py, acceptance_hook.py, pm_scaffold.py, init_session.py, + 11 bulk-audit files) completing here. Fixes HIB-061.
+**Delivered items**:
+- T1-E-04: Complete config.yaml parser unification rollout across `route_decision.py`, `check_traceability.py`, `acceptance_check.py`, `acceptance_hook.py`, `pm_scaffold.py`, `init_session.py`, + 6 unit tests in `test_config_loader.py`.
+- T1-L-21: Dynamic `high_risk_patterns.override_defaults` with fail-closed protection on empty pattern set (`CRITICAL_WARNING_ZERO_HIGH_RISK_PATTERNS`).
+- T1-K-12 & T1-K-13: Root-commit exemption predicate (`is_root_commit()`), spec-ID regex for versioned specs & archive fallback, merge-gate `--check-merge-trace` / `--ack-no-trace` CLI mode & pre-push hook stage template, and 12-char SHA session ledger fallback attribution (`_get_session_ledger_attribution()`).
+- HIB-ENV-02 & T1-I-08: TTY-aware session-start recovery stash prompt and clean stash drop on close.
+- HIB-059: `PRAGMA table_info` SQLite schema drift auto-migration in `state_persistence.py`.
+- T1-K-14: Fail-open audit taxonomy (`large_diff_fail_open` events & explicit `FAIL_OPEN` verdicts).
+- HIB-063: Live log snapshots on close (`harness_events_<session_id>.jsonl` and `ai_review_log_<session_id>.jsonl` to `.agent/state/snapshots/`).
+- T1-K-15 / AT-04: `check_exception_standards.py` wrapper script and pre-commit template entry.
+- HIB-061 / AT-06: Root commit traceability exemption.
+- T1-L-20: `record_decision()` append-only helper with O(1) backdating guard, `archive_old_decisions()` helper with ascending-order check, and AGENTS.md governance rule update.
+- Framework Upgrade Manager migration script `v1_4_9_to_v1_4_10.py` and checksums registry bump.
 
 **Spec**: `SPEC-v1.4.10-governance-hardening.md` (spec-first per standing
 practice). Inputs: `GOVERNANCE-HARDENING-INPUTS.md` (AT-04/05/06 findings
@@ -815,7 +815,7 @@ v1.x series = Developer Edition — solo developer to 3-person team, flat-file s
 **Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ⏳, v1.4.11 📋
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 📋
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
@@ -950,7 +950,7 @@ Scope:
 
 **Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ⏳
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 

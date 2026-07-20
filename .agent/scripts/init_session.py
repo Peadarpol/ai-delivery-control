@@ -219,17 +219,9 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
                 if not commits:
                     # Scan for modified spec files in specs_path
                     try:
-                        specs_dir = PROJECT_ROOT / "docs" / "planning" / "specs"
-                        config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-                        if config_path.exists():
-                            try:
-                                content = config_path.read_text(encoding="utf-8")
-                                match = re.search(r"specs_path:\s*['\"]?([^'\"\n]+)['\"]?", content)
-                                if match:
-                                    specs_dir = PROJECT_ROOT / Path(match.group(1).strip())
-                            except Exception:
-                                pass
-                        
+                        specs_path_str = get_harness_config("spec_gate", "specs_path")
+                        specs_dir = PROJECT_ROOT / Path(specs_path_str)
+
                         if specs_dir.exists() and specs_dir.is_dir():
                             if _uncommitted_spec_changes(specs_dir):
                                 spec_files_modified = True
