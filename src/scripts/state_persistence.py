@@ -127,6 +127,21 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
 
+    # Inspect sessions table columns for schema drift (HIB-059)
+    try:
+        cursor = conn.execute("PRAGMA table_info(sessions);")
+        existing_cols = {row[1] for row in cursor.fetchall()}
+        required_cols = {"session_id", "project_root", "agent", "start_time", "end_time", "outcome", "outcome_source", "outcome_note", "task_magnitude", "harness_version"}
+        missing = required_cols - existing_cols
+        if missing:
+            for col in missing:
+                try:
+                    conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT;")
+                except sqlite3.OperationalError:
+                    pass
+    except Exception:
+        pass
+
     # Insert schema version row if missing
     row = conn.execute("SELECT version FROM schema_version LIMIT 1;").fetchone()
     if row is None:
