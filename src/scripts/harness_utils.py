@@ -368,3 +368,47 @@ def _reset_config_cache() -> None:
     """Clear the global harness config cache (useful in unit tests)."""
     global _CONFIG_CACHE
     _CONFIG_CACHE.clear()
+
+
+def record_decision(
+    title: str,
+    decision: str,
+    context: str,
+    consequence: str,
+    date: str | None = None,
+    extra_fields: dict[str, str] | None = None,
+    log_path: Path | str | None = None,
+) -> None:
+    """
+    Append a structured decision entry to .agent/state/decisions_log.md.
+    This is the ONLY sanctioned way to write to this file — never edit it directly with file-write tools.
+    Always appends to the true end of the file; never prepends or inserts mid-file.
+    """
+    if not title.strip() or not decision.strip() or not context.strip() or not consequence.strip():
+        raise ValueError("record_decision() requires non-empty title, decision, context, and consequence.")
+
+    entry_date = date or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", entry_date):
+        raise ValueError(f"date must be YYYY-MM-DD format, got: {entry_date}")
+
+    target_path = Path(log_path) if log_path else (_find_project_root() / ".agent" / "state" / "decisions_log.md")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    entry_lines = [
+        f"\n## {entry_date}: {title.strip()}",
+        f"- **Decision**: {decision.strip()}",
+        f"- **Context**: {context.strip()}",
+        f"- **Consequence**: {consequence.strip()}",
+    ]
+
+    if extra_fields:
+        for k, v in extra_fields.items():
+            entry_lines.append(f"- **{k.strip()}**: {v.strip()}")
+
+    entry_str = "\n".join(entry_lines) + "\n"
+
+    if not target_path.exists():
+        target_path.write_text("# Decisions Log\n", encoding="utf-8")
+
+    with open(target_path, "a", encoding="utf-8") as f:
+        f.write(entry_str)
