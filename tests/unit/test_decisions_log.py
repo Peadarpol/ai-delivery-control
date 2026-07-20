@@ -111,3 +111,89 @@ def test_record_decision_supports_extra_fields(tmp_path):
 
     content = log_path.read_text(encoding="utf-8")
     assert "- **Gate Coverage Audit**: 5 commits fail-opened due to NameError and were manually verified" in content
+
+
+def test_record_decision_rejects_backdated_entry(tmp_path):
+    """Verify record_decision refuses an entry dated earlier than the last existing entry."""
+    log_path = tmp_path / "decisions_log.md"
+    harness_utils.record_decision(
+        title="Later Entry", decision="D", context="C", consequence="Cons",
+        date="2026-06-01", log_path=log_path,
+    )
+    with pytest.raises(ValueError, match="earlier than"):
+        harness_utils.record_decision(
+            title="Earlier Entry", decision="D", context="C", consequence="Cons",
+            date="2026-05-01", log_path=log_path,
+        )
+
+
+def test_record_decision_allows_same_date_entries(tmp_path):
+    """Verify same-day entries are allowed (not considered 'backdated')."""
+    log_path = tmp_path / "decisions_log.md"
+    harness_utils.record_decision(
+        title="First Today", decision="D", context="C", consequence="Cons",
+        date="2026-06-01", log_path=log_path,
+    )
+    harness_utils.record_decision(
+        title="Second Today", decision="D", context="C", consequence="Cons",
+        date="2026-06-01", log_path=log_path,
+    )
+    content = log_path.read_text(encoding="utf-8")
+    assert content.count("## 2026-06-01:") == 2
+
+
+def test_archive_old_decisions_noop_under_threshold(tmp_path):
+    """Verify archive_old_decisions does nothing when under the line threshold."""
+    log_path = tmp_path / "decisions_log.md"
+    archive_path = tmp_path / "decisions_log_archive.md"
+    harness_utils.record_decision(
+        title="Only Entry", decision="D", context="C", consequence="Cons",
+        date="2026-06-01", log_path=log_path,
+    )
+    count = harness_utils.archive_old_decisions(threshold_lines=150, log_path=log_path, archive_path=archive_path)
+    assert count == 0
+    assert not archive_path.exists()
+
+
+def test_archive_old_decisions_moves_oldest_entries(tmp_path):
+    """Verify archive_old_decisions moves entries from the front, appends to archive."""
+    log_path = tmp_path / "decisions_log.md"
+    archive_path = tmp_path / "decisions_log_archive.md"
+    for i in range(1, 30):
+        harness_utils.record_decision(
+            title=f"Entry {i}",
+            decision="D" * 20, context="C" * 20, consequence="Cons" * 20,
+            date=f"2026-01-{i:02d}", log_path=log_path,
+        )
+    count = harness_utils.archive_old_decisions(threshold_lines=50, log_path=log_path, archive_path=archive_path)
+    assert count > 0
+    archive_content = archive_path.read_text(encoding="utf-8")
+    assert "Entry 1" in archive_content
+    remaining_content = log_path.read_text(encoding="utf-8")
+    assert "Entry 29" in remaining_content  # newest entry must still be in the main log
+
+
+def test_archive_old_decisions_refuses_unsorted_log(tmp_path):
+    """Verify archive_old_decisions refuses to run against a disordered log."""
+    log_path = tmp_path / "decisions_log.md"
+    log_path.write_text(
+        "# Decisions Log\n"
+        "## 2026-06-01: Later\n- **Decision**: D\n- **Context**: C\n- **Consequence**: Cons\n"
+        "## 2026-01-01: Earlier\n- **Decision**: D\n- **Context**: C\n- **Consequence**: Cons\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="not in ascending chronological order"):
+        harness_utils.archive_old_decisions(threshold_lines=1, log_path=log_path)
+
+
+def test_archive_old_decisions_never_empties_log(tmp_path):
+    """Verify at least one entry always remains in the main log."""
+    log_path = tmp_path / "decisions_log.md"
+    archive_path = tmp_path / "decisions_log_archive.md"
+    harness_utils.record_decision(
+        title="Sole Entry", decision="D" * 500, context="C" * 500, consequence="Cons" * 500,
+        date="2026-01-01", log_path=log_path,
+    )
+    harness_utils.archive_old_decisions(threshold_lines=1, log_path=log_path, archive_path=archive_path)
+    content = log_path.read_text(encoding="utf-8")
+    assert "Sole Entry" in content

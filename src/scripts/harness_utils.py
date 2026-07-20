@@ -394,6 +394,23 @@ def record_decision(
     target_path = Path(log_path) if log_path else (_find_project_root() / ".agent" / "state" / "decisions_log.md")
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Note: checking only the last entry's date (existing_dates[-1]) is O(1) and sufficient
+    # because record_decision() always appends and the log is maintained in sorted order.
+    if target_path.exists():
+        existing_content = target_path.read_text(encoding="utf-8")
+        existing_dates = re.findall(r"^## (\d{4}-\d{2}-\d{2}):", existing_content, re.MULTILINE)
+        if existing_dates:
+            last_date = existing_dates[-1]
+            if entry_date < last_date:
+                raise ValueError(
+                    f"record_decision() refused: new entry date {entry_date} is earlier than "
+                    f"the last existing entry's date {last_date}. This would silently reintroduce "
+                    f"chronological disorder. If this is a genuine correction/backdated record of a "
+                    f"past decision, pass an explicit extra_fields={{'Note': '...'}} explaining the "
+                    f"backdating rather than bypassing this check, or add it under today's date "
+                    f"referencing the earlier event instead."
+                )
+
     entry_lines = [
         f"\n## {entry_date}: {title.strip()}",
         f"- **Decision**: {decision.strip()}",
@@ -412,3 +429,78 @@ def record_decision(
 
     with open(target_path, "a", encoding="utf-8") as f:
         f.write(entry_str)
+
+
+def archive_old_decisions(
+    threshold_lines: int = 150,
+    log_path: Path | str | None = None,
+    archive_path: Path | str | None = None,
+) -> int:
+    """
+    Move the oldest entries from decisions_log.md to decisions_log_archive.md
+    once the main log exceeds threshold_lines. Only the ONE sanctioned way to
+    perform archival — never move entries between these files with a file-write
+    tool directly.
+
+    Preconditions:
+    - decisions_log.md must be in ascending chronological order (guaranteed by
+      record_decision()'s backdating guard, assuming no direct edits occurred).
+
+    Returns the number of entries archived (0 if under threshold).
+    """
+    target_path = Path(log_path) if log_path else (_find_project_root() / ".agent" / "state" / "decisions_log.md")
+    dest_path = Path(archive_path) if archive_path else (_find_project_root() / ".agent" / "state" / "decisions_log_archive.md")
+
+    if not target_path.exists():
+        return 0
+
+    content = target_path.read_text(encoding="utf-8")
+    line_count = len(content.splitlines())
+    if line_count <= threshold_lines:
+        return 0
+
+    header_match = re.match(r"^(# Decisions Log\n)", content)
+    if not header_match:
+        raise ValueError("decisions_log.md does not start with expected '# Decisions Log' header — refusing to archive.")
+    header = header_match.group(1)
+    body = content[header_match.end():]
+
+    raw_entries = re.split(r"(?=^## \d{4}-\d{2}-\d{2}:)", body, flags=re.MULTILINE)
+    entries = [e for e in raw_entries if e.strip()]
+
+    if not entries:
+        return 0
+
+    # Verify ascending order before trusting "oldest = first N entries".
+    dates = []
+    for e in entries:
+        m = re.match(r"^## (\d{4}-\d{2}-\d{2}):", e)
+        if not m:
+            raise ValueError(f"Entry does not match expected date-header format, refusing to archive:\n{e[:100]}")
+        dates.append(m.group(1))
+    if dates != sorted(dates):
+        raise ValueError(
+            "decisions_log.md is not in ascending chronological order — refusing to archive "
+            "until this is corrected (see the reorder procedure used on 2026-07-20). "
+            "Archiving an unsorted file would move the wrong entries and call them 'oldest'."
+        )
+
+    # Archive entries one at a time from the front until back under threshold,
+    # always leaving at least 1 entry in the main log.
+    archived_count = 0
+    while len(entries) > 1:
+        remaining_content = header + "".join(entries)
+        if len(remaining_content.splitlines()) <= threshold_lines:
+            break
+        oldest = entries.pop(0)
+        if not dest_path.exists():
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            dest_path.write_text("# Decisions Log Archive\n", encoding="utf-8")
+        with open(dest_path, "a", encoding="utf-8") as f:
+            f.write(oldest)
+        archived_count += 1
+
+    if archived_count > 0:
+        target_path.write_text(header + "".join(entries), encoding="utf-8")
+
+    return archived_count
