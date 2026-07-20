@@ -346,6 +346,9 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         except Exception:
             pass
 
+        if outcome == "success":
+            _drop_session_checkpoint_stash(prev_id)
+
         return outcome, note
 
 
@@ -916,18 +919,58 @@ def main() -> None:
         maybe_run_wiki_lint()
 
 
+def _drop_session_checkpoint_stash(session_id: str) -> None:
+    """Drop session-start AUTO checkpoint stash on clean close (T1-I-08)."""
+    try:
+        res = subprocess.run(["git", "stash", "list"], capture_output=True, text=True, timeout=10)
+        if res.returncode == 0 and res.stdout:
+            prefix = session_id[:12] if len(session_id) >= 12 else session_id
+            for line in res.stdout.splitlines():
+                if f"AUTO: session-start checkpoint [{prefix}]" in line or f"AUTO: session-start checkpoint [{session_id}]" in line:
+                    stash_ref = line.split(":")[0].strip()
+                    subprocess.run(["git", "stash", "drop", stash_ref], capture_output=True, text=True, timeout=10)
+                    print(f"[SESSION] Clean close: dropped session checkpoint stash ({stash_ref})")
+                    break
+    except Exception:
+        pass
+
+
 def _create_session_checkpoint(session_id: str) -> None:
     """Create a recoverable git stash at session start. Non-fatal if stash fails."""
     if not (Path.cwd() / ".git").exists():
         return
+
+    # Check if working directory is dirty
     try:
+        status_res = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10
+        )
+        if status_res.returncode != 0 or not status_res.stdout.strip():
+            return  # Clean working tree, nothing to stash
+    except Exception:
+        return
+
+    # Interactive TTY prompt (HIB-ENV-02)
+    if sys.stdin and sys.stdin.isatty():
+        try:
+            print("Uncommitted changes detected. Create session-start recovery stash? [Y/n]: ", end="", flush=True)
+            response = sys.stdin.readline().strip().lower()
+            if response not in ("", "y", "yes"):
+                print("[SESSION] Session checkpoint stash skipped by operator confirmation.")
+                return
+        except Exception:
+            pass
+
+    try:
+        prefix = session_id[:12] if len(session_id) >= 12 else session_id
         result = subprocess.run(
             ["git", "stash", "push", "--include-untracked",
-             "-m", f"AUTO: session-start checkpoint [{session_id[:12]}]"],
+             "-m", f"AUTO: session-start checkpoint [{prefix}]"],
             capture_output=True, text=True, timeout=30
         )
         if result.returncode == 0 and "No local changes" not in result.stdout:
-            print(f"[SESSION] Checkpoint created: git stash (session {session_id[:12]})")
+            print(f"[SESSION] Checkpoint created: git stash (session {prefix})")
     except Exception:
         pass  # Non-fatal — checkpoint is a safety net, not a requirement
 
