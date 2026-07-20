@@ -27,13 +27,18 @@ class MigrationV1_4_9_to_V1_4_10(MigrationProtocol):
         self._validate_config(content)
         lines = content.splitlines()
 
+        replaced = False
         for idx, line in enumerate(lines):
             if line.strip().startswith("#"):
                 continue
             match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
             if match:
                 lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
+                replaced = True
                 break
+
+        if not replaced:
+            raise ValueError(f"Version key not found in configuration file at {config_path}")
 
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -46,13 +51,18 @@ class MigrationV1_4_9_to_V1_4_10(MigrationProtocol):
         self._validate_config(content)
         lines = content.splitlines()
 
+        replaced = False
         for idx, line in enumerate(lines):
             if line.strip().startswith("#"):
                 continue
             match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
             if match:
                 lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
+                replaced = True
                 break
+
+        if not replaced:
+            raise ValueError(f"Version key not found in configuration file at {config_path}")
 
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
