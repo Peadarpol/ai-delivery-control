@@ -83,10 +83,18 @@ def load_config() -> dict:
         sys.path.insert(0, str(scripts_path))
     from harness_utils import get_harness_config
     
+    raw_aliases = get_harness_config("spec_gate", "section_aliases", default={})
+    section_aliases = dict(_DEFAULT_SECTION_ALIASES)
+    if isinstance(raw_aliases, dict):
+        for concept, aliases in raw_aliases.items():
+            if concept in section_aliases and isinstance(aliases, list) and aliases:
+                section_aliases[concept] = aliases
+
     return {
         "specs_path": get_harness_config("spec_gate", "specs_path"),
         "budget_provider": get_harness_config("model_routing", "budget_provider"),
         "budget_model": get_harness_config("model_routing", "budget_model"),
+        "section_aliases": section_aliases,
     }
 
 
@@ -216,8 +224,57 @@ def resolve_spec_file(spec_input: str | None, specs_path: str) -> tuple[str, Pat
 
     return None
 
+# Each concept can be satisfied by EITHER a bold metadata field (e.g. "**Status**: ...")
+# OR a section header (e.g. "## Status & Sign-off") — whichever appears first wins.
+# Overridable via .agent/config.yaml: spec_gate.section_aliases.<concept>
+_DEFAULT_SECTION_ALIASES = {
+    "source": ["Source Issue", "Tracked under", "Origin", "Feeds into"],
+    "scope": ["Bounded Scope & Out of Scope", "Scope & Boundaries", "Bounded Scope"],
+    "assumptions": ["Assumptions"],
+    "acceptance_criteria": ["Acceptance Criteria"],
+    "status": ["Status & Sign-off", "Status"],
+}
 
-def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> Pass1Result:
+
+def _find_concept(content: str, lines: list[str], aliases: list[str]) -> dict | None:
+    """Locate a concept by trying each alias as (a) a bold field, then (b) a section header.
+
+    Returns {'kind': 'field', 'value': str, 'alias': str} or {'kind': 'section', 'start_line': int, 'depth': int, 'alias': str} or None.
+    """
+    for alias in aliases:
+        # Try bold field form: **Alias**: value
+        field_match = re.search(rf"\*\*{re.escape(alias)}\*\*:\s*([^\n]+)", content, re.IGNORECASE)
+        if field_match:
+            return {"kind": "field", "value": field_match.group(1).strip(), "alias": alias}
+
+    for alias in aliases:
+        # Build depth-aware regex per alias (escape spaces/ampersands safely)
+        parts = [re.escape(part) for part in alias.split()]
+        escaped_alias = r"\s+".join(parts)
+        header_regex = rf"^\s*(#{{1,6}})\s+(?:\d+\.\s+)?{escaped_alias}\b"
+        for i, line in enumerate(lines):
+            m = re.match(header_regex, line, re.IGNORECASE)
+            if m:
+                return {"kind": "section", "start_line": i, "depth": len(m.group(1)), "alias": alias}
+    return None
+
+
+def _extract_section_content(lines: list[str], start_line: int, start_depth: int) -> str:
+    end_line = len(lines)
+    for j in range(start_line + 1, len(lines)):
+        m = re.match(r"^\s*(#{1,6})\s+", lines[j])
+        if m and len(m.group(1)) <= start_depth:
+            end_line = j
+            break
+    return "\n".join(lines[start_line + 1:end_line]).strip()
+
+
+def run_pass1(
+    content: str,
+    spec_id: str,
+    mode: str = "incremental",
+    section_aliases: dict[str, list[str]] | None = None,
+) -> Pass1Result:
     """Execute Pass 1: Structural static checks. Returns (Passed, Errors, HighRiskDBA).
 
     mode controls enforcement level:
@@ -229,6 +286,9 @@ def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> Pass1Res
     high_risk_dba = False
     archetype = None
 
+    if section_aliases is None:
+        section_aliases = _DEFAULT_SECTION_ALIASES
+
     def _fail(message: str) -> None:
         """Record a structural failure — advisory-only in discovery, blocking otherwise."""
         if mode == "discovery":
@@ -236,67 +296,51 @@ def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> Pass1Res
         else:
             errors.append(message)
 
-    # 1. Non-empty Source Issue
-    source_match = re.search(r"\*\*Source Issue\*\*:\s*([^\n]+)", content, re.IGNORECASE)
-    if not source_match:
-        _fail("Missing '**Source Issue**:' field reference.")
-    else:
-        source_val = source_match.group(1).strip()
-        if (source_val.startswith("[") and source_val.endswith("]")) or not source_val:
-            _fail("Upstream issue reference cannot match placeholder brackets or be empty.")
-
-    # 2. Required Headings Existence (depth-independent, case-insensitive)
-    required_headings = [
-        ("Goal & Context", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Goal\s+&\s+Context\b"),
-        ("Bounded Scope & Out of Scope", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Bounded\s+Scope\s+&\s+Out\s+of\s+Scope\b"),
-        ("Assumptions", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Assumptions\b"),
-        ("Acceptance Criteria", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Acceptance\s+Criteria\b"),
-        ("Status & Sign-off", r"^\s*#{1,6}\s+(?:\d+\.\s+)?Status\s+&\s+Sign-off\b"),
-    ]
-
-    section_contents = {}
     lines = content.splitlines()
 
-    for h_name, h_regex in required_headings:
-        match_found = False
-        start_line = -1
-        for i, line in enumerate(lines):
-            if re.match(h_regex, line, re.IGNORECASE):
-                match_found = True
-                start_line = i
-                break
-        if not match_found:
-            _fail(f"Missing required section header: '# {h_name}'.")
-        else:
-            end_line = len(lines)
-            for j in range(start_line + 1, len(lines)):
-                if re.match(r"^\s*#{1,6}\s+", lines[j]):
-                    end_line = j
-                    break
-            section_contents[h_name] = "\n".join(lines[start_line + 1:end_line]).strip()
+    concepts = ["source", "scope", "assumptions", "acceptance_criteria", "status"]
+    concept_content = {}  # concept -> resolved text (field value or section body)
 
-    # 3. Section Non-emptiness
-    for h_name in ["Assumptions", "Acceptance Criteria"]:
-        if h_name in section_contents and not section_contents[h_name]:
-            _fail(f"The section '# {h_name}' cannot be empty.")
+    for concept in concepts:
+        aliases = section_aliases.get(concept, [])
+        found = _find_concept(content, lines, aliases)
+        if not found:
+            _fail(f"Missing required field or section for '{concept}' (tried aliases: {', '.join(aliases)}).")
+            continue
+        if found["kind"] == "field":
+            value = found["value"]
+            if (value.startswith("[") and value.endswith("]")) or not value:
+                _fail(f"'{found['alias']}' field cannot be empty or a placeholder.")
+            concept_content[concept] = value
+        else:  # section
+            body = _extract_section_content(lines, found["start_line"], found["depth"])
+            concept_content[concept] = body
 
-    # 4. Gherkin Scenario Validation (advisory-only in discovery, blocking otherwise)
-    if "Acceptance Criteria" in section_contents:
-        ac_text = section_contents["Acceptance Criteria"]
+    # Section Non-emptiness
+    for concept in ("assumptions", "acceptance_criteria"):
+        if concept in concept_content and not concept_content[concept]:
+            _fail(f"The '{concept}' section/field cannot be empty.")
+
+    # Gherkin Scenario Validation
+    if "acceptance_criteria" in concept_content:
+        ac_text = concept_content["acceptance_criteria"]
         if ac_text:
             keywords = ["given", "when", "then"]
-            missing_keywords = [kw.capitalize() for kw in keywords
-                                 if not re.search(rf"\b{kw}\b", ac_text, re.IGNORECASE)]
+            missing_keywords = [
+                kw.capitalize()
+                for kw in keywords
+                if not re.search(rf"\b{kw}\b", ac_text, re.IGNORECASE)
+            ]
             if missing_keywords:
                 _fail(
-                    f"BDD Gherkin validation failed in '# Acceptance Criteria'. "
+                    f"BDD Gherkin validation failed in acceptance criteria. "
                     f"Scenario block must contain Given, When, and Then scenarios "
                     f"(missing: {', '.join(missing_keywords)})."
                 )
 
-    # 5. Lenient Assumptions Formatting Bullet Check
-    if "Assumptions" in section_contents:
-        ass_text = section_contents["Assumptions"]
+    # Lenient Assumptions Formatting Bullet Check
+    if "assumptions" in concept_content:
+        ass_text = concept_content["assumptions"]
         has_pending = False
         has_invalid = False
         for line in ass_text.splitlines():
@@ -312,14 +356,14 @@ def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> Pass1Res
 
         if has_invalid:
             _fail(
-                "Lenient assumptions check failed. Every bullet list item in '# Assumptions' "
+                "Lenient assumptions check failed. Every bullet list item in assumptions "
                 "must be prefixed with '[Resolved: ...]' or '[Pending: ...]' to explicitly "
                 "surface unstated constraints."
             )
         if has_pending:
             _fail("Specification contains '[Pending]' assumptions which blocks final APPROVED status.")
 
-    # 6. Elevated DBA Constraint Flag
+    # Elevated DBA Constraint Flag
     if re.search(r"\[HIGH_RISK_SCHEMA_CHANGE\]", content, re.IGNORECASE):
         high_risk_dba = True
 
@@ -328,7 +372,7 @@ def run_pass1(content: str, spec_id: str, mode: str = "incremental") -> Pass1Res
     if archetype_match:
         archetype = archetype_match.group(1).strip()
 
-    # 7. Status Sign-off APPROVED Check (mode-conditional)
+    # Status Sign-off APPROVED Check (mode-conditional)
     is_approved = bool(re.search(r"\*\*Status\*\*:\s*APPROVED", content, re.IGNORECASE))
     pre_commit_env = os.environ.get("PRE_COMMIT") == "1"
     ci_env = os.environ.get("CI") == "1" or os.environ.get("GITHUB_ACTIONS") == "true"
@@ -760,7 +804,8 @@ def main() -> int:
     print(f"🔍 [REVIEW-GATE] Running Pass 1: Static Structural Checks for '{spec_id}'...")
 
     # 6. Pass 1 with mode
-    result = run_pass1(content, spec_id, mode)
+    section_aliases = config.get("section_aliases")
+    result = run_pass1(content, spec_id, mode, section_aliases=section_aliases)
     if not result.passed:
         print(f"❌ [REVIEW-GATE] Pass 1 Structural Checks FAILED for '{spec_id}':", file=sys.stderr)
         for err in result.errors:

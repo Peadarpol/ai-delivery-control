@@ -62,16 +62,10 @@ def _is_feature_branch(branch: str) -> bool:
 
 
 def _resolve_specs_dir() -> Path:
-    """Read specs_path from config.yaml if present, otherwise use the default."""
-    if CONFIG_PATH.exists():
-        try:
-            content = CONFIG_PATH.read_text(encoding="utf-8")
-            match = re.search(r"specs_path:\s*['\"]?([^'\"\n]+)['\"]?", content)
-            if match:
-                return PROJECT_ROOT / Path(match.group(1).strip())
-        except Exception:
-            pass
-    return _DEFAULT_SPECS_DIR
+    """Read specs_path from config.yaml using get_harness_config if present, otherwise use the default."""
+    from harness_utils import get_harness_config
+    specs_path = get_harness_config("acceptance_gate", "specs_path", default="docs/planning/specs/")
+    return PROJECT_ROOT / Path(specs_path)
 
 
 def _load_spec_status(specs_dir: Path) -> dict[str, str]:

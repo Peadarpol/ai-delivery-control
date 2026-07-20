@@ -285,6 +285,11 @@ architecture_checks:
 # Spec Quality Gate Configuration (T1-L-01)
 spec_gate:
   specs_path: docs/planning/specs/
+  # Optional: override which header/field text satisfies each required spec concept.
+  # Only needed if your team's spec template uses different wording than the defaults below.
+  # section_aliases:
+  #   source: ["Source Issue"]
+  #   status: ["Status & Sign-off"]
 
 # Outer loop methodology profile
 # Controls how the spec quality gate and BA/PM workflows enforce requirements.

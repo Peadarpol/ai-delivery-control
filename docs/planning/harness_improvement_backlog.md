@@ -1137,7 +1137,7 @@ This serves as direct, first-party evidence for the --no-trace authentication ga
 **Date**: 2026-07-18
 **Source**: Synthetic reproduction / AT-05 (F5)
 **Pillar**: Stability / Runtime
-**Status**: 📋 Backlog
+**Status**: ✅ Resolved (v1.4.9.1)
 
 A runtime regression introduced in version 1.4.9 (`8b6ae2a`) renamed the utility function `_strip_json_fences` to `_parse_json_response` and updated its return semantics. However, all three LLM providers (`AnthropicProvider`, `OpenAIProvider`, and `OllamaProvider`) in `src/scripts/providers.py` still invoke `_strip_json_fences` inside their `raw_completion` methods. This raises a `NameError: name '_strip_json_fences' is not defined` whenever `raw_completion` is called, which in turn causes critical helper scripts (such as `pm_scaffold.py`, `acceptance_check.py`, and `rebuttal.py`) to crash immediately.
 
@@ -1148,7 +1148,7 @@ A runtime regression introduced in version 1.4.9 (`8b6ae2a`) renamed the utility
 **Date**: 2026-07-18
 **Source**: Synthetic reproduction / AT-01 (F1)
 **Pillar**: Installation / Templates
-**Status**: 📋 Backlog
+**Status**: ✅ Resolved (v1.4.9.1)
 
 The pre-commit template `pre-commit-config.yaml.template` utilizes the placeholder `[PROJECT_PACKAGE_MANAGER]` directly inside hook entries, e.g., `[PROJECT_PACKAGE_MANAGER] run mypy [PROJECT_SRC_PATH]/`. When the package manager is detected as `pip` (e.g., in a clean, standard pip-based target project), this resolves to `pip run mypy`. Because pip does not support a `run` command, attempting to commit on a newly bootstrapped pip-based project causes ~8 hooks of `language: system` to fail with `ERROR: unknown command "run"`. Corroborated 2026-07-18: observed live during a first-time macOS install session (see cold-start-field-observations-2026-07-18.md, Finding 2, which also surfaced a second related defect on the same install)
 
@@ -1159,7 +1159,7 @@ The pre-commit template `pre-commit-config.yaml.template` utilizes the placehold
 **Date**: 2026-07-18
 **Source**: Synthetic reproduction / AT-02 (F2)
 **Pillar**: Stability / Gating
-**Status**: 📋 Backlog
+**Status**: ✅ Resolved (v1.4.9.1)
 
 The review gate script `src/scripts/ai_review.py` and its imported modules (`route_decision.py`, `rebuttal.py`, `gate_context.py`) import `pydantic` at the top level. In a fresh, minimal python environment without optional dependencies, executing the review gate raises a `ModuleNotFoundError: No module named 'pydantic'` at import time. This uncaught exception crashes the pre-commit script before the execution can enter the `try...except` block containing the gate's fail-open logic, causing the hook to fail loudly and block commits for standard projects.
 
@@ -1170,7 +1170,7 @@ The review gate script `src/scripts/ai_review.py` and its imported modules (`rou
 **Date**: 2026-07-18
 **Source**: Synthetic reproduction / AT-03 (F3)
 **Pillar**: Gating / Architecture
-**Status**: 📋 Backlog
+**Status**: ✅ Resolved (v1.4.9.1)
 
 The Clean Architecture checks hook (`.agent/skills/universal/senior-architect/scripts/architecture_checks.py`) and other skill/helper scripts import `harness_utils` using a hardcoded path insertion: `sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "src" / "scripts"))`. This assumes that the project's source folder is named `"src"`. If a target project uses a custom source root (e.g. `lib/` or `app/`), `harness_utils.py` will be copied to `lib/scripts/` or `app/scripts/`, causing the path insertion in the script to fail to resolve the module. Furthermore, if the skill is executed from a global customization path, the relative parent resolution (`parents[5]`) will point to a location outside the project root entirely, causing a `ModuleNotFoundError`.
 

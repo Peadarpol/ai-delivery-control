@@ -58,6 +58,7 @@ if __name__ == "__main__":
 # Ensure imports can find the src scripts (providers) and .agent/scripts (audit_logger)
 script_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(script_dir))
+sys.path.insert(0, str(script_dir.parent.parent / "src" / "scripts"))
 sys.path.insert(0, str(script_dir.parent.parent))
 
 from src.scripts.providers import get_provider
@@ -95,44 +96,14 @@ def resolve_spec_id(spec_arg: str | None = None) -> str:
     raise ValueError("SPEC_ID could not be resolved from CLI arguments, environment, or git branch.")
 
 def load_config() -> dict:
-    """Load config.yaml settings dynamically using regex."""
-    config = {
-        "specs_path": "docs/planning/specs/",
-        "base_branch": "main",
-        "migration_paths": ["migrations/versions/", "alembic/versions/", "db/migration/", "migrations/"],
-        "outer_loop_mode": "incremental"
+    """Load config.yaml settings dynamically using get_harness_config."""
+    from harness_utils import get_harness_config
+    return {
+        "specs_path": get_harness_config("acceptance_gate", "specs_path"),
+        "base_branch": get_harness_config("acceptance_gate", "base_branch"),
+        "migration_paths": get_harness_config("acceptance_gate", "migration_paths"),
+        "outer_loop_mode": get_harness_config("outer_loop", "mode"),
     }
-    config_path = Path(".agent/config.yaml")
-    if config_path.exists():
-        try:
-            content = config_path.read_text(encoding="utf-8")
-            # Parse specs_path
-            s_match = re.search(r"^\s*specs_path:\s*(.+)", content, re.MULTILINE)
-            if s_match:
-                config["specs_path"] = s_match.group(1).strip().strip("\"'")
-            
-            # Parse base_branch
-            b_match = re.search(r"^\s*base_branch:\s*(.+)", content, re.MULTILINE)
-            if b_match:
-                config["base_branch"] = b_match.group(1).strip().strip("\"'")
-                
-            # Parse outer_loop mode
-            mode_match = re.search(r"^\s*mode:\s*(.+)", content, re.MULTILINE)
-            if mode_match:
-                config["outer_loop_mode"] = mode_match.group(1).strip().strip("\"'")
-                
-            # Parse migration_paths (simple array parse)
-            mig_paths = re.findall(r"^\s*-\s*([^\s\n]+)", content, re.MULTILINE)
-            # Find under acceptance_gate.migration_paths:
-            # Let's target the acceptance_gate section specifically
-            ag_section = re.search(r"acceptance_gate:.*?(?:\n\S|$)", content, re.DOTALL)
-            if ag_section:
-                paths = re.findall(r"-\s*(.+)", ag_section.group(0))
-                if paths:
-                    config["migration_paths"] = [p.strip().strip("\"'") for p in paths]
-        except Exception:
-            pass
-    return config
 
 def get_git_diff(base_branch: str) -> str:
     """Retrieve git diff from base_branch to HEAD, including staged changes."""

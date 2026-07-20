@@ -4,11 +4,14 @@ Requirement-to-Commit Traceability Gate (T1-L-04)
 Ensures all non-trivial commits trace back to approved specifications.
 """
 
-import sys
+import argparse
+import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
+from typing import Any
 
 # Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
 if __name__ == "__main__":
@@ -17,11 +20,13 @@ if __name__ == "__main__":
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-# Ensure imports can find .agent/scripts (audit_logger)
+# Ensure imports can find .agent/scripts (audit_logger) and src/scripts (harness_utils)
 script_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(script_dir))
+sys.path.insert(0, str(script_dir.parent.parent / "src" / "scripts"))
 sys.path.insert(0, str(script_dir.parent.parent))
 from audit_logger import log_action
+from harness_utils import get_harness_config
 
 def get_git_dir() -> Path:
     """Run git rev-parse --git-dir to resolve the .git folder path."""
@@ -50,23 +55,10 @@ def get_commit_message(msg_path_arg: str | None = None) -> str:
     return path.read_text(encoding="utf-8")
 
 def get_config_options() -> tuple[Path, str]:
-    """Read specs_path and outer_loop mode from config.yaml."""
-    specs_path = "docs/planning/specs/"
-    mode = "incremental"
-    config_path = Path(".agent/config.yaml")
-    if config_path.exists():
-        try:
-            content = config_path.read_text(encoding="utf-8")
-            # Parse specs_path
-            s_match = re.search(r"^\s*specs_path:\s*(.+)", content, re.MULTILINE)
-            if s_match:
-                specs_path = s_match.group(1).strip().strip("\"'")
-            # Parse mode
-            m_match = re.search(r"^\s*mode:\s*(.+)", content, re.MULTILINE)
-            if m_match:
-                mode = m_match.group(1).strip().strip("\"'")
-        except Exception:
-            pass
+    """Read specs_path and outer_loop mode using get_harness_config."""
+    from harness_utils import get_harness_config
+    specs_path = get_harness_config("traceability", "specs_path")
+    mode = get_harness_config("outer_loop", "mode")
     return Path(specs_path), mode
 
 def is_doc_or_trivial_diff() -> bool:
@@ -109,8 +101,136 @@ Reason: {reason}
 """
     print(card, file=sys.stderr)
 
+def is_root_commit() -> bool:
+    """Check if total repository commit count is zero (root commit exemption)."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-list", "--all", "--count"],
+            capture_output=True,
+            text=True,
+            check=True,
+            shell=False
+        )
+        return res.stdout.strip() == "0"
+    except Exception:
+        return False
+
+
+def get_worktree_root() -> Path:
+    """Resolve the git top-level directory for worktree anchoring."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+            shell=False
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip()).resolve()
+    except Exception:
+        pass
+    return Path.cwd()
+
+
+def extract_commit_trailers(commit_sha: str | None = None) -> dict[str, str]:
+    """Extract trailers from commit message or git log if SHA provided."""
+    trailers = {}
+    try:
+        cmd = ["git", "log", "-1", "--format=%(trailers:only,unfold)", commit_sha or "HEAD"]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        for line in res.stdout.splitlines():
+            if ":" in line:
+                k, v = line.split(":", 1)
+                trailers[k.strip()] = v.strip()
+    except Exception:
+        pass
+    return trailers
+
+
+def _get_session_ledger_attribution(commit_sha: str) -> dict[str, Any]:
+    """Fallback attribution lookup via session_ledger.jsonl when commit trailers are absent."""
+    ledger_path = Path(".agent/state/session_ledger.jsonl")
+    if not ledger_path.exists():
+        return {}
+    try:
+        for line in ledger_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            action = entry.get("action", "")
+            if action.startswith("[COMMIT]:") and commit_sha[:12] in action:
+                return {"session_id": entry.get("session_id"), "agent": entry.get("agent")}
+    except Exception:
+        pass
+    return {}
+
+
+def check_branch_no_trace_commits(base_branch: str = "main", ack_reason: str | None = None) -> bool:
+    """Check if branch contains --no-trace commits and require --ack-no-trace parameter."""
+    try:
+        cmd = ["git", "log", f"{base_branch}..HEAD", "--grep=--no-trace", "--oneline"]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        no_trace_commits = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+        if not no_trace_commits:
+            return True  # Clean
+
+        if not ack_reason:
+            print("❌ [TRACEABILITY MERGE GATE] Merge contains --no-trace commits. Explicit confirmation required.", file=sys.stderr)
+            print("   Re-run: python .agent/scripts/check_traceability.py --check-merge-trace --ack-no-trace \"<reason>\"", file=sys.stderr)
+            print("   Then push again.", file=sys.stderr)
+            for c in no_trace_commits:
+                sha = c.split()[0]
+                trailers = extract_commit_trailers(sha)
+                session_id = trailers.get("Session-Id")
+                signer = trailers.get("Signed-by")
+                if not session_id or not signer:
+                    ledger_attr = _get_session_ledger_attribution(sha)
+                    session_id = session_id or ledger_attr.get("session_id", "unknown-session")
+                    signer = signer or ledger_attr.get("agent", "unknown-signer")
+                print(f"     - {c} (session: {session_id}, signed_by: {signer})", file=sys.stderr)
+            return False
+
+        # Sanitize and truncate reason to 250 chars
+        sanitized_reason = ack_reason.strip()[:250]
+        from harness_utils import log_harness_event
+        log_harness_event({
+            "event_type": "ack_no_trace_merge",
+            "severity": "WARNING",
+            "payload": {
+                "reason": sanitized_reason,
+                "no_trace_count": len(no_trace_commits),
+                "no_trace_commits": no_trace_commits,
+            }
+        })
+        print(f"⚠️ [TRACEABILITY MERGE GATE] Merging branch with {len(no_trace_commits)} --no-trace commits acknowledged: '{sanitized_reason}'")
+        return True
+    except Exception as e:
+        print(f"⚠️ [TRACEABILITY MERGE GATE] Warning checking branch commits: {e}")
+        return True
+
+
 def main():
-    msg_path = sys.argv[1] if len(sys.argv) > 1 else None
+    parser = argparse.ArgumentParser(description="Requirement Traceability Gate")
+    parser.add_argument("commit_msg_file", nargs="?", help="Path to COMMIT_EDITMSG (commit-msg stage)")
+    parser.add_argument("--check-merge-trace", action="store_true",
+                        help="Run the merge-gate --no-trace aggregator instead of the per-commit check (pre-push stage)")
+    parser.add_argument("--ack-no-trace", type=str, default=None, metavar="REASON",
+                        help="Acknowledge and permit a merge containing --no-trace commits, with a required reason")
+    parser.add_argument("--base-branch", type=str, default=None,
+                        help="Override the base branch for the merge check (default: config acceptance_gate.base_branch, fallback 'main')")
+    args = parser.parse_args()
+
+    if args.check_merge_trace:
+        base_branch = args.base_branch or get_harness_config("acceptance_gate", "base_branch")
+        ok = check_branch_no_trace_commits(base_branch=base_branch, ack_reason=args.ack_no_trace)
+        sys.exit(0 if ok else 1)
+
+    if is_root_commit():
+        print("ℹ️  [TRACEABILITY] Root commit exemption active (repo commit count is 0).")
+        sys.exit(0)
+
+    msg_path = args.commit_msg_file
     try:
         commit_msg = get_commit_message(msg_path)
     except Exception as e:
@@ -128,8 +248,12 @@ def main():
         
     specs_path, mode = get_config_options()
     
-    # Check for SPEC ID, T1, HIB, BUG
-    spec_matches = re.findall(r"\b((?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b", commit_msg, re.IGNORECASE)
+    # Check for SPEC ID (versioned SPEC-vX.Y.Z-name or legacy numeric SPEC-001), T1, HIB, BUG
+    spec_matches = re.findall(
+        r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
+        commit_msg,
+        re.IGNORECASE,
+    )
     
     # Bypass check (--no-trace)
     bypass_match = re.search(r"--no-trace\s+(.+)", commit_msg, re.IGNORECASE)
@@ -185,8 +309,21 @@ def main():
         if spec_id.startswith("SPEC-"):
             spec_file = specs_path / f"{spec_id}.md"
             if not spec_file.exists():
-                print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
-                sys.exit(1)
+                archive_file = specs_path / "archive" / f"{spec_id}.md"
+                if archive_file.exists():
+                    spec_file = archive_file
+                else:
+                    # Check for wildcard match for versioned spec files (e.g., SPEC-v1.4.10-governance-hardening.md)
+                    matches = list(specs_path.glob(f"{spec_id}*.md")) or list(specs_path.glob(f"{spec_id.lower()}*.md"))
+                    if not matches:
+                        arch_dir = specs_path / "archive"
+                        if arch_dir.exists():
+                            matches = list(arch_dir.glob(f"{spec_id}*.md")) or list(arch_dir.glob(f"{spec_id.lower()}*.md"))
+                    if matches:
+                        spec_file = matches[0]
+                    else:
+                        print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
+                        sys.exit(1)
                 
             # Parse status
             spec_content = spec_file.read_text(encoding="utf-8")

@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 import uuid
@@ -218,17 +219,9 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
                 if not commits:
                     # Scan for modified spec files in specs_path
                     try:
-                        specs_dir = PROJECT_ROOT / "docs" / "planning" / "specs"
-                        config_path = PROJECT_ROOT / ".agent" / "config.yaml"
-                        if config_path.exists():
-                            try:
-                                content = config_path.read_text(encoding="utf-8")
-                                match = re.search(r"specs_path:\s*['\"]?([^'\"\n]+)['\"]?", content)
-                                if match:
-                                    specs_dir = PROJECT_ROOT / Path(match.group(1).strip())
-                            except Exception:
-                                pass
-                        
+                        specs_path_str = get_harness_config("spec_gate", "specs_path")
+                        specs_dir = PROJECT_ROOT / Path(specs_path_str)
+
                         if specs_dir.exists() and specs_dir.is_dir():
                             if _uncommitted_spec_changes(specs_dir):
                                 spec_files_modified = True
@@ -346,7 +339,31 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
         except Exception:
             pass
 
+        if outcome == "success":
+            _drop_session_checkpoint_stash(prev_id)
+            _snapshot_live_logs(prev_id)
+
         return outcome, note
+
+
+def _snapshot_live_logs(session_id: str) -> None:
+    """Snapshot untracked live logs (.ai-review-log.jsonl and harness_events.jsonl) on clean session close (HIB-063)."""
+    try:
+        snapshot_dir = STATE_DIR / "snapshots"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_id = re.sub(r"[^\w\.-]", "_", session_id or "unknown")
+        live_events = STATE_DIR / "harness_events.jsonl"
+        if live_events.exists() and live_events.stat().st_size > 0:
+            target_events = snapshot_dir / f"harness_events_{safe_id}.jsonl"
+            shutil.copy2(live_events, target_events)
+
+        live_review = PROJECT_ROOT / ".ai-review-log.jsonl"
+        if live_review.exists() and live_review.stat().st_size > 0:
+            target_review = snapshot_dir / f"ai_review_log_{safe_id}.jsonl"
+            shutil.copy2(live_review, target_review)
+    except Exception as e:
+        print(f"[SESSION] Live log snapshot warning: {e}")
 
 
 def load_hot_tier(ledger_path: Path = LEDGER_FILE, n: int = 3) -> list[dict]:
@@ -916,18 +933,58 @@ def main() -> None:
         maybe_run_wiki_lint()
 
 
+def _drop_session_checkpoint_stash(session_id: str) -> None:
+    """Drop session-start AUTO checkpoint stash on clean close (T1-I-08)."""
+    try:
+        res = subprocess.run(["git", "stash", "list"], capture_output=True, text=True, timeout=10)
+        if res.returncode == 0 and res.stdout:
+            prefix = session_id[:12] if len(session_id) >= 12 else session_id
+            for line in res.stdout.splitlines():
+                if f"AUTO: session-start checkpoint [{prefix}]" in line or f"AUTO: session-start checkpoint [{session_id}]" in line:
+                    stash_ref = line.split(":")[0].strip()
+                    subprocess.run(["git", "stash", "drop", stash_ref], capture_output=True, text=True, timeout=10)
+                    print(f"[SESSION] Clean close: dropped session checkpoint stash ({stash_ref})")
+                    break
+    except Exception:
+        pass
+
+
 def _create_session_checkpoint(session_id: str) -> None:
     """Create a recoverable git stash at session start. Non-fatal if stash fails."""
     if not (Path.cwd() / ".git").exists():
         return
+
+    # Check if working directory is dirty
     try:
+        status_res = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10
+        )
+        if status_res.returncode != 0 or not status_res.stdout.strip():
+            return  # Clean working tree, nothing to stash
+    except Exception:
+        return
+
+    # Interactive TTY prompt (HIB-ENV-02)
+    if sys.stdin and sys.stdin.isatty():
+        try:
+            print("Uncommitted changes detected. Create session-start recovery stash? [Y/n]: ", end="", flush=True)
+            response = sys.stdin.readline().strip().lower()
+            if response not in ("", "y", "yes"):
+                print("[SESSION] Session checkpoint stash skipped by operator confirmation.")
+                return
+        except Exception:
+            pass
+
+    try:
+        prefix = session_id[:12] if len(session_id) >= 12 else session_id
         result = subprocess.run(
             ["git", "stash", "push", "--include-untracked",
-             "-m", f"AUTO: session-start checkpoint [{session_id[:12]}]"],
+             "-m", f"AUTO: session-start checkpoint [{prefix}]"],
             capture_output=True, text=True, timeout=30
         )
         if result.returncode == 0 and "No local changes" not in result.stdout:
-            print(f"[SESSION] Checkpoint created: git stash (session {session_id[:12]})")
+            print(f"[SESSION] Checkpoint created: git stash (session {prefix})")
     except Exception:
         pass  # Non-fatal — checkpoint is a safety net, not a requirement
 

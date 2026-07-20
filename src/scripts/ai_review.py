@@ -1820,21 +1820,31 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     diff_lines = diff.count("\n")
     max_lines = config.get("max_diff_lines", MAX_DIFF_LINES)
     if diff_lines > max_lines:
-        print(
-            f"⚠️  AI review skipped: diff too large ({diff_lines} lines > {max_lines} max)."
-        )
+        msg = f"diff too large ({diff_lines} lines > {max_lines} max)"
+        print(f"⚠️  AI review skipped: {msg}.")
         print("   Review this commit manually.")
         _log_gate_skipped("DIFF_TOO_LARGE_FAILOPEN", diff)
+        _persist_verdict(fail_open_reason=msg)
+        log_harness_event({
+            "event_type": "large_diff_fail_open",
+            "severity": "WARNING",
+            "payload": {"diff_lines": diff_lines, "max_lines": max_lines}
+        })
         return 0
 
     diff_chars = len(diff)
     max_chars = config.get("max_diff_chars", MAX_DIFF_CHARS)
     if diff_chars > max_chars:
-        print(
-            f"⚠️  AI review skipped: diff too large ({diff_chars:,} chars > {max_chars:,} max)."
-        )
+        msg = f"diff too large ({diff_chars:,} chars > {max_chars:,} max)"
+        print(f"⚠️  AI review skipped: {msg}.")
         print("   Review this commit manually.")
         _log_gate_skipped("DIFF_TOO_LARGE_FAILOPEN", diff)
+        _persist_verdict(fail_open_reason=msg)
+        log_harness_event({
+            "event_type": "large_diff_fail_open",
+            "severity": "WARNING",
+            "payload": {"diff_chars": diff_chars, "max_chars": max_chars}
+        })
         return 0
 
     # Get commit message, PageRank repo map, and ADR context

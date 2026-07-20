@@ -1,3 +1,5 @@
+
+
 # Decisions Log Archive
 
 ## Session 2 (Outer Loop)
@@ -192,3 +194,18 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Decision**: Removed model and cost tier tracking logic that was originally added in commit 76283ca.
 - **Context**: An audit revealed that the core input (driving-agent model via AGENT_MODEL) is undiscoverable for both Claude Code and Gemini CLI sessions. Furthermore, the downstream consumption of model and cost_tier data was zero (harness_health.py, distill_dream.py, state_persistence.py, and harness_utils.py do not read it).
 - **Consequence**: The feature was removed rather than patched to keep the harness lightweight. The model_tiers section was removed from .agent/config.yaml, and related lookup logic was stripped from init_session.py and state file schemas.
+## 2026-05-30: Automated Outer Loop Spec Gating & BDD Governance (v1.2.0)
+- **Decision**: Implemented automated spec quality gating (`check_spec.py`) enforcing BDD specifications structures, Gherkin word boundaries, lenient assumptions presence, and adversarial LLM quality checks (soft/hard gates). Consolidated shared path setups, session locks, and Windows UTF-8 stream wrapping into `src/scripts/harness_utils.py` and updated `init_session.py` to prevent redundant wrapping.
+- **Context**: BDD specifications lacked structured quality gating, while multiple bootstrap utilities duplicated stdout/stderr stream wrapping logic, causing double-wrapping crashes under Windows subprocesses.
+- **Consequence**: All 26/26 E2E scenarios and 154 unit tests pass successfully, delivering robust and automated spec governance.
+
+## 2026-05-30: Hardened Outer Loop Lifecycle Gating & Backlog Scaffolding (v1.3.0)
+- **Decision**: Designed the blueprints for Sprint 1 of the v1.3.0 milestone incorporating ten major multi-persona hardening invariants (exempting merges, standard library traceability, schema creep gating, double-anchored commit messages, CI/offline warnings, PM checklist backups, XML sanitization, C4 decoupled providers, isolated E2E sandboxes, terminal box cards).
+- **Context**: Rigorous security, developer ergonomics, and pipeline integration must be achieved simultaneously to prevent friction from causing hook circumvention.
+- **Consequence**: Delivers robust, enterprise-grade traceability and gating checks with zero developer friction and extremely high reliability.
+
+## 2026-06-02: Applied Consolidated Backlog and Roadmap Updates
+- **Decision**: Applied the consolidated June 2026 backlog updates (Sprint 0, T1-B, T1-G, T1-L, T1-M, and T1-N items) to `FRAMEWORK_BACKLOG.md` and the milestone pre-sprint gate/strategic context additions to `FRAMEWORK_ROADMAP.md`.
+- **Context**: Keeping documentation in sync with consolidated research findings and plan refinements is necessary before starting Sprint 1 implementation.
+- **Consequence**: Ground truth documentation is updated for developers and agents. All 184 tests pass.
+
