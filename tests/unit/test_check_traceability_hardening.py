@@ -147,6 +147,8 @@ def test_merge_trace_gate_clean_branch_passes():
 def test_merge_trace_gate_blocks_without_ack(capsys):
     """Verify --check-merge-trace blocks and outputs exact recovery command when --no-trace commits exist."""
     with unittest.mock.patch("subprocess.run") as mock_run, \
+         unittest.mock.patch("check_traceability.extract_commit_trailers", return_value={}), \
+         unittest.mock.patch("check_traceability._get_session_ledger_attribution", return_value={}), \
          unittest.mock.patch("sys.argv", ["check_traceability.py", "--check-merge-trace"]):
         mock_run.return_value.stdout = "a1b2c3d feat: --no-trace Quick bug fix\n"
         mock_run.return_value.returncode = 0
@@ -192,7 +194,7 @@ def test_merge_trace_gate_ledger_fallback_attribution(tmp_path):
 
 
 def test_per_commit_merge_commit_exemption_regression():
-    """Verify per-commit path exits 0 cleanly for merge commit messages (starting with 'Merge ')." """
+    """Verify per-commit path exits 0 cleanly for merge commit messages (starting with 'Merge ')."""
     msg = "Merge branch 'feature/v1.4.10' into main"
     with unittest.mock.patch("check_traceability.is_root_commit", return_value=False), \
          unittest.mock.patch("check_traceability.get_commit_message", return_value=msg), \

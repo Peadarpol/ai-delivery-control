@@ -26,6 +26,7 @@ sys.path.insert(0, str(script_dir))
 sys.path.insert(0, str(script_dir.parent.parent / "src" / "scripts"))
 sys.path.insert(0, str(script_dir.parent.parent))
 from audit_logger import log_action
+from harness_utils import get_harness_config
 
 def get_git_dir() -> Path:
     """Run git rev-parse --git-dir to resolve the .git folder path."""
@@ -158,7 +159,7 @@ def _get_session_ledger_attribution(commit_sha: str) -> dict[str, Any]:
                 continue
             entry = json.loads(line)
             action = entry.get("action", "")
-            if action.startswith("[COMMIT]:") and commit_sha[:7] in action:
+            if action.startswith("[COMMIT]:") and commit_sha[:12] in action:
                 return {"session_id": entry.get("session_id"), "agent": entry.get("agent")}
     except Exception:
         pass
@@ -221,7 +222,6 @@ def main():
     args = parser.parse_args()
 
     if args.check_merge_trace:
-        from harness_utils import get_harness_config
         base_branch = args.base_branch or get_harness_config("acceptance_gate", "base_branch")
         ok = check_branch_no_trace_commits(base_branch=base_branch, ack_reason=args.ack_no_trace)
         sys.exit(0 if ok else 1)
