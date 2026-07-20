@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 import uuid
@@ -348,8 +349,28 @@ def infer_and_close_previous_session() -> tuple[str | None, str | None]:
 
         if outcome == "success":
             _drop_session_checkpoint_stash(prev_id)
+            _snapshot_live_logs(prev_id)
 
         return outcome, note
+
+
+def _snapshot_live_logs(session_id: str) -> None:
+    """Snapshot untracked live logs (.ai-review-log.jsonl and harness_events.jsonl) on clean session close (HIB-063)."""
+    try:
+        snapshot_dir = STATE_DIR / "snapshots"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        live_events = STATE_DIR / "harness_events.jsonl"
+        if live_events.exists() and live_events.stat().st_size > 0:
+            target_events = snapshot_dir / "harness_events_snapshot.jsonl"
+            shutil.copy2(live_events, target_events)
+
+        live_review = PROJECT_ROOT / ".ai-review-log.jsonl"
+        if live_review.exists() and live_review.stat().st_size > 0:
+            target_review = snapshot_dir / "ai_review_log_snapshot.jsonl"
+            shutil.copy2(live_review, target_review)
+    except Exception as e:
+        print(f"[SESSION] Live log snapshot warning: {e}")
 
 
 def load_hot_tier(ledger_path: Path = LEDGER_FILE, n: int = 3) -> list[dict]:
