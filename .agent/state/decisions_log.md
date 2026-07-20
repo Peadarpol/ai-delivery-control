@@ -1,5 +1,11 @@
 # Decisions Log
 
+## 2026-07-20: Release v1.4.10 — Governance Hardening Implementation
+
+- **Decision**: Delivered Release v1.4.10 Governance Hardening across 6 core components (`T1-E-04`, `T1-L-21`, `T1-K-12`, `T1-K-13`, `HIB-ENV-02`, `T1-I-08`, `HIB-059`, `T1-K-15`, `AT-04`).
+- **Context**: Spec `SPEC-v1.4.10-governance-hardening.md` passed Pass 1 static structural checks and dual adversarial reviews (15 remediations applied). Approved by human operator on 2026-07-20.
+- **Consequence**: Unified config.yaml loading across consumers via `get_harness_config()`; added dynamic `high_risk_patterns.override_defaults` with fail-closed protection; added root commit exemption and merge-gate `--ack-no-trace` confirmation aggregator; added interactive TTY prompt for session start stashing and clean stash drop on close; implemented `PRAGMA table_info` SQLite schema drift auto-migration; created `check_exception_standards.py` wrapper script. All 97 unit tests passing (100%).
+
 ## 2026-07-18: Meta-Audit of AT-Series and AI Review Factual Claim Verification Gap
 
 - **Decision**: Documented the AI review gate's limitation regarding factual verification of citations/contents in markdown deliverables (AT-series, specifications, plans) following a meta-audit that identified load-bearing errors across five of five AT analysis documents.

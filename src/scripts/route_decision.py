@@ -9,6 +9,9 @@ import fnmatch
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
+
+from harness_utils import get_harness_config
+
 try:
     from pydantic import BaseModel, Field
     _pydantic_installed = True
@@ -111,7 +114,7 @@ def _get_active_ai_review() -> Any:
                 def __getattr__(self, key):
                     return self.globs.get(key)
             return ModuleWrapper(frame_info.frame.f_globals)
-    from harness_utils import get_harness_config
+    return None
 
 
 def _load_adr_capability_mappings_from_config() -> Dict[str, str]:
