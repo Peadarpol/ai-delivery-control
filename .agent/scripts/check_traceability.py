@@ -200,8 +200,12 @@ def main():
         
     specs_path, mode = get_config_options()
     
-    # Check for SPEC ID, T1, HIB, BUG
-    spec_matches = re.findall(r"\b((?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b", commit_msg, re.IGNORECASE)
+    # Check for SPEC ID (versioned SPEC-vX.Y.Z-name or legacy numeric SPEC-001), T1, HIB, BUG
+    spec_matches = re.findall(
+        r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
+        commit_msg,
+        re.IGNORECASE,
+    )
     
     # Bypass check (--no-trace)
     bypass_match = re.search(r"--no-trace\s+(.+)", commit_msg, re.IGNORECASE)

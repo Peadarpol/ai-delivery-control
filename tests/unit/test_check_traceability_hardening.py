@@ -75,3 +75,55 @@ def test_check_branch_no_trace_commits_aggregator():
         mock_log.assert_called_once()
         payload = mock_log.call_args[0][0]["payload"]
         assert len(payload["reason"]) == 250
+
+
+def test_spec_regex_matches_versioned_spec_id():
+    """Verify spec-ID regex captures full versioned spec ID (e.g. SPEC-v1.4.10-governance-hardening)."""
+    import re
+    msg = "[SPEC-v1.4.10-governance-hardening] fix: test commit"
+    matches = re.findall(
+        r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
+        msg,
+        re.IGNORECASE,
+    )
+    assert matches == ["SPEC-v1.4.10-governance-hardening"]
+
+
+def test_spec_regex_matches_legacy_numeric_spec_id():
+    """Verify spec-ID regex captures legacy numeric spec ID (e.g. SPEC-001)."""
+    import re
+    msg = "[SPEC-001] fix: legacy spec commit"
+    matches = re.findall(
+        r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
+        msg,
+        re.IGNORECASE,
+    )
+    assert matches == ["SPEC-001"]
+
+
+def test_spec_regex_resolves_correct_spec_file_path():
+    """Verify check_traceability resolves full spec file path for SPEC-v1.4.10-governance-hardening."""
+    msg = "[SPEC-v1.4.10-governance-hardening] test commit"
+    with unittest.mock.patch("check_traceability.is_root_commit", return_value=False), \
+         unittest.mock.patch("check_traceability.get_commit_message", return_value=msg), \
+         unittest.mock.patch("check_traceability.is_doc_or_trivial_diff", return_value=False), \
+         unittest.mock.patch("check_traceability.get_config_options", return_value=(PROJECT_ROOT / "docs" / "planning" / "specs", "strict")), \
+         unittest.mock.patch("sys.argv", ["check_traceability.py"]):
+
+        # Main should exit 0 because docs/planning/specs/SPEC-v1.4.10-governance-hardening.md exists and is APPROVED
+        try:
+            check_traceability.main()
+        except SystemExit as e:
+            assert e.code == 0
+
+
+def test_spec_regex_no_match_on_unrelated_fid_reference():
+    """Verify FID-1 or unrelated tags do not match spec_matches regex."""
+    import re
+    msg = "fix(gate): fix issue (FID-1)"
+    matches = re.findall(
+        r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
+        msg,
+        re.IGNORECASE,
+    )
+    assert matches == []
