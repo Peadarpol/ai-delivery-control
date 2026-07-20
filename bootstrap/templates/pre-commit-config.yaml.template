@@ -105,6 +105,15 @@ repos:
         stages: [pre-push]
         verbose: true
 
+      - id: merge-trace-gate
+        name: "Merge-Gate --no-trace Aggregator"
+        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_traceability.py --check-merge-trace
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+        verbose: true
+
   - repo: local
     hooks:
       - id: governance-audit

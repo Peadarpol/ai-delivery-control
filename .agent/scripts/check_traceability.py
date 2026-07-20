@@ -4,11 +4,14 @@ Requirement-to-Commit Traceability Gate (T1-L-04)
 Ensures all non-trivial commits trace back to approved specifications.
 """
 
-import sys
+import argparse
+import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
+from typing import Any
 
 # Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
 if __name__ == "__main__":
@@ -144,6 +147,24 @@ def extract_commit_trailers(commit_sha: str | None = None) -> dict[str, str]:
     return trailers
 
 
+def _get_session_ledger_attribution(commit_sha: str) -> dict[str, Any]:
+    """Fallback attribution lookup via session_ledger.jsonl when commit trailers are absent."""
+    ledger_path = Path(".agent/state/session_ledger.jsonl")
+    if not ledger_path.exists():
+        return {}
+    try:
+        for line in ledger_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            action = entry.get("action", "")
+            if action.startswith("[COMMIT]:") and commit_sha[:7] in action:
+                return {"session_id": entry.get("session_id"), "agent": entry.get("agent")}
+    except Exception:
+        pass
+    return {}
+
+
 def check_branch_no_trace_commits(base_branch: str = "main", ack_reason: str | None = None) -> bool:
     """Check if branch contains --no-trace commits and require --ack-no-trace parameter."""
     try:
@@ -155,7 +176,18 @@ def check_branch_no_trace_commits(base_branch: str = "main", ack_reason: str | N
 
         if not ack_reason:
             print("❌ [TRACEABILITY MERGE GATE] Merge contains --no-trace commits. Explicit confirmation required.", file=sys.stderr)
-            print("   Re-run merge/verification with --ack-no-trace \"<reason>\"", file=sys.stderr)
+            print("   Re-run: python .agent/scripts/check_traceability.py --check-merge-trace --ack-no-trace \"<reason>\"", file=sys.stderr)
+            print("   Then push again.", file=sys.stderr)
+            for c in no_trace_commits:
+                sha = c.split()[0]
+                trailers = extract_commit_trailers(sha)
+                session_id = trailers.get("Session-Id")
+                signer = trailers.get("Signed-by")
+                if not session_id or not signer:
+                    ledger_attr = _get_session_ledger_attribution(sha)
+                    session_id = session_id or ledger_attr.get("session_id", "unknown-session")
+                    signer = signer or ledger_attr.get("agent", "unknown-signer")
+                print(f"     - {c} (session: {session_id}, signed_by: {signer})", file=sys.stderr)
             return False
 
         # Sanitize and truncate reason to 250 chars
@@ -178,11 +210,27 @@ def check_branch_no_trace_commits(base_branch: str = "main", ack_reason: str | N
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Requirement Traceability Gate")
+    parser.add_argument("commit_msg_file", nargs="?", help="Path to COMMIT_EDITMSG (commit-msg stage)")
+    parser.add_argument("--check-merge-trace", action="store_true",
+                        help="Run the merge-gate --no-trace aggregator instead of the per-commit check (pre-push stage)")
+    parser.add_argument("--ack-no-trace", type=str, default=None, metavar="REASON",
+                        help="Acknowledge and permit a merge containing --no-trace commits, with a required reason")
+    parser.add_argument("--base-branch", type=str, default=None,
+                        help="Override the base branch for the merge check (default: config acceptance_gate.base_branch, fallback 'main')")
+    args = parser.parse_args()
+
+    if args.check_merge_trace:
+        from harness_utils import get_harness_config
+        base_branch = args.base_branch or get_harness_config("acceptance_gate", "base_branch")
+        ok = check_branch_no_trace_commits(base_branch=base_branch, ack_reason=args.ack_no_trace)
+        sys.exit(0 if ok else 1)
+
     if is_root_commit():
         print("ℹ️  [TRACEABILITY] Root commit exemption active (repo commit count is 0).")
         sys.exit(0)
 
-    msg_path = sys.argv[1] if len(sys.argv) > 1 else None
+    msg_path = args.commit_msg_file
     try:
         commit_msg = get_commit_message(msg_path)
     except Exception as e:
