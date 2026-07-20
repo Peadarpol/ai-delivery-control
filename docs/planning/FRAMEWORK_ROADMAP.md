@@ -503,7 +503,7 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
-### v1.4.10 — Governance Hardening ✅ SHIPPED (2026-07-20)
+### v1.4.10 — Governance Hardening ✅ SHIPPED (2026-07-20, tag `v1.4.10`)
 
 **Goal**: Hardened requirement traceability and merge governance, completed unified configuration parser rollout across all consumers, established append-only decisions log discipline with O(1) backdating guard, fixed SQLite schema drift, and added live log snapshotting.
 
@@ -812,7 +812,7 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
+**Active milestone**: v1.4.11 (v1.4.10 shipped 2026-07-20)
 **Sprint tracking**: `.agent/state/active_context.md`
 
 **v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 📋
@@ -948,7 +948,7 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
+**Active milestone**: v1.4.11 (v1.4.10 shipped 2026-07-20)
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
 **v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
