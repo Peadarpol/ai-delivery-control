@@ -97,7 +97,91 @@ Reason: {reason}
 """
     print(card, file=sys.stderr)
 
+def is_root_commit() -> bool:
+    """Check if total repository commit count is zero (root commit exemption)."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-list", "--all", "--count"],
+            capture_output=True,
+            text=True,
+            check=True,
+            shell=False
+        )
+        return res.stdout.strip() == "0"
+    except Exception:
+        return False
+
+
+def get_worktree_root() -> Path:
+    """Resolve the git top-level directory for worktree anchoring."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+            shell=False
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip()).resolve()
+    except Exception:
+        pass
+    return Path.cwd()
+
+
+def extract_commit_trailers(commit_sha: str | None = None) -> dict[str, str]:
+    """Extract trailers from commit message or git log if SHA provided."""
+    trailers = {}
+    try:
+        cmd = ["git", "log", "-1", "--format=%(trailers:only,unfold)", commit_sha or "HEAD"]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        for line in res.stdout.splitlines():
+            if ":" in line:
+                k, v = line.split(":", 1)
+                trailers[k.strip()] = v.strip()
+    except Exception:
+        pass
+    return trailers
+
+
+def check_branch_no_trace_commits(base_branch: str = "main", ack_reason: str | None = None) -> bool:
+    """Check if branch contains --no-trace commits and require --ack-no-trace parameter."""
+    try:
+        cmd = ["git", "log", f"{base_branch}..HEAD", "--grep=--no-trace", "--oneline"]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        no_trace_commits = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+        if not no_trace_commits:
+            return True  # Clean
+
+        if not ack_reason:
+            print("❌ [TRACEABILITY MERGE GATE] Merge contains --no-trace commits. Explicit confirmation required.", file=sys.stderr)
+            print("   Re-run merge/verification with --ack-no-trace \"<reason>\"", file=sys.stderr)
+            return False
+
+        # Sanitize and truncate reason to 250 chars
+        sanitized_reason = ack_reason.strip()[:250]
+        from harness_utils import log_harness_event
+        log_harness_event({
+            "event_type": "ack_no_trace_merge",
+            "severity": "WARNING",
+            "payload": {
+                "reason": sanitized_reason,
+                "no_trace_count": len(no_trace_commits),
+                "no_trace_commits": no_trace_commits,
+            }
+        })
+        print(f"⚠️ [TRACEABILITY MERGE GATE] Merging branch with {len(no_trace_commits)} --no-trace commits acknowledged: '{sanitized_reason}'")
+        return True
+    except Exception as e:
+        print(f"⚠️ [TRACEABILITY MERGE GATE] Warning checking branch commits: {e}")
+        return True
+
+
 def main():
+    if is_root_commit():
+        print("ℹ️  [TRACEABILITY] Root commit exemption active (repo commit count is 0).")
+        sys.exit(0)
+
     msg_path = sys.argv[1] if len(sys.argv) > 1 else None
     try:
         commit_msg = get_commit_message(msg_path)
