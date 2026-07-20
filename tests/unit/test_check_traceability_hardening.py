@@ -4,6 +4,7 @@ Unit tests for check_traceability hardening (T1-K-12, T1-K-13, HIB-061, AT-06).
 
 from __future__ import annotations
 
+import re
 import sys
 import unittest.mock
 from pathlib import Path
@@ -79,7 +80,6 @@ def test_check_branch_no_trace_commits_aggregator():
 
 def test_spec_regex_matches_versioned_spec_id():
     """Verify spec-ID regex captures full versioned spec ID (e.g. SPEC-v1.4.10-governance-hardening)."""
-    import re
     msg = "[SPEC-v1.4.10-governance-hardening] fix: test commit"
     matches = re.findall(
         r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
@@ -91,7 +91,6 @@ def test_spec_regex_matches_versioned_spec_id():
 
 def test_spec_regex_matches_legacy_numeric_spec_id():
     """Verify spec-ID regex captures legacy numeric spec ID (e.g. SPEC-001)."""
-    import re
     msg = "[SPEC-001] fix: legacy spec commit"
     matches = re.findall(
         r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
@@ -101,16 +100,20 @@ def test_spec_regex_matches_legacy_numeric_spec_id():
     assert matches == ["SPEC-001"]
 
 
-def test_spec_regex_resolves_correct_spec_file_path():
+def test_spec_regex_resolves_correct_spec_file_path(tmp_path):
     """Verify check_traceability resolves full spec file path for SPEC-v1.4.10-governance-hardening."""
+    specs_dir = tmp_path / "specs"
+    specs_dir.mkdir(parents=True)
+    spec_file = specs_dir / "SPEC-v1.4.10-governance-hardening.md"
+    spec_file.write_text("**Status**: APPROVED\n", encoding="utf-8")
+
     msg = "[SPEC-v1.4.10-governance-hardening] test commit"
     with unittest.mock.patch("check_traceability.is_root_commit", return_value=False), \
          unittest.mock.patch("check_traceability.get_commit_message", return_value=msg), \
          unittest.mock.patch("check_traceability.is_doc_or_trivial_diff", return_value=False), \
-         unittest.mock.patch("check_traceability.get_config_options", return_value=(PROJECT_ROOT / "docs" / "planning" / "specs", "strict")), \
+         unittest.mock.patch("check_traceability.get_config_options", return_value=(specs_dir, "strict")), \
          unittest.mock.patch("sys.argv", ["check_traceability.py"]):
 
-        # Main should exit 0 because docs/planning/specs/SPEC-v1.4.10-governance-hardening.md exists and is APPROVED
         try:
             check_traceability.main()
         except SystemExit as e:
@@ -119,7 +122,6 @@ def test_spec_regex_resolves_correct_spec_file_path():
 
 def test_spec_regex_no_match_on_unrelated_fid_reference():
     """Verify FID-1 or unrelated tags do not match spec_matches regex."""
-    import re
     msg = "fix(gate): fix issue (FID-1)"
     matches = re.findall(
         r"\b(SPEC-v[\d.]+(?:-[\w-]+)?|(?:SPEC|HIB|BUG)-\d+|T1-\w+-\d+)\b",
