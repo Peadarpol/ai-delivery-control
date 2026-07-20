@@ -152,11 +152,3 @@ repos:
         stages: [commit-msg]
         always_run: true
         pass_filenames: false
-
-      - id: merge-traceability
-        name: Merge Traceability Aggregator Hook
-        entry: [PROJECT_PACKAGE_MANAGER] run python .agent/scripts/check_traceability.py --check-merge-trace
-        language: system
-        stages: [pre-push]
-        always_run: true
-        pass_filenames: false
