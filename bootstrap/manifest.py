@@ -22,6 +22,7 @@ FRAMEWORK_OWNED = [
     "src/scripts/context_loader.py",
     "src/scripts/route_decision.py",
     "src/scripts/rebuttal.py",
+    "src/scripts/check_exception_standards.py",
 ]
 
 PROJECT_OWNED = [
