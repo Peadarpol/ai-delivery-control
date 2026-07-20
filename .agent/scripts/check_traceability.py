@@ -309,8 +309,12 @@ def main():
         if spec_id.startswith("SPEC-"):
             spec_file = specs_path / f"{spec_id}.md"
             if not spec_file.exists():
-                print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
-                sys.exit(1)
+                archive_file = specs_path / "archive" / f"{spec_id}.md"
+                if archive_file.exists():
+                    spec_file = archive_file
+                else:
+                    print_diagnostic_card(f"Referenced spec file does not exist: {spec_file}")
+                    sys.exit(1)
                 
             # Parse status
             spec_content = spec_file.read_text(encoding="utf-8")

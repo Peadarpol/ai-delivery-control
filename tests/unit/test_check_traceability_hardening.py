@@ -121,6 +121,27 @@ def test_spec_regex_resolves_correct_spec_file_path(tmp_path):
             assert e.code == 0
 
 
+def test_spec_regex_resolves_archived_spec_file_path(tmp_path):
+    """Verify check_traceability resolves archived spec file in specs/archive/ subfolder."""
+    specs_dir = tmp_path / "specs"
+    archive_dir = specs_dir / "archive"
+    archive_dir.mkdir(parents=True)
+    spec_file = archive_dir / "SPEC-v1.4.10-governance-hardening.md"
+    spec_file.write_text("**Status**: APPROVED\n", encoding="utf-8")
+
+    msg = "[SPEC-v1.4.10-governance-hardening] test commit"
+    with unittest.mock.patch("check_traceability.is_root_commit", return_value=False), \
+         unittest.mock.patch("check_traceability.get_commit_message", return_value=msg), \
+         unittest.mock.patch("check_traceability.is_doc_or_trivial_diff", return_value=False), \
+         unittest.mock.patch("check_traceability.get_config_options", return_value=(specs_dir, "strict")), \
+         unittest.mock.patch("sys.argv", ["check_traceability.py"]):
+
+        try:
+            check_traceability.main()
+        except SystemExit as e:
+            assert e.code == 0
+
+
 def test_spec_regex_no_match_on_unrelated_fid_reference():
     """Verify FID-1 or unrelated tags do not match spec_matches regex."""
     msg = "fix(gate): fix issue (FID-1)"

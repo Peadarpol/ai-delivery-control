@@ -305,7 +305,7 @@ This text is missing the Gherkin keywords.
 def test_pass1_smoke_all_three_specs():
     """Live smoke test against real spec files in the repository."""
     specs = [
-        "docs/planning/specs/SPEC-v1.4.10-governance-hardening.md",
+        "docs/planning/specs/archive/SPEC-v1.4.10-governance-hardening.md",
         "docs/planning/specs/archive/SPEC-v1.4.9.1-first-commit-hotfix.md",
         "docs/planning/specs/SPEC-v1.4.11-installer-onboarding.md",
     ]
