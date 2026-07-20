@@ -46,17 +46,9 @@ def resolve_spec_id(arg_val: str | None = None) -> str:
     raise ValueError("SPEC_ID could not be resolved from command line arguments, environment, or git branch.")
 
 def get_specs_path() -> Path:
-    """Read specs_path from config.yaml, falling back to default."""
-    specs_path = "docs/planning/specs/"
-    config_path = Path(".agent/config.yaml")
-    if config_path.exists():
-        try:
-            content = config_path.read_text(encoding="utf-8")
-            m = re.search(r"^\s*specs_path:\s*(.+)", content, re.MULTILINE)
-            if m:
-                specs_path = m.group(1).strip().strip("\"'")
-        except Exception:
-            pass
+    """Read specs_path from config.yaml using get_harness_config."""
+    from harness_utils import get_harness_config
+    specs_path = get_harness_config("spec_gate", "specs_path")
     return Path(specs_path)
 
 def parse_gherkin_scenarios(content: str) -> tuple[list[str], bool]:

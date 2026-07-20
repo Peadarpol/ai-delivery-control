@@ -362,3 +362,9 @@ def get_harness_config(section: str, key: str | None = None, default: Any = None
             return DEFAULTS[section].get(key, default)
             
     return default
+
+
+def _reset_config_cache() -> None:
+    """Clear the global harness config cache (useful in unit tests)."""
+    global _CONFIG_CACHE
+    _CONFIG_CACHE.clear()

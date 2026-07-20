@@ -111,14 +111,11 @@ def _get_active_ai_review() -> Any:
                 def __getattr__(self, key):
                     return self.globs.get(key)
             return ModuleWrapper(frame_info.frame.f_globals)
-    return sys.modules.get("src.scripts.ai_review") or sys.modules.get("ai_review")
+    from harness_utils import get_harness_config
 
 
-def _load_adr_capability_mappings() -> Dict[str, str]:
-    """Read adr_capability_mappings from .agent/config.yaml.
-
-    Uses simple indentation and prefix matching to avoid a YAML dependency.
-    """
+def _load_adr_capability_mappings_from_config() -> Dict[str, str]:
+    """Load ADR domain -> capability name mapping from architecture_checks.adr_capability_mappings in .agent/config.yaml."""
     ai_rev = _get_active_ai_review()
     if ai_rev is not None:
         func = getattr(ai_rev, "_load_adr_capability_mappings", None)
@@ -126,54 +123,9 @@ def _load_adr_capability_mappings() -> Dict[str, str]:
             return func()
 
     project_root = getattr(ai_rev, "PROJECT_ROOT", PROJECT_ROOT) if ai_rev is not None else PROJECT_ROOT
-    mappings = {}
     config_path = project_root / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return mappings
-
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        in_arch_checks = False
-        in_mappings = False
-        
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-                
-            # Detect section transitions
-            if stripped == "architecture_checks:":
-                in_arch_checks = True
-                in_mappings = False
-                continue
-                
-            if in_arch_checks:
-                indent = len(line) - len(line.lstrip())
-                
-                if stripped == "adr_capability_mappings:":
-                    in_mappings = True
-                    continue
-                    
-                if in_mappings:
-                    if ":" in stripped:
-                        key_part, val_part = stripped.split(":", 1)
-                        # Remove comment if any (e.g. key: value # comment)
-                        val_part = val_part.split("#", 1)[0]
-                        key = key_part.strip().strip("\"'")
-                        val = val_part.strip().strip("\"'")
-                        if key and val:
-                            mappings[key] = val
-                    else:
-                        if indent == 0:
-                            in_arch_checks = False
-                            in_mappings = False
-                else:
-                    if indent == 0:
-                        in_arch_checks = False
-    except Exception:
-        pass
-        
-    return mappings
+    val = get_harness_config("architecture_checks", "adr_capability_mappings", config_path=config_path)
+    return val if isinstance(val, dict) else {}
 
 
 HIGH_RISK_PATTERNS = {
@@ -198,13 +150,7 @@ HIGH_RISK_PATTERNS = {
 
 
 def _load_layer_paths_from_config() -> Dict[str, str]:
-    """Load layer name → path from architecture.layers in .agent/config.yaml.
-
-    Returns a dict mapping each layer name to its path prefix, e.g.
-    {"domain": "src/domain", "application": "src/application", ...}.
-    Returns an empty dict when the config is absent, the architecture.layers
-    section is missing, or all paths are unresolved install-time placeholders.
-    """
+    """Load layer name → path from architecture.layers in .agent/config.yaml."""
     ai_rev = _get_active_ai_review()
     if ai_rev is not None:
         func = getattr(ai_rev, "_load_layer_paths_from_config", None)
@@ -213,61 +159,24 @@ def _load_layer_paths_from_config() -> Dict[str, str]:
 
     project_root = getattr(ai_rev, "PROJECT_ROOT", PROJECT_ROOT) if ai_rev is not None else PROJECT_ROOT
     config_path = project_root / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return {}
-
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        layers: Dict[str, str] = {}
-        in_architecture = False
-        in_layers = False
-        current_name: Optional[str] = None
-
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-
-            indent = len(line) - len(line.lstrip())
-
-            if stripped == "architecture:":
-                in_architecture = True
-                in_layers = False
-                current_name = None
-                continue
-
-            if in_architecture:
-                if indent == 0:
-                    break  # Exited architecture: section
-
-                if stripped == "layers:":
-                    in_layers = True
-                    current_name = None
-                    continue
-
-                if in_layers:
-                    if indent <= 2 and not stripped.startswith("-"):
-                        in_layers = False
-                        continue
-
-                    if stripped.startswith("- name:"):
-                        current_name = stripped.split(":", 1)[1].strip().strip("\"'")
-                    elif stripped.startswith("path:") and current_name is not None:
-                        path_val = stripped.split(":", 1)[1].strip().strip("\"'")
-                        # Skip unresolved install-time placeholders like "[PROJECT_SRC_PATH]/domain"
-                        if path_val and not path_val.startswith("["):
-                            layers[current_name] = path_val
-
-        return layers
-    except Exception:
-        return {}
+    raw_layers = get_harness_config("architecture", "layers", config_path=config_path)
+    layers: Dict[str, str] = {}
+    if isinstance(raw_layers, list):
+        for item in raw_layers:
+            if isinstance(item, dict):
+                name = item.get("name")
+                path_val = item.get("path")
+                if name and path_val and not path_val.startswith("["):
+                    layers[name] = path_val
+    elif isinstance(raw_layers, dict):
+        for name, path_val in raw_layers.items():
+            if name and path_val and isinstance(path_val, str) and not path_val.startswith("["):
+                layers[name] = path_val
+    return layers
 
 
-def _load_high_risk_patterns() -> Dict[str, List[str]]:
-    """Load high_risk_patterns from .agent/config.yaml.
-
-    Uses simple line parsing to avoid PyYAML dependency.
-    """
+def _load_high_risk_patterns() -> Dict[str, Any]:
+    """Load high_risk_patterns from .agent/config.yaml."""
     ai_rev = _get_active_ai_review()
     if ai_rev is not None:
         func = getattr(ai_rev, "_load_high_risk_patterns", None)
@@ -275,58 +184,21 @@ def _load_high_risk_patterns() -> Dict[str, List[str]]:
             return func()
 
     project_root = getattr(ai_rev, "PROJECT_ROOT", PROJECT_ROOT) if ai_rev is not None else PROJECT_ROOT
-    config_patterns = {"paths": [], "filenames": [], "adr_domains": []}
     config_path = project_root / ".agent" / "config.yaml"
-    if not config_path.exists():
-        return config_patterns
+    raw_hrp = get_harness_config("architecture_checks", "high_risk_patterns", config_path=config_path)
 
-    try:
-        content = config_path.read_text(encoding="utf-8")
-        in_arch_checks = False
-        in_patterns = False
-        current_list = None
-        
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-                
-            # Transition triggers
-            if stripped == "architecture_checks:":
-                in_arch_checks = True
-                in_patterns = False
-                continue
-                
-            if in_arch_checks:
-                indent = len(line) - len(line.lstrip())
-                if indent == 0:
-                    in_arch_checks = False
-                    in_patterns = False
-                    continue
-                    
-                if stripped == "high_risk_patterns:":
-                    in_patterns = True
-                    continue
-                    
-                if in_patterns:
-                    if indent <= 2:  # Exited high_risk_patterns block
-                        if stripped != "high_risk_patterns:":
-                            in_patterns = False
-                            continue
-                            
-                    # Let's detect lists: paths:, filenames:, adr_domains:
-                    if stripped in ("paths:", "filenames:", "adr_domains:"):
-                        current_list = stripped[:-1]  # "paths", "filenames", or "adr_domains"
-                        continue
-                        
-                    # Parse list items like `- "item"` or `- item`
-                    if stripped.startswith("-") and current_list:
-                        item = stripped[1:].strip().strip("\"'")
-                        if item:
-                            config_patterns[current_list].append(item)
-    except Exception:
-        pass
-        
+    config_patterns: Dict[str, Any] = {
+        "override_defaults": False,
+        "paths": [],
+        "filenames": [],
+        "adr_domains": [],
+    }
+    if isinstance(raw_hrp, dict):
+        config_patterns["override_defaults"] = bool(raw_hrp.get("override_defaults", False))
+        for k in ("paths", "filenames", "adr_domains"):
+            items = raw_hrp.get(k, [])
+            if isinstance(items, list):
+                config_patterns[k] = [str(x) for x in items if x]
     return config_patterns
 
 
@@ -343,10 +215,20 @@ def classify_commit_risk(changed_files: List[str], adr_domains: List[str]) -> Tu
             return func(changed_files, adr_domains)
 
     cfg = _load_high_risk_patterns()
-    
-    paths = list(HIGH_RISK_PATTERNS["paths"]) + cfg.get("paths", [])
-    filenames = list(HIGH_RISK_PATTERNS["filenames"]) + cfg.get("filenames", [])
-    adr_domains_list = list(HIGH_RISK_PATTERNS["adr_domains"]) + cfg.get("adr_domains", [])
+    override_defaults = cfg.get("override_defaults", False)
+
+    if override_defaults:
+        paths = cfg.get("paths", [])
+        filenames = cfg.get("filenames", [])
+        adr_domains_list = cfg.get("adr_domains", [])
+        if not paths and not filenames and not adr_domains_list:
+            import logging
+            logging.critical("CRITICAL_WARNING_ZERO_HIGH_RISK_PATTERNS: override_defaults is true but high_risk_patterns is empty! Failing closed to elevated.")
+            return True, ["CRITICAL_WARNING_ZERO_HIGH_RISK_PATTERNS"]
+    else:
+        paths = list(HIGH_RISK_PATTERNS["paths"]) + cfg.get("paths", [])
+        filenames = list(HIGH_RISK_PATTERNS["filenames"]) + cfg.get("filenames", [])
+        adr_domains_list = list(HIGH_RISK_PATTERNS["adr_domains"]) + cfg.get("adr_domains", [])
     
     matched = []
     

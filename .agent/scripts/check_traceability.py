@@ -17,9 +17,10 @@ if __name__ == "__main__":
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-# Ensure imports can find .agent/scripts (audit_logger)
+# Ensure imports can find .agent/scripts (audit_logger) and src/scripts (harness_utils)
 script_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(script_dir))
+sys.path.insert(0, str(script_dir.parent.parent / "src" / "scripts"))
 sys.path.insert(0, str(script_dir.parent.parent))
 from audit_logger import log_action
 
@@ -50,23 +51,10 @@ def get_commit_message(msg_path_arg: str | None = None) -> str:
     return path.read_text(encoding="utf-8")
 
 def get_config_options() -> tuple[Path, str]:
-    """Read specs_path and outer_loop mode from config.yaml."""
-    specs_path = "docs/planning/specs/"
-    mode = "incremental"
-    config_path = Path(".agent/config.yaml")
-    if config_path.exists():
-        try:
-            content = config_path.read_text(encoding="utf-8")
-            # Parse specs_path
-            s_match = re.search(r"^\s*specs_path:\s*(.+)", content, re.MULTILINE)
-            if s_match:
-                specs_path = s_match.group(1).strip().strip("\"'")
-            # Parse mode
-            m_match = re.search(r"^\s*mode:\s*(.+)", content, re.MULTILINE)
-            if m_match:
-                mode = m_match.group(1).strip().strip("\"'")
-        except Exception:
-            pass
+    """Read specs_path and outer_loop mode using get_harness_config."""
+    from harness_utils import get_harness_config
+    specs_path = get_harness_config("traceability", "specs_path")
+    mode = get_harness_config("outer_loop", "mode")
     return Path(specs_path), mode
 
 def is_doc_or_trivial_diff() -> bool:

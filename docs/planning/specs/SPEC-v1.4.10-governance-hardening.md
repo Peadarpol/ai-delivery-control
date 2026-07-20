@@ -1,7 +1,8 @@
-# SPEC-v1.4.10-governance-hardening
+# Specification: SPEC-v1.4.10-governance-hardening
 
-**Status**: DRAFT  
-**Author**: Gemini (AI execution mode)  
+**Source Issue**: https://github.com/Peadarpol/ai-delivery-control/issues/1410
+**Date**: 2026-07-20
+**Author**: Gemini (AI execution mode)
 **Feeds into**: Release v1.4.10  
 **Tracked under**: `T1-K-12` / `T1-L-21` / `T1-K-13` / `T1-K-14` / `HIB-063` / `T1-L-20` / `HIB-ENV-02` / `T1-I-08` / `HIB-059` / `HIB-061` / `T1-E-04`
 
@@ -40,29 +41,53 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ## 4. Acceptance Criteria
 
-### Scenario 1: Risk classification override in config
+**Scenario 1: Risk classification override in config**
 * **Given** a target project layout with no Repository or Unit-of-Work classes (e.g. a simple script library)
 * **When** `high_risk_patterns` config overrides are specified in `.agent/config.yaml`
 * **Then** `route_decision.py` uses the customized config file list to compute `elevated` or `critical` reviews
 * **And** GymBase defaults are ignored if overridden.
 
-### Scenario 2: Fail-open audit reports correct taxonomy
+**Scenario 2: Fail-open audit reports correct taxonomy**
 * **Given** a git commit diff exceeding the maximum token capacity (e.g. 700KB)
 * **When** the pre-commit review gate runs
 * **Then** the gate exits cleanly but reports `verdict: FAIL_OPEN` (or `INCOMPLETE`) to the session ledger
 * **And** the commit metadata correctly logs the `large_diff_fail_open` event.
 
-### Scenario 3: Precondition skip advisory
+**Scenario 3: Precondition skip advisory**
 * **Given** a project running pre-commit check hooks where contextual files (such as exception standards tests) are absent
 * **When** the hook execution wrapper fires
 * **Then** the hook logs `verdict: SKIPPED-precondition` in `harness_events.jsonl`
 * **And** exits with code `0`.
 
-### Scenario 4: Config resolution precedence is consistent across consumers
+**Scenario 4: Config resolution precedence is consistent across consumers**
 * **Given** a config file where an unrelated top-level `mode: ignore` key exists above the `outer_loop: {mode: strict}` block
 * **When** `check_traceability.py`, `acceptance_hook.py`, and `check_spec.py` each resolve their mode
 * **Then** all three return `strict` via the shared `get_harness_config()` path
 * **And** no consumer falls back to its own regex parsing.
+
+**Scenario 5: Root-commit traceability exemption**
+* **Given** a newly initialized git repository containing zero total commits
+* **When** `check_traceability.py` evaluates the root commit message without any pre-existing spec ID
+* **Then** the `is_root_commit()` predicate confirms total repository commit count is zero (`git rev-list --all --count` returning `0`, preventing orphan branch bypasses)
+* **And** the gate exits cleanly with code `0`, allowing initial environment bootstrapping without a deadlock.
+
+**Scenario 6: Merge-gate `--no-trace` aggregator**
+* **Given** a local branch merge containing one or more commits utilizing the `--no-trace` override
+* **When** the pre-commit hook (evaluating `.git/MERGE_HEAD`) or pre-push hook fires
+* **Then** the merge is blocked and the gate outputs the commit SHAs, session IDs, and signers extracted from commit trailers or session ledger
+* **And** the merge proceeds only when re-invoked with explicit `--ack-no-trace "<reason>"` confirmation.
+
+**Scenario 7: Interactive stashing preflight confirmation (non-interactive path already delivered v1.4.9.1)**
+* **Given** an active uncommitted working tree state when `init_session.py` runs interactively (stdin is a TTY) and a `.git` directory is present
+* **When** session initialization executes `_create_session_checkpoint()`
+* **Then** the script prompts the operator for confirmation before running `git stash push`
+* **And** declines to stash if the operator does not confirm, logging a warning and retaining the dirty working tree instead.
+
+**Scenario 8: SQLite schema drift detection & auto-rebuild**
+* **Given** a session SQLite database where the table schema lacks a required column (e.g. `session_id`)
+* **When** `sync_session_to_db()` or `_ensure_schema()` executes
+* **Then** the handler detects schema drift via `PRAGMA table_info` and safely triggers schema migration or `rebuild_from_flat_files()`
+* **And** logs the schema migration event without throwing an unhandled `OperationalError`.
 
 ---
 
@@ -73,6 +98,7 @@ The goal of this release is to harden the harness's self-governance and downstre
 - **T1-L-21 (`high_risk_patterns` override)**: Refactor `_load_high_risk_patterns()` to load the `override_defaults` boolean flag (default: false) from `.agent/config.yaml`.
   * If `override_defaults: true` -> return only the config-defined list, skipping merging with hardcoded GymBase defaults.
   * If `override_defaults: false` or absent -> return the merged list (additive merge of defaults + config).
+  * **Fail-Closed Protection (Security Finding S3)**: If `override_defaults: true` and the config pattern list is empty, `route_decision.py` MUST log a `CRITICAL_WARNING_ZERO_HIGH_RISK_PATTERNS` to `stderr` and fail-closed to `elevated` review mode, preventing empty configs from winking out risk classification.
   * Refactor `classify_commit_risk()` and `get_high_risk_files()` to consume the list returned by the loader directly instead of doing manual list prepending themselves.
 - **T1-L-20 (decisions log schema)**: Research-only pass. No code or schema changes are introduced in this release.
 
@@ -84,13 +110,13 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ### Component: Configuration Loading (T1-E-04)
 #### [MODIFY] [harness_utils.py](file:///c:/projects/ai-delivery-control/src/scripts/harness_utils.py)
-- **DEFAULTS table**: Define a single dictionary of all harness config defaults. No call site redefines defaults locally.
+- **DEFAULTS table**: Modular composite dictionary constructed from domain-specific defaults constants (e.g. `ROUTING_DEFAULTS`, `TRACEABILITY_DEFAULTS`). No call site redefines defaults locally.
 - **Lazy imports**: The `import yaml` statement must be lazy and try/except-guarded inside loading functions, not at module top-level (required for the no-PyYAML test path to actually exercise the fallback).
 - **load_yaml_with_fallback**: Implement `load_yaml_with_fallback(path) -> dict` as a generic YAML loader: no caching, no defaults — safe for non-config YAML consumers (e.g. `coupling_decisions.yaml`).
 - **load_harness_config**: Implement `load_harness_config(config_path=None) -> dict` using `load_yaml_with_fallback` under the hood.
-- **Caching Semantics**: Define a module-level `_config_cache` dict keyed by resolved path to parse the config once per process. Add `_reset_config_cache()` for test isolation.
+- **Caching Semantics (Performance Finding PCS-1)**: Define a module-level `_config_cache` dict storing `(mtime, config_dict)` keyed by resolved path. Validate `os.path.getmtime(path)` on lookup and invalidate on timestamp mismatch to prevent stale cache returns on disk edits. Add `_reset_config_cache()` for test isolation.
 - **get_harness_config**: Implement `get_harness_config(section=None, key=None, default=None) -> Any`. Precedence chain: User Config Value → DEFAULTS table → caller's explicit default= argument → None.
-- **Fallback parser**: Implement an indentation-aware fallback parser supporting block scalars (`|` or `>`), extending the pattern in `bootstrap/migration_base.py:validate_yaml_config`. It must fail per-key with a logged warning (via `log_harness_event` + `stderr`), never silently defaulting the whole file.
+- **Fallback parser**: Implement an indentation-aware fallback parser supporting block scalars (`|` or `>`) and normalizing YAML 1.1 booleans (`yes`/`no`/`true`/`false`/`on`/`off`), extending `bootstrap/migration_base.py`. It must fail per-key with a logged warning (via `log_harness_event` + `stderr`), never silently defaulting the whole file.
 
 #### [MODIFY] Regex-parser call sites (replace with `get_harness_config()`):
 - **[acceptance_hook.py](file:///c:/projects/ai-delivery-control/src/scripts/acceptance_hook.py)**: `mode` and `specs_path` extraction.
@@ -117,40 +143,48 @@ The goal of this release is to harden the harness's self-governance and downstre
   "authorization": {
     "signed_by": "<git config user.name or explicit input>",
     "signed_at": "<ISO 8601 timestamp>",
-    "session_id": "<session_id>"
+    "session_id": "<session_id>",
+    "is_interactive": true
   }
   ```
-  On non-interactive session start, either omit this block or inherit it from a parent session if one exists (never fabricate a signer). This block is written once on init and is not re-verified per commit.
+  On non-interactive session start, either inherit from a parent session if present or inspect CI environment variables (`GITHUB_ACTOR`, `GITLAB_USER_LOGIN`, `GIT_AUTHOR_NAME`) to populate `signed_by` with `"is_interactive": false` (never fabricate a human signature). This block is written once on init and is not re-verified per commit.
 
 #### [MODIFY] [check_traceability.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_traceability.py)
-- **T1-K-13.1 (backlog-ID verification hardening)**: Modify the ID verification loop to verify backlog references (such as `HIB-*`, `BUG-*`, or `T1-*`) against the committed document contents at `HEAD` (via `git show HEAD:docs/...` or equivalent) rather than reading directly from the working-tree files, preventing self-ratifying IDs introduced in the same commit.
-- **HIB-061 / AT-06 (root commit exemption)**: Integrate mode-dependent exemption checks. Explicitly handle initial project root commits containing code files in incremental mode (where `git rev-parse --verify HEAD` fails due to no existing commits), allowing them to pass the gate safely while maintaining strict validation on all subsequent commits.
+- **T1-K-13.1 (backlog-ID verification hardening)**: Modify the ID verification loop to verify backlog references (such as `HIB-*`, `BUG-*`, or `T1-*`) against the committed document contents at `HEAD` (via `git show HEAD:<repo_relative_path>`) rather than reading directly from working-tree files, preventing self-ratifying IDs. **Worktree Support (Finding EIA-1)**: All git path lookups MUST anchor relative paths using `git rev-parse --show-toplevel` to ensure robust operation in Git worktrees and nested subdirectories.
+- **HIB-061 / AT-06 (root commit exemption)**: Integrate mode-dependent exemption checks. Explicitly handle initial project root commits containing code files in incremental mode by verifying **total repository commit count is zero** (`git rev-list --all --count` returning `0`, preventing orphan branch bypasses), allowing root commits to pass safely while maintaining strict validation on all subsequent commits.
 
 #### [MODIFY] Shared Blocking Hook (built with `T1-K-12`)
 - **T1-K-13 (Merge-Gate --no-trace Aggregator)**:
   * On merge trigger, enumerate all commits being merged into target branch (`git log <target>..<source>`).
   * For each commit, check for the `--no-trace` bypass marker in the commit message or trailer.
-  * For each match, pull the attribution block from that commit's session.json in history (`git show <commit>:.agent/session.json`) to extract `signed_by` and `session_id`.
+  * For each match, extract attribution from commit trailers (`Session-Id: <uuid>`, `Signed-by: <signer>`) or query `.agent/state/session_ledger.jsonl` by commit SHA (fixing untracked `session.json` file lookup flaw).
   * If zero matches: merge proceeds.
   * If >=1 matches: block the merge and print a summary:
     ```
     BLOCKED: merge contains N commit(s) using --no-trace:
-      - <sha> (session <session_id>, signed_by <signer>): "<commit message>"
+      - <sha> (session <session_id>, signed_by <signer>, interactive <is_interactive>): "<commit message>"
       - ...
     Re-run with --ack-no-trace "<reason>" to proceed.
     ```
-  * Permit the merge to proceed only if re-invoked with the explicit `--ack-no-trace "<reason>"` acknowledgment flag. Log the acknowledgment and reason to `harness_events.jsonl` as the audit record.
+  * Permit the merge to proceed only if re-invoked with explicit `--ack-no-trace "<reason>"` acknowledgment. **Sanitization (Finding AIB-2)**: Reason strings MUST be sanitized (stripping system instruction prefixes, XML/markdown tags, and truncating to max 250 chars) before writing to `harness_events.jsonl`.
 
 ### Component: Gate Diagnostics
 #### [MODIFY] [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py)
 - **T1-K-14 (fail-open gate audit)**: Update `DIFF_TOO_LARGE_FAILOPEN` and runtime exception boundaries to assert `FAIL_OPEN` or `INCOMPLETE` verdicts rather than defaulting to pass.
+
+#### [NEW] [check_exception_standards.py](file:///c:/projects/ai-delivery-control/.agent/scripts/check_exception_standards.py)
+- **T1-K-15 / AT-04 (precondition skip wrapper)**: Provision a lightweight Python wrapper script executed by the `architecture-quality` pre-commit hook. If `tests/quality/test_exception_standards.py` is absent, it logs `verdict: SKIPPED-precondition` with a `gate_precondition_skipped` event to `harness_events.jsonl` and exits cleanly (`0`), eliminating GymBase-specific test failure leakage on clean target project layouts.
+
+#### [MODIFY] [upgrade.py](file:///c:/projects/ai-delivery-control/bootstrap/upgrade.py)
+- **Framework File Distribution**: Update `copy_framework_files()` manifest to include `.agent/scripts/check_exception_standards.py` so existing projects receive the wrapper script during framework upgrades.
+- **Parser Consolidation (Refactoring Finding RCA-2)**: Refactor `bootstrap/migration_base.py` to import and reuse `harness_utils.load_yaml_with_fallback` once `v1.4.10` ships, eliminating duplicated YAML fallback logic.
 
 ### Component: Session Lifecycle
 #### [MODIFY] [governance_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/governance_check.py), [ai_review.py](file:///c:/projects/ai-delivery-control/src/scripts/ai_review.py), [init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py), and [.gitignore](file:///c:/projects/ai-delivery-control/.gitignore)
 - **HIB-063 (snapshot-based audit-log)**: Implement an untracked live logs strategy to avoid git hook conflicts. Enumerate all log-writer sites to ignore: `harness_events.jsonl` (written by `governance_check.py` and `init_session.py`) and `.ai-review-log.jsonl` (written by `ai_review.py`). Ignore these files in the project `.gitignore`. A committed snapshot of the live logs is taken on clean session close.
 
 #### [MODIFY] [init_session.py](file:///c:/projects/ai-delivery-control/.agent/scripts/init_session.py)
-- **HIB-ENV-02 (stashing preflight control)**: Prevent silent/unconditional stashing at session start in `_create_session_checkpoint()`. If stdin is not a TTY (programmatic agent execution), the fail-safe behavior is to NOT stash and log a warning (retaining the dirty working copy). If stdin is a TTY (interactive developer), prompt the operator before stashing.
+- **HIB-ENV-02 (stashing preflight control) — PARTIALLY DELIVERED (v1.4.9.1)**: The non-interactive/no-.git guard already exists in `_create_session_checkpoint()` (v1.4.9.1, verified) — if `.git` is absent, the function returns immediately without stashing. Remaining scope for v1.4.10: add the interactive-TTY path. If stdin is a TTY and a dirty working tree exists, prompt the operator for confirmation before calling `git stash push`; do not stash silently even when `.git` is present. Do not re-implement the non-interactive guard — extend the existing function.
 - **T1-I-08 (session-start stash accumulation cleanup)**: Refactor `infer_and_close_previous_session()` (which retrospectively closes the prior session at the start of the next session) to drop the session-start checkpoint stash matching the prior session's ID.
   * **Ordering Constraint**: The stash drop MUST occur after the session-close outcome is successfully written to `session.json`.
 
@@ -179,7 +213,7 @@ The goal of this release is to harden the harness's self-governance and downstre
 ### Additional Verification Test Coverage (T1-E-04)
 #### New tests/unit/test_config_loader.py:
 - **Fallback Parity Test**: Parse `bootstrap/templates/config.yaml.template` and `.agent/config.yaml` using both `yaml.safe_load` and the fallback parser. Assert the resulting dictionaries are identical.
-- **No-PyYAML Execution**: Monkeypatch `sys.modules["yaml"] = None` during test setup to explicitly verify the lazy import triggers `ImportError` and the fallback parser executes successfully in a clean environment.
+- **No-PyYAML Execution**: Use `unittest.mock.patch.dict(sys.modules, {"yaml": None})` inside an isolated test function, calling `importlib.reload(harness_utils)` to verify the lazy import triggers `ImportError` and fallback parser executes cleanly, ensuring `importlib.reload(harness_utils)` runs in `finally:` teardown to restore global module state.
 - **Caching**: Verify `load_harness_config` hits the cache, is correctly keyed by path, and `_reset_config_cache` clears it.
 - **Consumer Section Awareness (Scenario 4)**: Provide a config where an unrelated top-level `mode: ignore` exists above the `outer_loop: {mode: strict}` block. Test consumer behavior directly: Call the actual mode-resolution functions exported by `check_traceability.py`, `acceptance_hook.py`, and `check_spec.py` and verify they return `strict`.
 - **Self-Enforcing Defaults Rule**: Add a static grep-style test ensuring no consumer calls `get_harness_config(..., default=X)` for a key that already exists in the `DEFAULTS` table.
@@ -194,6 +228,8 @@ The goal of this release is to harden the harness's self-governance and downstre
   * Branch with `--no-trace` commits -> verify merge is blocked, and correct commits, sessions, and signers are printed.
   * Merge retried with `--ack-no-trace "<reason>"` -> verify merge proceeds, and `harness_events.jsonl` contains the ack record with the reason.
   * Squash-merge scenario: verify the aggregator successfully catches and blocks on `--no-trace` commits pre-squash.
+* **Stashing Preflight Control (`HIB-ENV-02`)**:
+  * Note: The existing non-interactive/no-.git test coverage (from v1.4.9.1) should be re-run as a regression check alongside new tests for the interactive-TTY prompt path, rather than being treated as new coverage to write from scratch.
 
 ---
 
@@ -203,3 +239,11 @@ The goal of this release is to harden the harness's self-governance and downstre
 * **T1-L-21 (High-Risk Override Design)**: Resolved 2026-07-19. Option A is selected. The loader reads `override_defaults: true` under `high_risk_patterns` in `config.yaml` to bypass defaults and use user-defined lists only.
 * **T1-K-13 (Human Signature Verification & Enforcement)**: Resolved 2026-07-19. The session signature is captured once at interactive session start for attribution only. The merge-gate aggregator enforces check trace integrity pre-merge, requiring an explicit `--ack-no-trace "<reason>"` bypass confirmation at merge time. Other alternatives (such as real-time token exchange) were rejected due to unnecessary developer friction relative to risk, since the merge-to-main boundary represents the true trust threshold.
 * **T1-E-04 (Config Loader Design)**: Resolved prior to v1.4.10 folding. Fallback parser is indentation-aware with block-scalar support, extending bootstrap/migration_base.py's pattern. Precedence chain is User Config → DEFAULTS table → caller's explicit default= → None, with the DEFAULTS table strictly winning over caller-supplied defaults. Fails per-key with a logged warning, never silently drops the whole config.
+
+---
+
+## 9. Status & Sign-off
+
+**Status**: APPROVED
+**Signed-off by**: Peter Long
+**Sign-off Date**: 2026-07-20
