@@ -32,10 +32,34 @@ def test_snapshot_live_logs_copies_files(tmp_path):
     with unittest.mock.patch("init_session.STATE_DIR", state_dir), \
          unittest.mock.patch("init_session.PROJECT_ROOT", tmp_path):
 
-        init_session._snapshot_live_logs("test-session-123")
+        session_id = "test-session-123"
+        init_session._snapshot_live_logs(session_id)
 
         snapshot_dir = state_dir / "snapshots"
         assert snapshot_dir.exists()
-        assert (snapshot_dir / "harness_events_snapshot.jsonl").exists()
-        assert (snapshot_dir / "ai_review_log_snapshot.jsonl").exists()
-        assert "test_event" in (snapshot_dir / "harness_events_snapshot.jsonl").read_text(encoding="utf-8")
+        assert (snapshot_dir / f"harness_events_{session_id}.jsonl").exists()
+        assert (snapshot_dir / f"ai_review_log_{session_id}.jsonl").exists()
+        assert "test_event" in (snapshot_dir / f"harness_events_{session_id}.jsonl").read_text(encoding="utf-8")
+
+
+def test_snapshot_live_logs_skips_empty_files(tmp_path):
+    """Verify _snapshot_live_logs skips zero-byte files."""
+    state_dir = tmp_path / ".agent" / "state"
+    state_dir.mkdir(parents=True)
+    
+    events_file = state_dir / "harness_events.jsonl"
+    events_file.write_text('', encoding="utf-8")  # 0 bytes
+
+    review_file = tmp_path / ".ai-review-log.jsonl"
+    review_file.write_text('', encoding="utf-8")  # 0 bytes
+
+    with unittest.mock.patch("init_session.STATE_DIR", state_dir), \
+         unittest.mock.patch("init_session.PROJECT_ROOT", tmp_path):
+
+        session_id = "test-empty-session"
+        init_session._snapshot_live_logs(session_id)
+
+        target_events = state_dir / "snapshots" / f"harness_events_{session_id}.jsonl"
+        target_review = state_dir / "snapshots" / f"ai_review_log_{session_id}.jsonl"
+        assert not target_events.exists()
+        assert not target_review.exists()

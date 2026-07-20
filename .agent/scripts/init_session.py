@@ -360,14 +360,15 @@ def _snapshot_live_logs(session_id: str) -> None:
         snapshot_dir = STATE_DIR / "snapshots"
         snapshot_dir.mkdir(parents=True, exist_ok=True)
 
+        safe_id = re.sub(r"[^\w\.-]", "_", session_id or "unknown")
         live_events = STATE_DIR / "harness_events.jsonl"
         if live_events.exists() and live_events.stat().st_size > 0:
-            target_events = snapshot_dir / "harness_events_snapshot.jsonl"
+            target_events = snapshot_dir / f"harness_events_{safe_id}.jsonl"
             shutil.copy2(live_events, target_events)
 
         live_review = PROJECT_ROOT / ".ai-review-log.jsonl"
         if live_review.exists() and live_review.stat().st_size > 0:
-            target_review = snapshot_dir / "ai_review_log_snapshot.jsonl"
+            target_review = snapshot_dir / f"ai_review_log_{safe_id}.jsonl"
             shutil.copy2(live_review, target_review)
     except Exception as e:
         print(f"[SESSION] Live log snapshot warning: {e}")
