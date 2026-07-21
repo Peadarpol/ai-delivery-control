@@ -38,7 +38,7 @@ This release focuses on hardening the harness installation and onboarding experi
 ## 3. Assumptions
 
 * `[Resolved: The host environment supports subprocess execution of standard git and python commands.]`
-* `[Amended in v1.2: Network access during validate.py execution is expected but not assumed reliable. Preflight API calls must degrade gracefully — bounded by an explicit timeout (Scenario 2) — rather than assuming the network is always reachable. The original assumption ("network access is available") is retained as the common case; the timeout requirement exists precisely because that assumption can be wrong in practice (corporate firewalls, offline onboarding, etc.).]`
+* `[Resolved: Network access during validate.py execution is expected but not assumed reliable (Amended in v1.2). Preflight API calls must degrade gracefully — bounded by an explicit timeout (Scenario 2) — rather than assuming the network is always reachable. The original assumption ("network access is available") is retained as the common case; the timeout requirement exists precisely because that assumption can be wrong in practice (corporate firewalls, offline onboarding, etc.).]`
 
 ---
 
