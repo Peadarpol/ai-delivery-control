@@ -4,6 +4,8 @@ Environment Validation Script (T1-A-03)
 Confirms all required tools are installed, pre-commit hooks are wired, and project configs are valid.
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import os
@@ -443,7 +445,7 @@ class Validator:
     def validate_wiki_state(self) -> Tuple[bool, str]:
         """Verify wiki compile state."""
         import json
-        from datetime import datetime, UTC
+        from datetime import datetime, timezone
         state_file = self.project_path / ".agent" / "state" / "wiki_compile_state.json"
         if not state_file.exists():
             return True, "No wiki compilation state found."
@@ -465,12 +467,12 @@ class Validator:
                     dt_str = dt_str[:-1] + "+00:00"
                 dt = datetime.fromisoformat(dt_str)
                 if dt.tzinfo is not None:
-                    dt = dt.astimezone(UTC).replace(tzinfo=None)
+                    dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
                 return dt
             except Exception:
                 return None
 
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if last_failure_utc:
             fail_dt = safe_parse_dt(last_failure_utc)
