@@ -1181,7 +1181,7 @@ The Clean Architecture checks hook (`.agent/skills/universal/senior-architect/sc
 **Date**: 2026-07-19
 **Source**: AT-03 import pathing audit (F3)
 **Pillar**: Gating / Architecture
-**Status**: 📋 Backlog (Target Release: v1.4.11)
+**Status**: 📋 Backlog (Target Release: v1.4.12)
 
 While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architecture_checks.py` (the primary blocker for the first-commit onboarding), there are 11 other scripts/skills identified in the AT-03 pathing audit that remain vulnerable to hardcoded source paths (`"src"`) or CWD execution drift:
 1. `check_spec.py`
@@ -1197,7 +1197,7 @@ While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architec
 11. `harness_health.py` (CWD-dependent load path drift)
 
 
-These scripts must be refactored in v1.4.11 to use the dynamic `sys.path` bootstrapping helper which resolves source path location from `.agent/config.yaml` dynamically rather than hardcoding parent depth and directory name parameters.
+These scripts must be refactored in v1.4.12 to use the dynamic `sys.path` bootstrapping helper which resolves source path location from `.agent/config.yaml` dynamically rather than hardcoding parent depth and directory name parameters.
 
 ---
 
@@ -1206,7 +1206,7 @@ These scripts must be refactored in v1.4.11 to use the dynamic `sys.path` bootst
 **Date**: 2026-07-20
 **Source**: Operational session review / SPEC-v1.4.9.1
 **Pillar**: Gating / Diagnosis
-**Status**: 📋 Backlog (Target Release: v1.4.11)
+**Status**: 📋 Backlog (Target Release: v1.4.12)
 
 When the review provider throws a local exception (e.g. `RuntimeError: Content too large` in the provider class), the wrapper execution in `ai_review.py` catches the generic exception and reports it to the developer and event logs as a network/API failure (`PROVIDER_ERROR` and `API unavailable`). This conflates local validation limits with genuine external API outages or credential availability issues, causing troubleshooting confusion and potentially generating incorrect audit logs.
 
