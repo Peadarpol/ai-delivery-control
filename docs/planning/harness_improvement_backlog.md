@@ -1181,7 +1181,7 @@ The Clean Architecture checks hook (`.agent/skills/universal/senior-architect/sc
 **Date**: 2026-07-19
 **Source**: AT-03 import pathing audit (F3)
 **Pillar**: Gating / Architecture
-**Status**: 📋 Backlog (Target Release: v1.4.11)
+**Status**: 📋 Backlog (Target Release: v1.4.12)
 
 While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architecture_checks.py` (the primary blocker for the first-commit onboarding), there are 11 other scripts/skills identified in the AT-03 pathing audit that remain vulnerable to hardcoded source paths (`"src"`) or CWD execution drift:
 1. `check_spec.py`
@@ -1197,7 +1197,7 @@ While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architec
 11. `harness_health.py` (CWD-dependent load path drift)
 
 
-These scripts must be refactored in v1.4.11 to use the dynamic `sys.path` bootstrapping helper which resolves source path location from `.agent/config.yaml` dynamically rather than hardcoding parent depth and directory name parameters.
+These scripts must be refactored in v1.4.12 to use the dynamic `sys.path` bootstrapping helper which resolves source path location from `.agent/config.yaml` dynamically rather than hardcoding parent depth and directory name parameters.
 
 ---
 
@@ -1206,10 +1206,25 @@ These scripts must be refactored in v1.4.11 to use the dynamic `sys.path` bootst
 **Date**: 2026-07-20
 **Source**: Operational session review / SPEC-v1.4.9.1
 **Pillar**: Gating / Diagnosis
-**Status**: 📋 Backlog (Target Release: v1.4.11)
+**Status**: 📋 Backlog (Target Release: v1.4.12)
 
 When the review provider throws a local exception (e.g. `RuntimeError: Content too large` in the provider class), the wrapper execution in `ai_review.py` catches the generic exception and reports it to the developer and event logs as a network/API failure (`PROVIDER_ERROR` and `API unavailable`). This conflates local validation limits with genuine external API outages or credential availability issues, causing troubleshooting confusion and potentially generating incorrect audit logs.
 
 The review engine must be refactored to distinguish between external network/HTTP errors and local configuration/validation exceptions, printing and logging distinct event types and details for each.
+
+---
+
+## HIB-075 — Inconsistent Line-Wrapping Across Planning Documentation
+
+**Date**: 2026-07-24
+**Source**: Manual review of `FRAMEWORK_ROADMAP.md` during roadmap consolidation pass
+**Pillar**: Documentation Hygiene
+**Status**: 📋 Backlog (Target Release: unscheduled — dedicated docs pass)
+
+`FRAMEWORK_ROADMAP.md` (and likely other `docs/planning/*.md` files) mixes two paragraph conventions inconsistently: some paragraphs are hard-wrapped at roughly 70–80 characters with manual line breaks, others are written as a single unwrapped line. This reflects different authoring sessions/tools rather than a deliberate style choice — e.g. the v1.4.10 and v1.4.11 "Goal" paragraphs sit adjacent in the same file with visibly different wrapping.
+
+This is cosmetic only when rendered — Markdown collapses single newlines within a paragraph to a space, so output is identical either way. However it causes two real problems: (1) hard-wrapped paragraphs reflow entirely on a single-word edit, producing noisy diffs in a git-tracked document; (2) inconsistent line boundaries make precise programmatic edits (e.g. `edit_file`-style exact-match patches) harder to anchor, since hard-wrapped prose has less predictable structure than single-line paragraphs.
+
+Recommend normalising all tracked Markdown docs under `docs/` (and `.agent/` where applicable) to single-line-per-paragraph — the more common convention for git-tracked Markdown specifically because it minimises diff churn — as a dedicated hygiene pass rather than piecemeal fixes during unrelated edits.
 
 

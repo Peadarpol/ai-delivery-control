@@ -1,6 +1,42 @@
 # Changelog
 
-## v1.4.7 — 2026-07-02
+## v1.4.11 — 2026-07-24
+
+### Installer & Validator Hardening
+- **SPEC-v1.4.11**: Implemented target repository self-installation guard (`F-COLD-1`) in `install.py` and `validate.py` preventing execution inside framework repo.
+- **Pre-Commit Exclude Regex Escaping (F7)**: Rendered `[PROJECT_SRC_PATH]` with `re.escape()` in `.pre-commit-config.yaml.template` for `black`, `ruff`, and `mypy` formatting exclusions.
+- **Ephemeral Dry-Run Sandbox**: Built git-sandbox dry-run validator under `.agent/scratch/validate_sandbox/` using `Path.as_uri()` for cross-platform `file://` formatting, bounded timeouts (30s clone, 60s pre-commit), interrupt safety, and Windows read-only teardown (`remove_sandbox_dir`).
+- **Live API Key Preflight**: Implemented Anthropic (`/v1/models`) and OpenAI (`/v1/models`) probe preflight with hard `<= 5.0s` timeout, HTTP 401/403 failure status classification, and credential scrubbing (raw keys, authorization headers, key fragments).
+- **Python Currency & Tooling Checks (F-COLD-5)**: Standardized diagnostic strings with bounded 1.0s tool version timeouts.
+- **CLI Validation Flag**: Added `--skip-validation` CLI flag to both `install.py` and `validate.py`.
+- **Shared Helpers**: Created `bootstrap/common.py` for shared `is_harness_repo()` and `resolve_venv_python()` utilities.
+- **Migration & Checksums**: Added `v1_4_10_to_v1_4_11.py` migration script, unit test suite, updated `harness_version.txt` to `1.4.11`, and regenerated `bootstrap/checksums.py` (652 files hashed).
+
+## v1.4.10 — 2026-07-20
+
+### Governance Hardening — Traceability, Config Rollout & Decisions-Log Discipline
+- **Unified Config Loader**: Integrated central YAML/fallback config loader across framework modules.
+- **Merge Gate & Traceability**: Implemented merge-gate `--no-trace` aggregator pre-push check and root commit exemption.
+- **SQLite Schema Drift**: Added SQLite schema drift auto-migration and persistence helpers.
+- **Session Checkpoints & Archiving**: Added interactive session checkpoint prompt and session live log snapshot archiving.
+- **Migration & Checksums**: Added `v1_4_9_to_v1_4_10.py` migration script and updated version-of-record.
+
+## v1.4.9.1 — 2026-07-20
+
+### Hotfix — First-Commit Onboarding in Bare-PIP Environments
+- **HIB-069**: Resolved first-commit onboarding failures in bare-pip environments.
+
+## v1.4.9 — 2026-07-12
+
+### Parser Unification & Traceability Enhancements
+- **Co-Change Reconciler**: Added co-change reconciler and Coupling Decision Record (CDR) ledger integration.
+- **Spec Quality Gate**: Enhanced `check_spec.py` two-tier spec quality gate and parser unification.
+- **Migration & Checksums**: Added `v1_4_8_to_v1_4_9.py` migration script.
+
+## v1.4.8 — 2026-07-07
+
+### Co-Change & CDR Ledger Integration
+- **v1.4.8 Release**: Added `v1_4_7_to_v1_4_8.py` migration unit for co-change reconciler and Coupling Decision Record (CDR) ledger integration.
 
 ### Spec Gate & Upgrade Path Fixes
 - **HIB-057**: `ReviewProvider.call_llm` was never defined, causing Pass 2 of the spec gate (`check_spec.py`) to throw `AttributeError` for all LLM-backed providers (Ollama, Anthropic, OpenAI). Spec quality review is now functional again for all providers.

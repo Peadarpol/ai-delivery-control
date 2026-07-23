@@ -185,8 +185,8 @@ class TestInitSessionGitStash:
         init_session._create_session_checkpoint("session-1234567890123")
         captured = capsys.readouterr()
         
-        mock_run.assert_called_once()
-        args = mock_run.call_args[0][0]
+        assert mock_run.call_count == 2
+        args = mock_run.call_args_list[1][0][0]
         assert "git" in args
         assert "stash" in args
         assert "push" in args

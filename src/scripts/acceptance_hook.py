@@ -64,7 +64,7 @@ def _is_feature_branch(branch: str) -> bool:
 def _resolve_specs_dir() -> Path:
     """Read specs_path from config.yaml using get_harness_config if present, otherwise use the default."""
     from harness_utils import get_harness_config
-    specs_path = get_harness_config("acceptance_gate", "specs_path", default="docs/planning/specs/")
+    specs_path = get_harness_config("acceptance_gate", "specs_path") or "docs/planning/specs/"
     return PROJECT_ROOT / Path(specs_path)
 
 

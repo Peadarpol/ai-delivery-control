@@ -39,6 +39,14 @@ SYMBOL_INFO = _safe_symbol("ℹ️", "[INFO]")
 SYMBOL_STEP = _safe_symbol("📦", "[STEP]")
 
 
+# Add framework root to sys.path for bootstrap.common import
+framework_root = Path(__file__).resolve().parent.parent
+if str(framework_root) not in sys.path:
+    sys.path.insert(0, str(framework_root))
+
+from bootstrap import common
+
+
 class Installer:
     def __init__(
         self,
@@ -47,10 +55,12 @@ class Installer:
         test_framework_override: Optional[str] = None,
         language_override: Optional[str] = None,
         verbose: bool = False,
+        skip_validation: bool = False,
     ):
         self.project_path = Path(project_path).resolve()
         self.framework_path = Path(__file__).resolve().parent.parent
         self.verbose = verbose
+        self.skip_validation = skip_validation
         
         self.package_manager_override = package_manager_override
         self.test_framework_override = test_framework_override
@@ -445,6 +455,7 @@ class Installer:
             for k, v in replacements.items():
                 content = content.replace(k, v)
                     
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
             dest_path.write_text(content, encoding="utf-8")
 
         # 1. Generate .agent/UNIVERSAL_CONTEXT.md — always overwrite (machine-generated, version-stamped)
@@ -498,8 +509,12 @@ class Installer:
                 os.remove(backup_path)
             os.rename(precommit_dest, backup_path)
             
-        # Render precommit
-        render_template("pre-commit-config.yaml.template", precommit_dest)
+        # Render precommit with regex-escaped PROJECT_SRC_PATH (F7)
+        import re
+        precommit_extra = {
+            "[PROJECT_SRC_PATH]": re.escape(self.src_path),
+        }
+        render_template("pre-commit-config.yaml.template", precommit_dest, precommit_extra)
         
         # Non-Windows dynamic command translation (strip cmd /c )
         if sys.platform != "win32":
@@ -571,6 +586,7 @@ class Installer:
             ".agent/wiki/",
             ".agent/state/agent_session_close.json",
             ".clinerules/hooks/",
+            ".agent/scratch/",
         ]
 
         if gitignore_path.exists():
@@ -736,8 +752,11 @@ class Installer:
             sys.exit(1)
             
         try:
+            val_cmd = [sys.executable, str(validate_script), "--project-path", str(self.project_path)]
+            if self.skip_validation:
+                val_cmd.append("--skip-validation")
             result = subprocess.run(
-                [sys.executable, str(validate_script), "--project-path", str(self.project_path)],
+                val_cmd,
                 capture_output=False, # Print directly to stdout/stderr
             )
             if result.returncode == 0:
@@ -750,6 +769,17 @@ class Installer:
             sys.exit(1)
 
     def run(self):
+        if common.is_harness_repo(self.project_path):
+            self.log(
+                SYMBOL_ERROR,
+                "Cannot install AI Delivery Control harness inside the harness repository itself! Target directory contains harness_version.txt.",
+            )
+            self.log(
+                SYMBOL_INFO,
+                "Please specify a target project path using --project-path <path_to_external_project>.",
+            )
+            sys.exit(1)
+
         print(f"==================================================")
         self.log(SYMBOL_ROCKET, "AI Delivery Control Harness Bootstrapper")
         print(f"==================================================")
@@ -790,6 +820,11 @@ def main():
     parser.add_argument("--test-framework", help="Force specific test framework (pytest, jest, vitest)")
     parser.add_argument("--language", help="Force specific language (Python, TypeScript, JavaScript)")
     parser.add_argument("--verbose", action="store_true", help="Print verbose/debug logging")
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip post-install git-sandbox dry-run validation (non-sandbox checks still run).",
+    )
     
     args = parser.parse_args()
     
@@ -799,6 +834,7 @@ def main():
         test_framework_override=args.test_framework,
         language_override=args.language,
         verbose=args.verbose,
+        skip_validation=args.skip_validation,
     )
     installer.run()
 

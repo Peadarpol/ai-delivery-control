@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.10
-**Target Release**: v1.4.11 (deliberately resequenced 2026-07-18 — usability/onboarding hardening prioritised ahead of v1.5.0; see decisions_log.md 2026-07-18)
-**Last Updated**: 2026-07-20 (v1.4.10 shipped; governance hardening, config parser unification rollout & decisions log discipline)
+**Current Version**: 1.4.11
+**Target Release**: v1.4.12 (Installer & validator onboarding hardening shipped in v1.4.11; see decisions_log.md 2026-07-23)
+**Last Updated**: 2026-07-24 (v1.4.11 shipped; installer & validator onboarding hardening, sandbox dry-run, API preflight)
 
 ---
 
@@ -95,211 +95,13 @@ The dream phase is the mechanism that makes the framework improve over time — 
 
 ## Release Milestones
 
-### v1.0.0 — Foundation ✅ SHIPPED (2026-05-21)
-
-**Goal**: Extract the harness from its host project into a standalone installable framework.
-
-**Delivered**:
-- Bootstrap install script — under 10 minutes from zero to working harness
-- Environment validation script
-- Config-driven architecture checks
-- Two-layer review context (universal + project)
-- Universal + stack-pack skills (22 universal, python-fastapi stack pack)
-- Tool supplement generation (CLAUDE.md, GEMINI.md, .cursorrules as thin shims)
-- Pre-commit AI adversarial review gate with pre-flight shortcut, diff-aware routing, typed ReviewVerdict, policy notes output
-- PageRank repository map injected into review context
-- ADR annotation convention and compiled wiki layer (Gemma4 local)
-- Dream phase self-improvement loop (session pattern detection, skill proposals, contradiction detection)
-- Session lifecycle hooks (outcome inference, startup orientation, retention policy)
-- Repository identity guard (P-14)
-- Full documentation suite (getting started, configuration reference, customisation guide, AISDLC bootloader)
-
-**Reference implementation**: GymBase (gym management SaaS, currently private). The framework was developed and validated over 6 months of active feature delivery. A public worked example is planned for v1.1.0.
+> **Historical milestones v1.0.0 – v1.2.0.1** (Foundation, Demonstrably Working, Beta Ready,
+> Outer Loop, Harness Gitignore Enforcements) have been moved to
+> [`FRAMEWORK_ROADMAP_Archive.md`](FRAMEWORK_ROADMAP_Archive.md) to keep this file smaller for
+> agent context budgets. Nothing was summarised or reworded — full detail is preserved there
+> verbatim. This file picks up at v1.3.0.
 
 ---
-
-### v1.1.0 — Demonstrably Working ✅ SHIPPED (2026-05-23)
-
-**Goal**: Show the framework working in practice. The headline is the self-improvement loop producing real proposals from real sessions — not hygiene items. A developer landing on this project should be able to see the temporal moat in action, understand what makes the gate adversarial, and run the framework without an Anthropic account.
-
-**Success criteria**:
-- A public worked example shows a complete commit cycle: diff → routing decision → verdict → policy notes
-- Dream phase outputs from real sessions are documented and visible
-- The gate works with any LLM provider (Anthropic, OpenAI, Ollama)
-- Repository signals a maintained project, not a personal workspace
-- Convention vs enforcement is explicitly documented
-
-**Planned items**:
-
-| ID | Item | Category |
-|----|------|----------|
-| S0-01 | Remove `scratch/` directory | Repository hygiene |
-| S0-02 | Narrow README positioning claim to match actual scope | Documentation |
-| S0-03 | Add `CONTRIBUTING.md` | Community |
-| S0-04 | Add GitHub issue templates | Community |
-| S0-05 | Cut v1.0.0 GitHub release with release notes | Release |
-| S0-06 | Add CI badge to README | Social proof |
-| S0-07 | Document convention vs enforcement explicitly in README | Documentation | ✅ |
-| S0-08 | Surface 2-3 representative skills in docs | Documentation |
-| S0-09 | Add worked example: complete diff → routing → verdict cycle | Documentation |
-| S0-10 | Publish dream phase example: real proposals from real sessions | Documentation |
-| S0-11 | Add "What it prevents" section to README | Documentation | ✅ |
-| S0-12 | Fix validate.py legacy filename warning | Validation | ✅ |
-| S0-20 | Competitive positioning statement — add to README and docs | Documentation | |
-| S0-24 | De-GymBase-ify functional code before public promotion | General framework decoupling | |
-| T1-E-02 | LLMProvider ABC (AnthropicProvider, OpenAIProvider, OllamaProvider) | Provider portability | ✅ |
-
-> **S0-24 scope note (identified 2026-06-02)**: Three targeted code changes —
-> (a) extract `SYSTEM_PROMPT` in `ai_review.py` to a config-loaded template with
-> project-neutral defaults (GymBase patterns move to `review_context_project.md`);
-> (b) move `DOMAIN_REGISTRY` in `wiki_compile.py` from hardcoded Python to
-> `.agent/config.yaml` so projects without GymBase ADR files skip gracefully;
-> (c) move hardcoded directory paths in `build_route_decision()` to config.
-> Must complete before S0-23 (README pre-Reddit additions) goes live.
-| T1-L-06 | Explicit production scope statement in README and docs | Documentation | ✅ |
-| T1-L-08 | High-risk commit classification for fail-open behaviour | Gate hardening | ✅ |
-| T1-L-09 | Framework self-test suite (60 tests across 6 modules) | Testing | ✅ |
-| BUG-01 | commit-msg hook not installed by bootstrap — already present since initial commit | Gate wiring | ✅ |
-| BUG-02 | validate.py does not check commit-msg hook — already present | Validation | ✅ |
-| BUG-03 | Gate reads empty diff on amend at commit-msg stage — ORIG_HEAD guard + empty tree fallback | Gate fix | ✅ |
-| BUG-04 | PASS/PASS_FAST verdicts not written to audit log | Logging | ✅ |
-| BUG-05 | ADR domain names not mapping to capability names | Routing fix | ✅ |
-| BUG-06 | Gate calibration too aggressive — proportionate calibration + false-positive guard | Gate calibration | ✅ |
-| T1-M-01 | Agent operations guide | Documentation | — (human-authored, deferred) |
-| T1-M-02 | Spec writing guide | Documentation | — (human-authored, deferred) |
-| T1-M-05 | Stack coverage acknowledgment | Documentation | ✅ |
-
-**Note on T1-E-02 placement**: Provider agnosticism is moved from v1.3.0 to v1.1.0. Anthropic vendor lock-in is an immediate evaluation objection from any engineering team with data residency requirements. It should not remain a v1.3.0 problem for a framework positioning itself at governed delivery in constrained environments.
-
----
-
-### v1.1.5 — Beta Ready ✅ SHIPPED (2026-05-29)
-
-**Goal**: Ship a version that external developers can install, use, and upgrade
-without hand-holding — while closing the two sharpest edges the framework
-currently has (token surprise, gate false positives). Sits between v1.1.0 and
-the Outer Loop milestone; does not pull forward any v1.2.0 outer loop content.
-
-**The gap this addresses**: v1.1.0 delivered a working framework but not yet
-an installable product. Beta testers need a clean upgrade path, a governed token
-ceiling, and a gate that does not frustrate them with false positives before they
-have built any trust in it. A beta tester who hits a $50 session overage or
-cannot upgrade without manual file merging will not continue.
-
-**Success criteria**:
-- A developer with no prior framework knowledge can install, run the onboarding
-  workflow, and make a governed commit in under 30 minutes
-- A v1.1.0 installation upgrades to v1.1.5 without manual file merging
-  (`upgrade.py --dry-run` completes cleanly)
-- A session approaching the token budget ceiling receives a WARN before context
-  exhaustion
-- A gate FAIL on a false positive has a governed resolution path that does not
-  require `SKIP_AI_REVIEW=1`
-- Token consumption per session is visible in `session_ledger` by category
-
----
-
-#### Theme 1 — Beta Installer Experience
-
-| ID | Item | Effort | Status |
-|----|------|--------|--------|
-| HIB-006 | `bootstrap/upgrade.py` | Medium | ✅ |
-| T1-B-03 | Onboarding workflow | Low | ✅ |
-| S0-03 | `CONTRIBUTING.md` | Low | ✅ |
-| S0-04 | GitHub issue templates | Low | ✅ |
-| S0-05 | Cut v1.1.5 GitHub release + tag | Low | ✅ |
-| S0-06 | CI badge | Low | ✅ |
-| S0-08 | Surface representative skills in docs | Low | ✅ |
-| S0-09 | Worked example (diff → routing → verdict cycle) | Low | ✅ |
-
-Human-authored in parallel (no agent session required): T1-M-01 (agent
-operations guide), T1-M-02 (spec writing guide), T1-M-04 (team usage guide).
-
-S0-05 must be cut before any beta invitations are sent.
-
----
-
-#### Theme 2 — Token Measurement & Calibration
-
-| ID | Item | Effort | Status |
-|----|------|--------|--------|
-| T1-I-02 | Token budget tracking per session | Low | ✅ |
-| T1-I-07 | Session token budget with WARN/HALT | Low | ✅ (2026-06-02 pre-sprint) — wiring of ai_review.py → session.json completed 2026-06-02 pre-sprint |
-| T1-M-06 | Context compaction template | Low | ✅ |
-| T1-G-08 | Diff size review strategy | Low | ✅ |
-
-> **T1-I-07 resolved (2026-06-02 pre-sprint)**: The HALT mechanism, file format,
-> and threshold logic existed at v1.1.5 delivery. The missing wiring —
-> `ai_review.py` incrementing the session token counter after each review call —
-> was completed as a pre-Sprint-1 item. The 80% WARN and 100% HALT thresholds
-> now fire correctly during sessions that include review gate calls.
-
----
-
-#### Theme 3 — Gate Trust & Calibration
-
-| ID | Item | Effort | Status |
-|----|------|--------|--------|
-| T1-H-08 | Branch-isolated model roster in compiled wiki | Low | ✅ |
-| T1-G-07 | Structured SKIP_REASON enforcement | Low | ✅ |
-| T1-L-10 | False positive → eval regression pipeline | Low | ✅ |
-| T1-G-06 | Structured rebuttal protocol | Medium | ✅ |
-
----
-
-#### Recommended Sequencing
-
-**Completed**: All items shipped in v1.1.5.2 patch release.
-
----
-
-### v1.2.0 — Outer Loop ✅ SHIPPED (2026-05-31)
-
-**Goal**: Govern the full delivery lifecycle from requirement to commit, not just from commit to repository.
-
-**The gap this addresses**: The framework currently picks up governance at "an agent starts working." Everything before that — how a business need becomes a requirement, how a requirement becomes a spec good enough to build against — is ungoverned. A perfectly governed commit can implement the wrong thing. This milestone closes that gap.
-
-**The deeper challenge**: The value of the outer loop is not in checking whether required fields are present in a spec file. It is in the institutional knowledge encoded in the `/business-analyst` and `/project-manager` workflows — what makes a requirement specific enough for an agent to act on, what acceptance criteria look like for AI-assisted delivery, how to scope work to avoid context window collapse mid-session. That knowledge is what the workflows need to capture.
-
-**Success criteria**:
-- A feature cannot start without an approved spec
-- Every commit references the requirement it implements
-- An acceptance gate checks intent alignment, not just code correctness
-- The `/business-analyst` and `/project-manager` workflows encode actionable institutional knowledge, not just field validation
-
-**Planned items**:
-
-| ID | Item | Description |
-|----|------|-------------|
-| T1-L-01 | Spec quality gate | Before `/feature-implementation` begins, SPEC-XXX.md must exist and pass quality checks: acceptance criteria present, out-of-scope stated, architectural constraints identified, status APPROVED. Gate refuses to start without an approved spec. *Note: description enhanced with CodeRabbit two-tier check.* | ✅ |
-| T1-L-02 | `/business-analyst` workflow | Full state-machine workflow: requirement intake → user story extraction → BDD scenarios → spec drafting → acceptance criteria → traceability matrix → human approval gate. Agent drafts; human approves. *Note: description enhanced with CodeRabbit Phase 0 intake, assumptions, and decisions_log feed.* Agent drafts; human approves. Scope: what to build and why. Effort estimation is T1-L-03's responsibility. | ✅ |
-| T1-L-03 | `/project-manager` workflow | How an approved SPEC becomes a prioritised backlog item with effort estimate and dependencies. Sprint planning and dependency resolution. Receives an approved SPEC-XXX.md from T1-L-02. Owns effort estimates, task breakdown, dependency ordering, and sprint assignment. |
-| T1-L-04 | Requirement → commit traceability | Pre-commit check: non-trivial commits must reference a requirement ID. Closes the spec-to-code chain. `--no-trace` flag for infrastructure commits with reason logged. |
-| T1-L-05 | Acceptance gate | Second AI review call with the spec as context, checking intent alignment not just code correctness. Produces `AcceptanceVerdict`: SATISFIED / PARTIAL / DIVERGED. Runs once per feature branch before PR. |
-| T1-L-07 | Incident → backlog pipeline | `incident_to_backlog.py`: structured incident entry with root cause, affected commit SHA, which gate should have caught it, and proposed guard. Closes the production feedback loop. |
-| T1-M-03 | Mid-session observability | Lightweight session health check: duration, tool call count, context load estimate, warning patterns. Diagnostic tool for when something feels off mid-session. |
-
----
-
-### v1.2.0.1 — Harness Gitignore Enforcements ✅ SHIPPED (2026-05-31)
-
-**Goal**: Patch release resolving BUG-10 — bootstrap installations were not adding the required `.gitignore` block for operational state files, causing pre-commit conflict loops on fresh installs.
-
-**The gap this addresses**: On every fresh install and upgrade, the harness creates files in `.agent/state/` that must not be committed (`session.json`, `HALT`, `.lock` files, `config.yaml.migration_backup`, the compiled wiki). Without the `.gitignore` block, these files appear as untracked changes. Developers staging them — inadvertently or deliberately — hit a pre-commit hook that rejects the commit, creating a conflict loop with no clear exit. Beta testers encounter this on their first governed commit.
-
-**Delivered**:
-- `bootstrap/install.py` — `update_gitignore()` appends the operational state block to the target project's `.gitignore` on every fresh install (idempotent; block is only appended if absent)
-- `bootstrap/migrations/v1_2_0_to_v1_2_0_1.py` — migration module for existing v1.2.0 installations; safe header-anchored downgrade removes only the harness block
-- `bootstrap/validate.py` — `validate_gitignored_states()` hardened: HALT absent from `.gitignore` → ERROR; `session.json` absent → WARN (not ERROR); `harness_events.jsonl` excluded (must be committed — it is the audit trail)
-- `harness_version.txt`, `upgrade.py`, `downgrade.py` — version targets bumped to `1.2.0.1`
-- Full test coverage: 184 tests pass (unit + integration)
-
-| ID | Item | Category | Status |
-|----|------|----------|--------|
-| BUG-10 | Bootstrap does not write `.gitignore` block — pre-commit conflict loop on fresh installs | Install hardening | ✅ |
-
----
-
 
 ### v1.4.0 — Intelligent Gate ✅ SHIPPED (2026-06-13)
 
@@ -343,10 +145,12 @@ S0-05 must be cut before any beta invitations are sent.
 | T1-L-12 | Spec grader per-criterion feedback | Medium | Outer loop |
 | T1-L-13 | Decision block format for ADR annotations | Low | Outer loop |
 | T1-L-14 | System archetype classification in spec template | Low | Outer loop |
-| T1-K-02 | Formal security review: context-injection attack surface | Medium | Security | ✅ (v1.4.1) |
-| T1-K-02a | Quarantine pattern as architectural context-injection mitigation | Low | Security | ✅ (v1.4.1) |
-| T1-K-05a | Environment variable sanitisation in gate subprocess calls | Medium | Security | ✅ (v1.4.1) |
-| T1-K-07 | Quarantine structural bypass mitigation | High | Security | ⬜ |
+
+> **Security batch, delivered v1.4.1** (full descriptions in that milestone's table, not repeated here): `T1-K-02` (formal security review), `T1-K-02a` (quarantine pattern mitigation), `T1-K-05a` (env var sanitisation in gate subprocess calls).
+
+| ID | Item | Effort | Category | Status |
+|----|------|--------|----------|--------|
+| T1-K-07 | Quarantine structural bypass mitigation — active contexts and dream proposals bypass structural validation before ingestion; close the isolation-marker attack surface gap identified in T1-K-02 | Medium | Security | ⬜ (still open — see Unscheduled Backlog, Security foundations) |
 
 **Sprint planning notes (pre-v1.4.0)**:
 
@@ -360,8 +164,8 @@ S0-05 must be cut before any beta invitations are sent.
 
 **Planned items**:
 
-| ID | Item | Effort | Category |
-|----|------|--------|----------|
+| ID | Item | Effort | Category | Status |
+|----|------|--------|----------|--------|
 | HIB-053 | `outcome_override` write-before-commit flaw — cross-check commits exist before accepting success override in `infer_and_close_previous_session()` | Low | Bug fix | ✅ (v1.4.1) |
 | HIB-054 | `false_positive_to_eval.py` Windows UnicodeEncodeError on emoji print; audit `incident_to_eval.py` for same pattern | Low | Bug fix | ✅ (v1.4.1) |
 | T1-L-12 | Spec grader per-criterion feedback | Medium | Outer loop | ✅ (v1.4.1) |
@@ -474,6 +278,45 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
+### v1.4.3 — Governance & Consistency ✅ SHIPPED (2026-06-22)
+
+**Goal**: Restructure the prohibition model into a tiered universal/project/pattern-conditional system, and close a round of consistency gaps between what the framework claims to enforce and what it actually enforces.
+
+**Delivered**:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| T1-K-08 | `architecture_checks.py` fail-loud on zero files scanned (previously silent PASS) | Governance & Consistency | ✅ |
+| T1-K-09 | Consistency gate: workflow slug resolution, `blocked_commands` header, H/S/C/G label assertions | Governance & Consistency | ✅ |
+| T1-K-10 | Session protocol single-sourcing (startup/close/escalation) | Governance & Consistency | ✅ |
+| T1-M-14 | Stale P-series reference cleanup in AGENTS.md; H-series positive reframing | Governance & Consistency | ✅ |
+| (restructure) | Prohibition restructure: universal / project-specific / pattern-conditional three-tier model | Governance | ✅ |
+
+---
+
+### v1.4.4 — Integration Release ✅ SHIPPED (2026-06-22)
+
+> **Known discrepancy**: `CHANGELOG.md`'s v1.4.4 entry also lists `T1-L-12`, `T1-L-13`,
+> `T1-L-14`, and `T1-K-05a` as delivered here. `FRAMEWORK_BACKLOG.md` (the canonical
+> item-status source) and this roadmap's own v1.4.1 entry both confirm all four
+> actually shipped in **v1.4.1**, three versions earlier — the CHANGELOG.md v1.4.4
+> entry is a duplicate/erroneous re-listing and still needs correcting there.
+> Excluded from the table below.
+
+**Goal**: Fold five unmerged feature branches into `main` in a single integration release, closing a batch of gate-correctness and observability gaps found across those branches.
+
+**Delivered**:
+
+| ID | Item | Category | Status |
+|----|------|----------|--------|
+| BUG-04 | PASS/PASS_FAST verdicts now written to audit log | Logging | ✅ |
+| BUG-05 | ADR domain names correctly mapped to capability names in routing | Routing fix | ✅ |
+| HIB-053 | Additional hardening: further guards on session close inference against write-before-commit race | Bug fix | ✅ |
+| T1-K-11 | Stale branch detection in `harness_health.py` — surfaces branches with unmerged commits older than 14 days | Observability | ✅ |
+| (CI) | CodeQL scanning scoped to Python only via `.github/codeql/codeql-config.yml` | CI | ✅ |
+
+**Test suite**: 372 tests passing (up from 358 at v1.4.2); checksum registry covers 643 files.
+
 ---
 
 ### v1.4.9 — System Consolidation ✅ SHIPPED (2026-07-12)
@@ -503,7 +346,7 @@ S0-05 must be cut before any beta invitations are sent.
 
 ---
 
-### v1.4.10 — Governance Hardening ✅ SHIPPED (2026-07-20)
+### v1.4.10 — Governance Hardening ✅ SHIPPED (2026-07-20, tag `v1.4.10`)
 
 **Goal**: Hardened requirement traceability and merge governance, completed unified configuration parser rollout across all consumers, established append-only decisions log discipline with O(1) backdating guard, fixed SQLite schema drift, and added live log snapshotting.
 
@@ -527,7 +370,7 @@ from `ANALYSIS-PLAN-v1.4.10.md`), `hib-collision-map-2026-07.md`,
 
 ---
 
-### v1.4.11 — Installer & Onboarding Hardening ⏳ PLANNED
+### v1.4.11 — Installer & Onboarding Hardening ✅ SHIPPED (2026-07-24)
 
 **Goal**: Close the silent and semi-silent failure modes a genuinely new user
 hits before or during their first install — distinct from v1.4.9.1's loud
@@ -569,7 +412,7 @@ practice). Input: `cold-start-field-observations-2026-07-18.md`.
 
 ---
 
-### Unscheduled — Under Consideration
+### Deferred Scope Candidates — Under Consideration
 
 **F-COLD-4 — Retrofit mode** (identified 2026-07-18, live cold-start session):
 no guided path exists today for a user who arrives with working code but no
@@ -747,8 +590,8 @@ IDs when v1.5.2 planning is confirmed.
 
 #### Governance & Consistency
 
-| ID | Item | Category |
-|----|------|----------|
+| ID | Item | Category | Status |
+|----|------|----------|--------|
 | T1-K-08 | Fix architecture_checks.py silent PASS on zero files scanned | Governance & Consistency | ✅ v1.4.3 |
 | T1-K-09 | Add consistency gate: assert cross-references exist and gates actually gate | Governance & Consistency | ✅ v1.4.3 |
 | T1-K-10 | Single-source session startup/close/escalation protocols (same treatment as prohibition fix) | Governance & Consistency | ✅ v1.4.3 |
@@ -812,10 +655,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
+**Active milestone**: v1.4.12 (v1.4.11 shipped 2026-07-24)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 📋
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
@@ -948,9 +791,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.10 (v1.4.9.1 shipped 2026-07-19)
+**Active milestone**: v1.4.12 (v1.4.11 shipped 2026-07-24)
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 
@@ -1061,58 +904,48 @@ Full implementation detail: `FRAMEWORK_BACKLOG.md`
 
 ---
 
-
-
----
-
 ### Unscheduled Backlog — Pending Foundations & Improvements
 
-**Goal**: The dream phase becomes operational — the framework's temporal moat starts generating real proposals from real session data. Memory system foundations make session history queryable and durable. Reliability mechanisms replace voluntary compliance with structured recovery. Security foundations address the novel context-injection attack surface before broad community distribution.
+**Goal**: Memory system foundations make session history queryable and durable.
+Reliability mechanisms replace voluntary compliance with structured recovery.
+Security foundations address the novel context-injection attack surface before
+broad community distribution.
 
-**The strategic context**: The adversarial gate is the same for every installation on day one. The dream phase is what makes each installation unique over time. This milestone is where the compound effect begins.
+> **Chain B — Self-Improvement Loop: fully delivered**, removed from this list.
+> All seven items (`T1-I-00a`, `T1-I-00b`, `T1-D-00`, `T1-C-01`, `T1-I-03`,
+> `T1-D-03`, `T1-I-05`) are confirmed ✅ in `Current Sprint Status` (v1.1.5,
+> v1.3.1 Sprint 2) and the archived v1.1.5 milestone entry. The dream phase is
+> live and producing proposals — the goal this table existed to track is met.
 
-**Success criteria**:
-- Dream phase produces at least one actionable proposal from real session data
-- Session outcomes (success/partial/abandoned/escalated) are inferred and recorded automatically
-- Memory tiering is formalised — hot/warm/cold with explicit retention policies
-- Agent escalation produces a structured approval request, not a HALT file
+**Success criteria remaining open**:
+- Memory tiering is formalised — hot/warm/cold with explicit retention policies (T1-I-01 partial, T1-I-06 tracked in v1.5.0)
+- Agent escalation produces a structured approval request, not a HALT file (T1-C-02, still open)
 
-**Chain B — Self-Improvement Loop** (implementation sequence from backlog):
-
-| ID | Item | Category | Status |
-|----|------|----------|--------|
-| T1-I-00a | Consolidate audit logs → harness_events.jsonl | Memory prereq | ⬜ |
-| T1-I-00b | Audit audit_logger.py wiring | Memory prereq | ⬜ |
-| T1-D-00 | skill_ownership.yaml — dream phase routing map | Chain B prereq | ✅ (2026-06-02 pre-sprint) |
-| T1-C-01 | Retrospective session outcome inference + post-commit heartbeat | Chain B foundation | ✅ (v1.1.5) |
-| T1-I-03 | Outcome-aware session startup orientation | Chain B | ✅ (v1.1.5) |
-| T1-D-03 | Dream phase distillation (distill_dream.py) | Chain B capstone | ✅ (v1.1.5) |
-| T1-I-05 | Memory contradiction detector (integrated into T1-D-03) | Chain B | ✅ |
-
-**Memory system & reliability**:
+**Memory system & reliability — still open**:
 
 | ID | Item | Category | Status |
 |----|------|----------|--------|
-| T1-I-01 | Memory tiering (hot/warm/cold) | Memory | ⬜ |
-| T1-I-04 | Automated memory staleness detection | Memory | ⬜ |
-| T1-I-06 | Memory retention policy | Memory | ⬜ |
+| T1-I-01 | Memory tiering (hot/warm/cold) | Memory | ⬜ (partial foundation delivered v1.3.1 — `memory_manager.py` three-tier scaffold; full tiering/retention not complete) |
+| T1-I-06 | Memory retention policy | Memory | ⬜ (superseded — see v1.5.0 planned items for current scope: 90-day archival + recency weighting) |
 | T1-C-02 | Structured HITL approval queue | Reliability | ⬜ |
 | T1-C-03 | Harness health alerting | Reliability | ⬜ |
-| T1-B-01 | Universal context file (eliminates three-copy drift) | Environment | ⬜ |
 | T1-B-02 | Harness versioning | Environment | ⬜ |
-| T1-B-03 | Onboarding workflow | Reliability | ✅ (v1.1.5) |
-| T1-J-01 | Automatic checkpoint before file changes | Recovery | ⬜ |
-| BUG-07 | Session heartbeat file modification failure | Bug fix | ✅ |
-| BUG-08 | Deprecated `datetime.utcnow()` in governance_check.py | Bug fix | ✅ |
 
-**Security foundations** *(new — addresses context-injection attack vector before broad community distribution)*:
+> **Removed from this table (confirmed shipped elsewhere, previously shown ⬜ in error)**:
+> `T1-I-00a`/`T1-I-00b` (Chain B, above), `T1-B-01` (✅ v1.3.1 Sprint 2 — UNIVERSAL_CONTEXT.md/tool shims),
+> `T1-I-04` (✅ v1.3.1 Sprint 2 — AST staleness detection), `T1-B-03` (✅ v1.1.5),
+> `T1-J-01` (✅ v1.3.4 — automatic session checkpoint + mid-task convention),
+> `BUG-07`, `BUG-08` (both ✅, closed bug fixes with no remaining tracking value).
+
+**Security foundations** *(addresses context-injection attack vector before broad community distribution)*:
 
 | ID | Item | Category | Status |
 |----|------|----------|--------|
 | S0-16 | GPG-sign all releases | Supply chain | ⬜ |
 | S0-17 | `validate.py --security` mode — hash and display governance files interactively | Verifiability | ⬜ |
 | S0-18 | `docs/security/` — document every context injection point as a visibility baseline | Transparency | ✅ (absorbed by T1-K-02) |
-| T1-K-05 | Formal security review: context-injection attack surface published as `docs/security/attack-surface-review.md` | Security | ⬜ |
+| T1-K-07 | Quarantine structural bypass mitigation — active contexts and dream proposals bypass structural validation before ingestion; close the isolation-marker attack surface gap identified in T1-K-02 (cross-referenced from v1.4.0's deferred table) | Security | ⬜ |
+| T1-K-05 | threat_model.md as a first-class governance artifact, separate from review_context_project.md; each threat paired with a deterministic `architecture_checks.py` rule (policy-as-code bridge to enterprise positioning) | Security | ⬜ |
 | T1-K-03 | Governance file diff highlighting on upgrade (AGENTS.md, governance.md, workflows) — on by default | Security | ⬜ |
 
 **Architecture**:

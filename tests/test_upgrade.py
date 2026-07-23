@@ -72,7 +72,7 @@ def test_upgrade_full_success(fresh_v110_project):
     state_file = fresh_v110_project / ".agent" / ".framework_migration_state"
     assert state_file.exists()
     state = json.loads(state_file.read_text(encoding="utf-8"))
-    assert state["current_version"] == "1.4.9"
+    assert state["current_version"] == upgrade._read_harness_version()
     assert any("v1_1_0_to_v1_1_5" in m for m in state["applied_migrations"])
     
     # Backup directory must be deleted on successful exit
@@ -97,7 +97,8 @@ def test_upgrade_conflict_with_sidecar(modified_v110_project):
     assert "# Custom developer rule" in gov_content
     
     # A conflict sidecar should be created containing the framework target version
-    sidecar_file = modified_v110_project / ".agent" / "governance.md.framework-v1.4.9"
+    target_ver = upgrade._read_harness_version()
+    sidecar_file = modified_v110_project / ".agent" / f"governance.md.framework-v{target_ver}"
     assert sidecar_file.exists()
     sidecar_content = sidecar_file.read_text(encoding="utf-8")
     assert "# Custom developer rule" not in sidecar_content
@@ -141,7 +142,8 @@ def test_already_upgraded_re_verify_mode(fresh_v110_project, capsys):
     # Run second time
     manager.run_upgrade(skip_preflight=True)
     captured = capsys.readouterr()
-    assert "Project is already at version 1.4.9" in captured.out
+    target_ver = upgrade._read_harness_version()
+    assert f"Project is already at version {target_ver}" in captured.out
 
 def test_adversarial_empty_config(malformed_config_project):
     """Verify that a malformed/empty config.yaml triggers validation errors and aborts safely."""

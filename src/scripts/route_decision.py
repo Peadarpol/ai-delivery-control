@@ -205,6 +205,13 @@ def _load_high_risk_patterns() -> Dict[str, Any]:
     return config_patterns
 
 
+def _load_adr_capability_mappings() -> Dict[str, str]:
+    raw = get_harness_config("architecture_checks", "adr_capability_mappings", config_path=PROJECT_ROOT / ".agent" / "config.yaml")
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    return {}
+
+
 def classify_commit_risk(changed_files: List[str], adr_domains: List[str]) -> Tuple[bool, List[str]]:
     """Classify commit risk based on modified paths, filenames, and active ADR domains.
 

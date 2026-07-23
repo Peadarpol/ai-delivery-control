@@ -29,9 +29,9 @@ def test_ai_review_route_decision_integration_namespace_safety():
 
 def test_api_unavailable_fail_open_persistence():
     """Verify provider/API unavailability triggers _persist_verdict with fail_open_reason."""
-    with unittest.mock.patch("ai_review._persist_verdict") as mock_persist, \
-         unittest.mock.patch("ai_review._log_gate_skipped") as mock_skip, \
-         unittest.mock.patch("ai_review.log_harness_event") as mock_log:
+    with unittest.mock.patch.object(ai_review, "_persist_verdict") as mock_persist, \
+         unittest.mock.patch.object(ai_review, "_log_gate_skipped") as mock_skip, \
+         unittest.mock.patch.object(ai_review, "log_harness_event") as mock_log:
 
         # Test _handle_api_unavailable
         res = ai_review._handle_api_unavailable("Provider timeout", ["some_file.py"], [])
@@ -44,11 +44,11 @@ def test_large_diff_lines_fail_open_logging():
     big_diff_lines = "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n" + ("+ def foo(): pass\n" * 500)
     config = {"max_diff_lines": 400, "max_diff_chars": 100000, "skip_paths": []}
 
-    with unittest.mock.patch("ai_review._persist_verdict") as mock_persist, \
-         unittest.mock.patch("ai_review._log_gate_skipped") as mock_skip, \
-         unittest.mock.patch("ai_review.log_harness_event") as mock_log, \
-         unittest.mock.patch("ai_review.load_config", return_value=config), \
-         unittest.mock.patch("ai_review.get_staged_diff", return_value=big_diff_lines), \
+    with unittest.mock.patch.object(ai_review, "_persist_verdict") as mock_persist, \
+         unittest.mock.patch.object(ai_review, "_log_gate_skipped") as mock_skip, \
+         unittest.mock.patch.object(ai_review, "log_harness_event") as mock_log, \
+         unittest.mock.patch.object(ai_review, "load_config", return_value=config), \
+         unittest.mock.patch.object(ai_review, "get_staged_diff", return_value=big_diff_lines), \
          unittest.mock.patch.object(sys, "argv", ["ai_review.py"]):
 
         res = ai_review.main()
@@ -63,11 +63,11 @@ def test_large_diff_chars_fail_open_logging():
     big_diff_chars = "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n+ " + ("x" * 500)
     config = {"max_diff_lines": 1000, "max_diff_chars": 100, "skip_paths": []}
 
-    with unittest.mock.patch("ai_review._persist_verdict") as mock_persist, \
-         unittest.mock.patch("ai_review._log_gate_skipped") as mock_skip, \
-         unittest.mock.patch("ai_review.log_harness_event") as mock_log, \
-         unittest.mock.patch("ai_review.load_config", return_value=config), \
-         unittest.mock.patch("ai_review.get_staged_diff", return_value=big_diff_chars), \
+    with unittest.mock.patch.object(ai_review, "_persist_verdict") as mock_persist, \
+         unittest.mock.patch.object(ai_review, "_log_gate_skipped") as mock_skip, \
+         unittest.mock.patch.object(ai_review, "log_harness_event") as mock_log, \
+         unittest.mock.patch.object(ai_review, "load_config", return_value=config), \
+         unittest.mock.patch.object(ai_review, "get_staged_diff", return_value=big_diff_chars), \
          unittest.mock.patch.object(sys, "argv", ["ai_review.py"]):
 
         res = ai_review.main()

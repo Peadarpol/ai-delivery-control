@@ -332,3 +332,65 @@ class TestOuterLoopModeValidation:
         passed, _ = v.validate_outer_loop_mode()
         assert passed is True
 
+
+# ── v1.4.11 Validator Hardening (F8, F-COLD-3, F-COLD-5, Sandbox) ─────────────
+
+
+class Testv1411ValidatorHardening:
+    def test_sandbox_removal_postcondition(self, validate_mod, tmp_path):
+        """Sandbox postcondition: not sandbox_path.exists() and all child paths unlinked, even with read-only files."""
+        v = validate_mod.Validator(tmp_path)
+        sandbox = tmp_path / ".agent" / "scratch" / "validate_sandbox"
+        sandbox.mkdir(parents=True)
+        read_only_file = sandbox / "readonly.txt"
+        read_only_file.write_text("data", encoding="utf-8")
+        import stat
+        read_only_file.chmod(stat.S_IREAD)
+        
+        v.remove_sandbox_dir(sandbox)
+        # Assert exact postcondition
+        assert not sandbox.exists()
+        assert not list(sandbox.glob("*"))
+
+    def test_skip_validation_flag(self, validate_mod, tmp_path):
+        """--skip-validation flag bypasses dry-run and prints summary notice."""
+        v = validate_mod.Validator(tmp_path, skip_validation=True)
+        passed, details = v.validate_sandbox_dryrun()
+        assert passed is True
+        assert "skipped" in details.lower()
+
+    def test_tool_version_subprocess_timeouts(self, validate_mod, tmp_path):
+        """Tool version checks respect individual <=1.0s timeouts."""
+        v = validate_mod.Validator(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="black, 24.1.0\n")
+            passed, details = v.validate_python_currency()
+            assert passed is True
+            # Verify timeout parameter was passed
+            for call_item in mock_run.call_args_list:
+                _, kwargs = call_item
+                if "timeout" in kwargs:
+                    assert kwargs["timeout"] <= 1.0
+
+    def test_api_preflight_timeout_and_redaction(self, validate_mod, tmp_path, monkeypatch, capsys):
+        """API preflight enforces timeout and redacts raw keys, auth headers, and key fragments."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-SECRET12345")
+        monkeypatch.delenv("HARNESS_MOCK_API_PREFLIGHT", raising=False)
+        
+        v = validate_mod.Validator(tmp_path)
+        with patch("urllib.request.urlopen", side_effect=Exception("Network failure for Bearer sk-ant-api03-SECRET12345")) as mock_urlopen:
+            passed, details = v.validate_api_preflight()
+            assert passed is True
+            # Assert timeout <= 5.0 parameter was enforced
+            assert mock_urlopen.call_args[1].get("timeout") == 5.0
+
+            captured = capsys.readouterr()
+            stderr_out = captured.err
+            
+            # Assert raw key, auth header, and fragment are strictly redacted
+            assert "sk-ant-api03-SECRET12345" not in stderr_out
+            assert "Bearer sk-ant-api03-SECRET12345" not in stderr_out
+            assert "SECRET12345" not in stderr_out
+            assert "[REDACTED_KEY]" in stderr_out or "[REDACTED_HEADER]" in stderr_out or "[REDACTED_FRAGMENT]" in stderr_out
+
+

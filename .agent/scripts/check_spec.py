@@ -91,9 +91,9 @@ def load_config() -> dict:
                 section_aliases[concept] = aliases
 
     return {
-        "specs_path": get_harness_config("spec_gate", "specs_path"),
-        "budget_provider": get_harness_config("model_routing", "budget_provider"),
-        "budget_model": get_harness_config("model_routing", "budget_model"),
+        "specs_path": get_harness_config("spec_gate", "specs_path") or "docs/planning/specs",
+        "budget_provider": get_harness_config("model_routing", "budget_provider") or "anthropic",
+        "budget_model": get_harness_config("model_routing", "budget_model") or "claude-sonnet-4-6",
         "section_aliases": section_aliases,
     }
 
@@ -302,7 +302,7 @@ def run_pass1(
     concept_content = {}  # concept -> resolved text (field value or section body)
 
     for concept in concepts:
-        aliases = section_aliases.get(concept, [])
+        aliases = section_aliases.get(concept) or _DEFAULT_SECTION_ALIASES.get(concept, [])
         found = _find_concept(content, lines, aliases)
         if not found:
             _fail(f"Missing required field or section for '{concept}' (tried aliases: {', '.join(aliases)}).")
@@ -310,7 +310,7 @@ def run_pass1(
         if found["kind"] == "field":
             value = found["value"]
             if (value.startswith("[") and value.endswith("]")) or not value:
-                _fail(f"'{found['alias']}' field cannot be empty or a placeholder.")
+                _fail(f"'{found['alias']}' field cannot be empty or a placeholder (valid issue reference required).")
             concept_content[concept] = value
         else:  # section
             body = _extract_section_content(lines, found["start_line"], found["depth"])
@@ -530,7 +530,7 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict, arc
         response_text, input_tokens, output_tokens = provider.call_llm(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=1000,
+            max_tokens=4096,
             json_mode=True
         )
         elapsed = time.time() - start_t
