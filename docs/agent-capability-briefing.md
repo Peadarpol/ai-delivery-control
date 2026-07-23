@@ -1,7 +1,7 @@
 # AI Delivery Control — Agent Capability Briefing
 
-**Framework version**: v1.4.10
-**Last updated**: 2026-07-20
+**Framework version**: v1.4.11
+**Last updated**: 2026-07-24
 **Update trigger**: Update this document when a backlog item moves to ✅ delivered,
 when a capability is materially changed, or when a "not yet built" item ships.
 
@@ -22,7 +22,7 @@ any LLM-based agent (Claude Code, Gemini CLI, Cursor, Windsurf) through
 
 ---
 
-## Currently Delivered Capabilities (v1.0.0–v1.4.4)
+## Currently Delivered Capabilities (v1.0.0–v1.4.11)
 
 ### Session lifecycle management
 
@@ -47,6 +47,16 @@ for subprocess operations exceeding 60 seconds.
 **Gemini CLI close protocol (HIB-GEMINI-01, v1.3.4)**: Establishes a structured close
 protocol for Gemini CLI sessions using `.agent/state/agent_session_close.json` to record
 outcomes, which is consumed at the next session start.
+
+**Installer & validator onboarding hardening (SPEC-v1.4.11, v1.4.11)**: `bootstrap/install.py`
+and `bootstrap/validate.py` enforce a target repository self-installation guard (`F-COLD-1`,
+via `bootstrap/common.py::is_harness_repo()`), run an ephemeral git-sandbox dry-run validator
+in `.agent/scratch/validate_sandbox/` with cross-platform URI formatting, bounded timeouts (30s
+clone, 60s pre-commit), interrupt safety, and Windows read-only teardown (`remove_sandbox_dir`),
+perform live API key preflight validation against Anthropic (`/v1/models`) and OpenAI (`/v1/models`)
+endpoints with hard `<= 5.0s` socket timeouts and credential scrubbing, enforce regex-escaped
+source paths (`re.escape()`, `F7`) in pre-commit exclusions for `black`, `ruff`, and `mypy`, and
+provide standardized `--skip-validation` CLI flags.
 
 ### Retrospective session outcome inference
 

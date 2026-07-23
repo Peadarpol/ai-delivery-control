@@ -1,8 +1,8 @@
 # AI Delivery Control — Capability Inventory
 
 **Generated**: 2026-06-13
-**Last reviewed**: 2026-06-22
-**Framework Version**: 1.4.4 (current as of last review)
+**Last reviewed**: 2026-07-24
+**Framework Version**: 1.4.11 (current as of last review)
 **Purpose**: Strategic review inventory. Cards reflect what the code actually does, not what the documentation intends. Discrepancies between documentation and implementation are called out explicitly.
 
 ---

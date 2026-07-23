@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.10
-**Target Release**: v1.4.11 (deliberately resequenced 2026-07-18 — usability/onboarding hardening prioritised ahead of v1.5.0; see decisions_log.md 2026-07-18)
-**Last Updated**: 2026-07-20 (v1.4.10 shipped; governance hardening, config parser unification rollout & decisions log discipline)
+**Current Version**: 1.4.11
+**Target Release**: v1.4.12 (Installer & validator onboarding hardening shipped in v1.4.11; see decisions_log.md 2026-07-23)
+**Last Updated**: 2026-07-24 (v1.4.11 shipped; installer & validator onboarding hardening, sandbox dry-run, API preflight)
 
 ---
 
