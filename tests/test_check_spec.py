@@ -90,8 +90,8 @@ class TestPass1Structural:
         assert high_risk is False
 
     def test_missing_sections_fails(self, base_spec_content):
-        # Remove Goal & Context section
-        bad_content = base_spec_content.replace("## 1. Goal & Context", "## 1. Vague Header")
+        # Remove Bounded Scope section
+        bad_content = base_spec_content.replace("## 2. Bounded Scope & Out of Scope", "## 2. Vague Header")
         result = check_spec.run_pass1(bad_content, "SPEC-001")
 
         ok = result.passed
@@ -100,7 +100,7 @@ class TestPass1Structural:
 
         _ = result.high_risk_dba
         assert ok is False
-        assert any("Goal & Context" in err for err in errors)
+        assert any("scope" in err.lower() for err in errors)
 
     def test_empty_source_issue_fails(self, base_spec_content):
         bad_content = base_spec_content.replace("https://github.com/owner/repo/issues/42", "[Placeholder URL]")
@@ -378,6 +378,29 @@ class TestConditionalCISkip:
             assert verdict is not None
             assert verdict.verdict == "PASS"
 
+    @patch("providers.get_provider")
+    def test_pass2_pydantic_schema_validation_error_degrades_cleanly(self, mock_get_provider, base_spec_content, tmp_path):
+        """Valid JSON lacking required Pydantic schema fields degrades cleanly with logged event rather than crashing."""
+        mock_provider = MagicMock()
+        # Returns valid JSON, but missing clarity_score, testable_criteria, sharp_boundaries, resolved_assumptions
+        mock_provider.call_llm.return_value = ('{"verdict": "ADVISORY", "advisories": ["Missing fields in response"]}', 100, 20)
+        mock_get_provider.return_value = mock_provider
+        
+        config = {"budget_provider": "anthropic", "budget_model": "claude-haiku"}
+        
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-testkey"}), \
+             patch("check_spec.SESSION_FILE", tmp_path / "session.json"), \
+             patch("check_spec.log_harness_event") as mock_log:
+             
+            exit_code, verdict = check_spec.run_pass2(base_spec_content, "SPEC-001", False, config)
+            assert exit_code == 0
+            assert verdict is not None
+            assert verdict.clarity_score == 5
+            assert verdict.testable_criteria is False
+            assert verdict.sharp_boundaries is False
+            assert verdict.resolved_assumptions is False
+            assert any(call_item[0][0].get("event_type") == "pass2_parse_failure" for call_item in mock_log.call_args_list)
+
 
 # ── Bypass Safety ─────────────────────────────────────────────────────────────
 
@@ -424,7 +447,7 @@ class TestOuterLoopMode:
 
     def test_incremental_mode_blocks_missing_heading(self, base_spec_content):
         """Missing heading in incremental mode → exit 1 (existing behaviour unchanged)."""
-        bad = base_spec_content.replace("## 1. Goal & Context", "## 1. Vague Header")
+        bad = base_spec_content.replace("## 2. Bounded Scope & Out of Scope", "## 2. Vague Header")
         result = check_spec.run_pass1(bad, "SPEC-001", mode="incremental")
 
         ok = result.passed
@@ -433,7 +456,7 @@ class TestOuterLoopMode:
 
         _ = result.high_risk_dba
         assert ok is False
-        assert any("Goal & Context" in e for e in errors)
+        assert any("scope" in e.lower() for e in errors)
 
     def test_discovery_mode_skips_gherkin_requirement(self, base_spec_content):
         """Missing Gherkin keywords in discovery mode → advisory, not a block."""

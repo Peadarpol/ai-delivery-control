@@ -228,7 +228,6 @@ def resolve_spec_file(spec_input: str | None, specs_path: str) -> tuple[str, Pat
 # OR a section header (e.g. "## Status & Sign-off") — whichever appears first wins.
 # Overridable via .agent/config.yaml: spec_gate.section_aliases.<concept>
 _DEFAULT_SECTION_ALIASES = {
-    "goal": ["Goal & Context", "Goal", "Context"],
     "source": ["Source Issue", "Tracked under", "Origin", "Feeds into"],
     "scope": ["Bounded Scope & Out of Scope", "Scope & Boundaries", "Bounded Scope"],
     "assumptions": ["Assumptions"],
@@ -299,7 +298,7 @@ def run_pass1(
 
     lines = content.splitlines()
 
-    concepts = ["goal", "source", "scope", "assumptions", "acceptance_criteria", "status"]
+    concepts = ["source", "scope", "assumptions", "acceptance_criteria", "status"]
     concept_content = {}  # concept -> resolved text (field value or section body)
 
     for concept in concepts:
@@ -531,7 +530,7 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict, arc
         response_text, input_tokens, output_tokens = provider.call_llm(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=1000,
+            max_tokens=4096,
             json_mode=True
         )
         elapsed = time.time() - start_t
@@ -540,27 +539,8 @@ def run_pass2(content: str, spec_id: str, high_risk_dba: bool, config: dict, arc
         try:
             verdict_dict = json.loads(response_text)
         except Exception as pe:
-            # Fallback for truncated JSON: extract top-level fields via regex
-            v_match = re.search(r'"verdict":\s*"(\w+)"', response_text)
-            c_match = re.search(r'"clarity_score":\s*(\d+)', response_text)
-            t_match = re.search(r'"testable_criteria":\s*(true|false)', response_text, re.IGNORECASE)
-            s_match = re.search(r'"sharp_boundaries":\s*(true|false)', response_text, re.IGNORECASE)
-            r_match = re.search(r'"resolved_assumptions":\s*(true|false)', response_text, re.IGNORECASE)
-            
-            if v_match:
-                verdict_dict = {
-                    "verdict": v_match.group(1),
-                    "clarity_score": int(c_match.group(1)) if c_match else 7,
-                    "testable_criteria": t_match.group(1).lower() == "true" if t_match else True,
-                    "sharp_boundaries": s_match.group(1).lower() == "true" if s_match else True,
-                    "resolved_assumptions": r_match.group(1).lower() == "true" if r_match else True,
-                    "advisories": re.findall(r'"(ADVISORY-\d+[^"]*|Scenario \d+:[^"]*)"', response_text),
-                    "blocking_concerns": re.findall(r'"(BLOCKING-\d+[^"]*)"', response_text),
-                    "per_criterion_feedback": []
-                }
-            else:
-                print(f"❌ [REVIEW-GATE] Configuration Error: LLM response failed JSON parsing: {pe}\nRaw text: {response_text}", file=sys.stderr)
-                return 1, None
+            print(f"❌ [REVIEW-GATE] Configuration Error: LLM response failed JSON parsing: {pe}\nRaw text: {response_text}", file=sys.stderr)
+            return 1, None
 
         try:
             verdict = SpecQualityVerdict(**verdict_dict)
