@@ -219,7 +219,7 @@ def main():
         print(f"❌ [ACCEPTANCE_GATE] Error resolving spec ID: {e}", file=sys.stderr)
         sys.exit(1)
         
-    specs_dir = Path(config["specs_path"])
+    specs_dir = Path(config.get("specs_path") or "docs/planning/specs")
     spec_file = specs_dir / f"{spec_id}.md"
     if not spec_file.exists():
         print(f"❌ [ACCEPTANCE_GATE] Spec file not found at {spec_file}", file=sys.stderr)
@@ -227,7 +227,7 @@ def main():
         
     spec_content = spec_file.read_text(encoding="utf-8")
     
-    base_branch = args.base or config["base_branch"]
+    base_branch = args.base or config.get("base_branch") or "main"
     try:
         diff_content = get_git_diff(base_branch)
     except Exception as e:

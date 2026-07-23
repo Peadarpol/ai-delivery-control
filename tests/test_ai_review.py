@@ -343,7 +343,9 @@ architecture_checks:
         config_file = agent_dir / "config.yaml"
         config_file.write_text(config_yaml_content, encoding="utf-8")
         
+        import route_decision
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch.object(route_decision, "PROJECT_ROOT", tmp_path), \
              patch("architecture_checks.extract_adr_annotations", return_value=["saas_architecture", "authentication"]), \
              patch("pathlib.Path.exists", return_value=True):
             

@@ -286,3 +286,48 @@ class TestInstallBlockedCommands:
         assert bc_dest.read_text(encoding="utf-8") == "customized version"
 
 
+# ── v1.4.11 Installer Hardening (F-COLD-1, F7, gitignore) ────────────────────
+
+
+class Testv1411InstallerHardening:
+    def test_installer_halts_on_harness_target(self, install_mod, tmp_path):
+        """F-COLD-1: Installer halts execution immediately if target has harness_version.txt."""
+        (tmp_path / "harness_version.txt").write_text("1.4.11", encoding="utf-8")
+        installer = install_mod.Installer(str(tmp_path))
+        with patch.object(installer, "detect_stack") as mock_detect:
+            with pytest.raises(SystemExit) as exc_info:
+                installer.run()
+            assert exc_info.value.code == 1
+            # Verify detect_stack was never called
+            mock_detect.assert_not_called()
+
+    def test_precommit_template_exclude_and_regex_escaping(self, install_mod, tmp_path):
+        """F7: Pre-commit template contains exclude for black, ruff, mypy with regex-escaped src path."""
+        (tmp_path / ".agent" / "config").mkdir(parents=True, exist_ok=True)
+        installer = install_mod.Installer(str(tmp_path))
+        installer.src_path = "src.main"
+        
+        # Scaffold configs
+        with patch.object(installer, "install_clinerules"):
+            installer.scaffold_configurations()
+            
+        pc_dest = tmp_path / ".pre-commit-config.yaml"
+        assert pc_dest.exists()
+        content = pc_dest.read_text(encoding="utf-8")
+        
+        # Assert exclude patterns exist
+        assert r"exclude: ^\.agent/|^src\.main/scripts/" in content
+        # Assert unescaped dot was NOT written
+        assert r"^src.main/scripts/" not in content
+
+    def test_gitignore_contains_agent_scratch(self, install_mod, tmp_path):
+        """Installer scaffolding includes .agent/scratch/ in .gitignore."""
+        installer = install_mod.Installer(str(tmp_path))
+        installer.update_gitignore()
+        gitignore_path = tmp_path / ".gitignore"
+        assert gitignore_path.exists()
+        content = gitignore_path.read_text(encoding="utf-8")
+        assert ".agent/scratch/" in content
+
+
+

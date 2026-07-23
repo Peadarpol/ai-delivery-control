@@ -4,11 +4,14 @@ import sys
 from pathlib import Path
 
 def find_project_root() -> Path:
+    cwd = Path.cwd().resolve()
+    if (cwd / ".agent" / "config.yaml").exists() or (cwd / ".git").exists():
+        return cwd
     current = Path(__file__).resolve()
     for parent in [current] + list(current.parents):
         if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
             return parent
-    return Path.cwd()
+    return cwd
 
 def _resolve_src_root_init(root: Path) -> str:
     config_path = root / ".agent" / "config.yaml"

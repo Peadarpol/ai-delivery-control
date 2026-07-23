@@ -21,6 +21,13 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
+# Add framework root to sys.path for bootstrap.common import
+framework_root = Path(__file__).resolve().parent.parent
+if str(framework_root) not in sys.path:
+    sys.path.insert(0, str(framework_root))
+
+from bootstrap import common
+
 
 def _safe_symbol(emoji: str, fallback: str) -> str:
     """Return emoji if stdout supports UTF-8, else ASCII fallback."""
@@ -101,15 +108,209 @@ def parse_simple_yaml(content: str) -> Dict[str, any]:
 
 
 class Validator:
-    def __init__(self, project_path: Path, verbose: bool = False):
+    def __init__(self, project_path: Path, verbose: bool = False, skip_validation: bool = False):
         self.project_path = project_path.resolve()
         self.verbose = verbose
+        self.skip_validation = skip_validation
         self.errors = 0
         self.warnings = 0
 
     def print_result(self, status: str, name: str, details: str = ""):
         detail_str = f" - {details}" if details else ""
         print(f"{status} {name}{detail_str}")
+
+    def remove_sandbox_dir(self, sandbox_path: Path):
+        """Helper to safely remove sandbox directory handling Windows read-only git objects."""
+        if not sandbox_path.exists():
+            return
+        import shutil
+        import stat
+
+        def remove_readonly(func, path, exc_info):
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+
+        try:
+            if sys.version_info >= (3, 12):
+                shutil.rmtree(sandbox_path, onexc=remove_readonly)
+            else:
+                shutil.rmtree(sandbox_path, onerror=remove_readonly)
+        except Exception:
+            pass
+
+        if sandbox_path.exists():
+            sys.stderr.write(f"Warning: Failed to clean up sandbox directory at {sandbox_path}\n")
+
+    def validate_harness_target_guard(self) -> Tuple[bool, str]:
+        """Secondary re-verification that target project is not the harness repository itself."""
+        if common.is_harness_repo(self.project_path):
+            is_framework = (self.project_path / "src" / "scripts" / "harness_utils.py").exists()
+            if is_framework:
+                return True, "Harness target repository guard: Framework repository identified (validation permitted for framework development)."
+            return False, "Target project contains harness_version.txt (Harness cannot be installed inside itself)."
+        return True, "Target project repository guard verified."
+
+    def validate_python_currency(self) -> Tuple[bool, str]:
+        """Check Python currency (hard 3.9 floor vs soft 3.10+ recommend) and tool versions."""
+        python_exe = common.resolve_venv_python(self.project_path)
+        
+        # Conda environment cross-verification
+        conda_env = os.environ.get("CONDA_DEFAULT_ENV")
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        if conda_env and conda_prefix:
+            if Path(conda_prefix).name != conda_env:
+                self.warnings += 1
+                print(f"{SYMBOL_WARN} Conda environment mismatch: CONDA_DEFAULT_ENV='{conda_env}' but CONDA_PREFIX points to '{conda_prefix}'.")
+
+        try:
+            res = subprocess.run([str(python_exe), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, timeout=1.0)
+            ver_str = res.stdout.strip()
+            major, minor = map(int, ver_str.split("."))
+        except Exception as e:
+            return True, f"Could not determine venv Python version: {e}"
+
+        if major < 3 or (major == 3 and minor < 9):
+            return False, f"Harness hard floor check failed: Python {ver_str} detected (minimum required: 3.9)."
+
+        hard_msg = f"[SUCCESS] Harness system floor met: Python {ver_str} (minimum required: 3.9)"
+        if minor < 10:
+            self.warnings += 1
+            soft_msg = f"[WARN] Target project Python {ver_str} is below recommended currency (3.10+). Upgrade recommended for best hook compatibility."
+            print(f"\n{SYMBOL_WARN} {soft_msg}\n")
+            return True, f"{hard_msg} | {soft_msg}"
+
+        # Subprocess tool version checks bounded by 1.0s timeout
+        tools = ["black", "ruff", "mypy"]
+        versions = []
+        for t in tools:
+            try:
+                t_res = subprocess.run([str(python_exe), "-m", t, "--version"], capture_output=True, text=True, timeout=1.0)
+                if t_res.returncode == 0:
+                    versions.append(f"{t}: {t_res.stdout.strip().splitlines()[0]}")
+            except Exception:
+                pass
+
+        return True, f"{hard_msg} (" + (", ".join(versions) if versions else "Tool versions checked") + ")"
+
+    def validate_api_preflight(self) -> Tuple[bool, str]:
+        """Preflight check for configured API keys with hard 5.0s timeout and strict redaction."""
+        import re
+        import urllib.error
+        import urllib.request
+
+        if os.environ.get("HARNESS_MOCK_API_PREFLIGHT") == "1":
+            return True, "API preflight verified (mock mode active)."
+
+        # Scan for active cloud provider keys
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+        openai_key = os.environ.get("OPENAI_API_KEY")
+
+        if not anthropic_key and not openai_key:
+            return True, "No cloud API keys configured in environment (skipping preflight network test)."
+
+        # Mock low-token test call with strict timeout <= 5.0s and credential redaction
+        target_var = "ANTHROPIC_API_KEY" if anthropic_key else "OPENAI_API_KEY"
+        target_val = anthropic_key or openai_key
+
+        def sanitize_msg(msg: str) -> str:
+            if not target_val:
+                return msg
+            # Redact raw key value, authorization headers, and partial key fragments
+            cleaned = msg.replace(target_val, "[REDACTED_KEY]")
+            cleaned = re.sub(r'Bearer\s+[A-Za-z0-9_\-\.]+', 'Bearer [REDACTED_HEADER]', cleaned)
+            cleaned = re.sub(r'sk-[A-Za-z0-9_\-\.]+', '[REDACTED_FRAGMENT]', cleaned)
+            return cleaned
+
+        try:
+            # Enforce socket/HTTP timeout <= 5.0s with provider-specific probe endpoints
+            req = urllib.request.Request("https://api.anthropic.com/v1/models" if anthropic_key else "https://api.openai.com/v1/models")
+            if anthropic_key:
+                req.add_header("x-api-key", anthropic_key)
+                req.add_header("anthropic-version", "2023-06-01")
+            else:
+                req.add_header("Authorization", f"Bearer {openai_key}")
+            
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                pass
+            return True, f"Preflight connection test succeeded for {target_var}."
+        except urllib.error.HTTPError as err:
+            clean_err = sanitize_msg(str(err))
+            card = (
+                f"\n--- API KEY TROUBLESHOOTING CARD ---\n"
+                f"Provider: {'Anthropic' if anthropic_key else 'OpenAI'}\n"
+                f"Environment Variable: {target_var}\n"
+                f"Error Category: Authorization Failure (HTTP {err.code}: {clean_err})\n"
+                f"Remediation: Verify key authorization and secret configuration.\n"
+                f"-------------------------------------\n"
+            )
+            sys.stderr.write(card)
+            if err.code in (401, 403):
+                return False, f"API key authentication failure (HTTP {err.code})."
+            # 400/404/422 indicates key is accepted by API gateway even if request parameters differ
+            return True, f"API key preflight test completed for {target_var} (HTTP {err.code})."
+        except Exception as e:
+            clean_err = sanitize_msg(str(e))
+            card = (
+                f"\n--- API KEY TROUBLESHOOTING CARD ---\n"
+                f"Provider: {'Anthropic' if anthropic_key else 'OpenAI'}\n"
+                f"Environment Variable: {target_var}\n"
+                f"Error Category: Network Failure ({clean_err})\n"
+                f"Remediation: Verify network connectivity.\n"
+                f"-------------------------------------\n"
+            )
+            sys.stderr.write(card)
+            return True, f"API key preflight check completed for {target_var} ({clean_err})."
+
+    def validate_sandbox_dryrun(self) -> Tuple[bool, str]:
+        """Temporary git-sandbox dry-run validator in .agent/scratch/validate_sandbox/.
+        
+        Executes pre-commit inside an ephemeral shallow clone cwd directory to isolate
+        scaffolding tests from developer workspace state.
+        """
+        if self.skip_validation:
+            print(f"{SYMBOL_INFO} Git sandbox dry-run validation explicitly skipped via --skip-validation (non-sandbox checks still run).")
+            return True, "Git sandbox dry-run skipped (--skip-validation active)."
+
+        sandbox_dir = self.project_path / ".agent" / "scratch" / "validate_sandbox"
+        
+        # Orphan sandbox recovery: remove leftover directory from prior crashed run
+        self.remove_sandbox_dir(sandbox_dir)
+        sandbox_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            # Create shallow clone using Path.as_uri() for cross-platform file:// formatting
+            clone_res = subprocess.run(
+                ["git", "clone", "--depth", "1", self.project_path.as_uri(), str(sandbox_dir)],
+                capture_output=True,
+                text=True,
+                timeout=30.0,
+            )
+            if clone_res.returncode != 0:
+                return False, f"Failed to create dry-run sandbox clone: {clone_res.stderr.strip()}"
+
+            # Invoke pre-commit inside sandbox with bounded timeout (60.0s)
+            python_exe = common.resolve_venv_python(self.project_path)
+            run_res = subprocess.run(
+                [str(python_exe), "-m", "pre_commit", "run", "--all-files"],
+                cwd=str(sandbox_dir),
+                capture_output=True,
+                text=True,
+                timeout=60.0,
+            )
+
+            if run_res.returncode != 0:
+                # Differentiate Infrastructure Error vs Content Violation
+                if "command not found" in run_res.stderr.lower() or run_res.returncode == 127:
+                    return False, f"Infrastructure Error during sandbox dry-run: {run_res.stderr.strip()}"
+                # Content violations are logged but non-blocking for environment runnability
+                return True, "Sandbox dry-run completed with content formatting notifications."
+
+            return True, "Ephemeral git-sandbox dry-run validation PASSED."
+        except subprocess.TimeoutExpired as exc:
+            return False, f"Sandbox dry-run execution timed out: {exc}"
+        finally:
+            # Teardown with interrupt safety and postcondition check
+            self.remove_sandbox_dir(sandbox_dir)
 
     def run_check(self, name: str, check_fn) -> bool:
         try:
@@ -510,6 +711,10 @@ class Validator:
         print(f"{SYMBOL_INFO} Target Path: {self.project_path}\n")
         
         self.run_check("Required CLI Tools", self.validate_tools)
+        self.run_check("Harness Target Repository Guard", self.validate_harness_target_guard)
+        self.run_check("Python Currency & Tooling", self.validate_python_currency)
+        self.run_check("API Credential Preflight", self.validate_api_preflight)
+        self.run_check("Git Sandbox Dry-Run", self.validate_sandbox_dryrun)
         self.run_check("Harness Core Directory Layout", self.validate_directories)
         self.run_check("Harness Core Files", self.validate_core_files)
         self.run_check("Repository Guard (G-01)", self.validate_repo_guard)
@@ -540,10 +745,15 @@ def main():
     parser = argparse.ArgumentParser(description="Harness Environment legibility check.")
     parser.add_argument("--project-path", default=".", help="Path to the project being verified (default: '.')")
     parser.add_argument("--verbose", action="store_true", help="Print debug/verbose logging")
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip post-install git-sandbox dry-run validation (non-sandbox checks still run).",
+    )
     args = parser.parse_args()
     
     project_path = Path(args.project_path)
-    validator = Validator(project_path, verbose=args.verbose)
+    validator = Validator(project_path, verbose=args.verbose, skip_validation=args.skip_validation)
     sys.exit(validator.run_all())
 
 
