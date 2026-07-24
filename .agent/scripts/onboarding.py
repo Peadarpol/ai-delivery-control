@@ -11,13 +11,28 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
-if sys.platform == "win32":
-    import io
-    if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+# Bootstrap: depth-agnostic root discovery before harness_utils import
+def _find_project_root() -> Path:
+    try:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
+            return parent
+    return p.parents[2] if len(p.parents) > 2 else p.parent
+
+_src_scripts = _find_project_root() / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+try:
+    from harness_utils import _setup_sys_path
+    _setup_sys_path()
+except ImportError:
+    pass
 
 def log_success(msg: str):
     """Log success helper."""
@@ -110,22 +125,23 @@ def main():
 
     # 4. Self-Test Verification (pytest)
     print("\n🔍 Running internal test suite...")
-    test_run = subprocess.run([sys.executable, "-m", "pytest"], capture_output=True, text=True, encoding="utf-8")
+    test_run = subprocess.run([sys.executable, "-m", "pytest", "tests/unit/"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     tests_passed = "UNKNOWN"
     tests_failed = "UNKNOWN"
+    stdout_text = test_run.stdout or ""
     
     if test_run.returncode == 0:
         print("✅ All internal unit tests passed successfully.")
         # Parse test outcomes e.g. "83 passed in 0.85s"
-        match = re.search(r"===+ (\d+) passed in", test_run.stdout)
+        match = re.search(r"===+ (\d+) passed in", stdout_text)
         if match:
             tests_passed = match.group(1)
             tests_failed = "0"
     else:
         print("❌ Internal test suite failures detected!")
         # Try to parse counts
-        passed_match = re.search(r"(\d+) passed", test_run.stdout)
-        failed_match = re.search(r"(\d+) failed", test_run.stdout)
+        passed_match = re.search(r"(\d+) passed", stdout_text)
+        failed_match = re.search(r"(\d+) failed", stdout_text)
         tests_passed = passed_match.group(1) if passed_match else "0"
         tests_failed = failed_match.group(1) if failed_match else "1"
 
@@ -140,7 +156,7 @@ def main():
                 val_script = Path(root) / "validate.py"
                 rel_val = val_script.relative_to(project_root)
                 print(f"  Running: {rel_val}...")
-                val_run = subprocess.run([sys.executable, str(val_script)], capture_output=True, text=True, encoding="utf-8")
+                val_run = subprocess.run([sys.executable, str(val_script)], capture_output=True, text=True, encoding="utf-8", errors="replace")
                 if val_run.returncode == 0:
                     skill_validations.append(f"{rel_val.parts[2]}={val_run.returncode} (PASSED)")
                 else:
@@ -170,6 +186,30 @@ def main():
     print(f"pre-commit hook: {pre_commit_ok}")
     print(f"commit-msg hook: {commit_msg_ok}")
     print(f"pre-push hook:   {pre_push_ok}")
+
+    # 6.5. Gate Enforcement Posture & Baseline Status (T1-G-18 Phase P4)
+    print("\n🔍 Checking gate enforcement posture & baseline status...")
+    posture_status = "strict"
+    baseline_status = "absent"
+    try:
+        import posture
+        pcfg = posture.load_enforcement_config(project_root)
+        posture_status = f"{pcfg['effective_posture']} (configured: {pcfg['posture']})"
+        if pcfg.get("expired"):
+            posture_status += " [EXPIRED]"
+        bdata = posture.load_baseline(project_root)
+        if bdata is not None:
+            b_entries = len(bdata.get("entries", []))
+            baseline_status = f"valid ({b_entries} entries)"
+        else:
+            b_path = project_root / ".agent" / "baseline.json"
+            if b_path.exists():
+                baseline_status = "TAMPER_SUSPECTED / UNPARSEABLE"
+    except Exception as e:
+        posture_status = f"error ({e})"
+
+    print(f"enforcement posture: {posture_status}")
+    print(f"baseline manifest:   {baseline_status}")
 
     # 7. Generate Onboarding Baseline Report
     baseline_dir = agent_dir / "baseline"

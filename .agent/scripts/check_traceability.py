@@ -299,8 +299,27 @@ def main():
                 if backlog_file.stat().st_size > 5 * 1024 * 1024:
                     print(f"⚠️ [TRACEABILITY] Warning: Skipping {backlog_file} because it exceeds the 5MB size limit.")
                     continue
-                content = backlog_file.read_text(encoding="utf-8", errors="ignore")
-                docs_lines.extend(content.splitlines())
+                # HIB-076: Read from HEAD to prevent self-ratification from staged diff additions
+                rel_path = backlog_file.as_posix()
+                content = ""
+                try:
+                    res = subprocess.run(
+                        ["git", "show", f"HEAD:{rel_path}"],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        check=True
+                    )
+                    content = res.stdout or ""
+                except Exception:
+                    # If HEAD check fails (e.g. non-git test fixtures or uncommitted new files), fall back to working file
+                    try:
+                        content = backlog_file.read_text(encoding="utf-8", errors="ignore") or ""
+                    except Exception:
+                        content = ""
+                if content:
+                    docs_lines.extend(content.splitlines())
 
     # If spec matches are present, verify spec files
     for spec_id in spec_matches:

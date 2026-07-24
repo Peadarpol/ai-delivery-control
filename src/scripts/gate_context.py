@@ -74,12 +74,14 @@ class CoChangeWarning(BaseModel):
     reason: str
 
 class GateContext(BaseModel):
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     generated_at: Optional[str] = None
     diff_text: str = ""
     diff_hash: str = ""
     changed_files: List[str] = Field(default_factory=list)
     session_id: Optional[str] = None
+    posture: str = "strict"
+    dispositions: List[Dict[str, Any]] = Field(default_factory=list)
 
     # Populated by architecture_checks.py
     arch_violations: List[ArchViolation] = Field(default_factory=list)
@@ -114,8 +116,9 @@ def load_gate_context(path: Optional[Path] = None) -> Optional[GateContext]:
     try:
         content = path.read_text(encoding="utf-8")
         data = json.loads(content)
-        # Check schema version
-        if data.get("schema_version") != "1.0":
+        # Check schema version — accept any 1.x schema version
+        ver = str(data.get("schema_version", ""))
+        if not ver.startswith("1."):
             return None
         return GateContext(**data)
     except Exception:

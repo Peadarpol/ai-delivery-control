@@ -77,7 +77,14 @@ def get_calibrated_weight(
     """Returns the weight for the capability, respecting config settings and overrides."""
     if config is None:
         config = {}
-        
+
+    try:
+        from posture import is_invariant_pinned
+        if is_invariant_pinned(capability):
+            return 1.0
+    except Exception:
+        pass
+
     calibration_config = config.get("capability_calibration", {})
     if not calibration_config.get("enabled", True):
         return 1.0

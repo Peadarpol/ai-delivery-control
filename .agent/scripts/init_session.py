@@ -1,8 +1,24 @@
+import subprocess
 import sys
 from pathlib import Path
 
-# Bootstrap: add src/scripts to path before harness_utils import
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src" / "scripts"))
+# Bootstrap: depth-agnostic root discovery before harness_utils import
+def _find_project_root() -> Path:
+    try:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
+            return parent
+    return p.parents[2] if len(p.parents) > 2 else p.parent
+
+_src_scripts = _find_project_root() / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
 from harness_utils import _setup_sys_path, _lock_session, log_harness_event, redact_api_keys, get_harness_config
 _setup_sys_path()  # full path setup for remaining imports
 

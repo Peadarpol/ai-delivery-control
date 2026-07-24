@@ -127,20 +127,49 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
 
-    # Inspect sessions table columns for schema drift (HIB-059)
-    try:
-        cursor = conn.execute("PRAGMA table_info(sessions);")
-        existing_cols = {row[1] for row in cursor.fetchall()}
-        required_cols = {"session_id", "project_root", "agent", "start_time", "end_time", "outcome", "outcome_source", "outcome_note", "task_magnitude", "harness_version"}
-        missing = required_cols - existing_cols
-        if missing:
-            for col in missing:
-                try:
-                    conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT;")
-                except sqlite3.OperationalError:
-                    pass
-    except Exception:
-        pass
+    # Inspect all tables for schema drift (HIB-059 & HIB-077)
+    table_schemas = {
+        "sessions": {
+            "session_id": "TEXT",
+            "project_root": "TEXT",
+            "agent": "TEXT",
+            "start_time": "TEXT",
+            "end_time": "TEXT",
+            "outcome": "TEXT",
+            "outcome_source": "TEXT",
+            "outcome_note": "TEXT",
+            "task_magnitude": "TEXT",
+            "harness_version": "TEXT",
+        },
+        "review_events": {
+            "session_id": "TEXT",
+            "project_root": "TEXT",
+            "timestamp_utc": "TEXT",
+            "verdict": "TEXT",
+            "diff_hash": "TEXT",
+            "input_tokens": "INTEGER DEFAULT 0",
+            "output_tokens": "INTEGER DEFAULT 0",
+            "call_count": "INTEGER DEFAULT 0",
+        },
+        "spec_acceptance": {
+            "spec_id": "TEXT",
+            "project_root": "TEXT",
+            "status": "TEXT",
+        },
+    }
+
+    for table_name, req_cols in table_schemas.items():
+        try:
+            cursor = conn.execute(f"PRAGMA table_info({table_name});")
+            existing_cols = {row[1] for row in cursor.fetchall()}
+            for col_name, col_type in req_cols.items():
+                if col_name not in existing_cols:
+                    try:
+                        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type};")
+                    except sqlite3.OperationalError:
+                        pass
+        except Exception:
+            pass
 
     # Insert schema version row if missing
     row = conn.execute("SELECT version FROM schema_version LIMIT 1;").fetchone()

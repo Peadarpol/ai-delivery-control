@@ -3,33 +3,29 @@ import json
 import os
 import subprocess
 import time
+import sys
 from pathlib import Path
 
-import sys
-try:
-    from harness_utils import _safe_git_env
-except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "src" / "scripts"))
-    from harness_utils import _safe_git_env
-
-def find_project_root() -> Path:
+def _find_project_root() -> Path:
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=_safe_git_env()
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return Path(result.stdout.strip())
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
     except Exception:
         pass
-    current = Path(__file__).resolve().parent
-    for parent in current.parents:
+    p = Path(__file__).resolve()
+    for parent in p.parents:
         if (parent / ".git").exists() or (parent / ".agent").exists():
             return parent
-    return current
+    return p.parents[2] if len(p.parents) > 2 else p.parent
+
+_src_scripts = _find_project_root() / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+from harness_utils import _safe_git_env
+
+def find_project_root() -> Path:
+    return _find_project_root()
 
 PROJECT_ROOT = find_project_root()
 CACHE_PATH = PROJECT_ROOT / ".agent" / "state" / "repo_graph_cache.json"

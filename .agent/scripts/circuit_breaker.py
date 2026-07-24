@@ -19,13 +19,26 @@ if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
+def _find_project_root() -> Path:
+    try:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
+            return parent
+    return p.parents[2] if len(p.parents) > 2 else p.parent
+
+_src_scripts = _find_project_root() / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+from harness_utils import get_harness_config
+
 def load_limits() -> dict:
     """Load agent_limits from config.yaml, falling back to defaults."""
-    # Bootstrap harness_utils
-    scripts_path = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
-    if str(scripts_path) not in sys.path:
-        sys.path.insert(0, str(scripts_path))
-    from harness_utils import get_harness_config
     
     limits = {
         "max_files_per_commit": get_harness_config("agent_limits", "max_files_per_commit"),

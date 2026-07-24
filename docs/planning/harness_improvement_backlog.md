@@ -1227,4 +1227,62 @@ This is cosmetic only when rendered — Markdown collapses single newlines withi
 
 Recommend normalising all tracked Markdown docs under `docs/` (and `.agent/` where applicable) to single-line-per-paragraph — the more common convention for git-tracked Markdown specifically because it minimises diff churn — as a dedicated hygiene pass rather than piecemeal fixes during unrelated edits.
 
+---
+
+## HIB-076 — Traceability Gate Self-Ratification Gap
+
+**Date**: 2026-07-24
+**Source**: Incident analysis `incident-chain-2026-07-15.md` §(d) (Incident commit `9d51019` / `HIB-149` ref)
+**Pillar**: Gating / Requirement Traceability
+**Status**: 📋 Backlog (Target Release: v1.4.12)
+
+`check_traceability.py` recursively scans the entire `docs/` tree for ID references at gate time against the post-commit working tree. A commit can reference a brand-new, never-approved ID in its commit message, and simultaneously stage a line elsewhere under `docs/` mentioning that same ID string (e.g. a to-do bullet in a planning document). The gate resolves the reference as "found" and passes, even though the only place the ID exists is in the commit currently being introduced. Documented incident: commit `9d51019` self-ratified `HIB-149` this way.
+
+This is structurally distinct from the `--no-trace` authentication gap (T1-K-13 / HIB-067) because it requires no explicit bypass flag. A normal traceability-gate pass can be self-authored.
+
+**Fix Direction**: Resolve referenced IDs against the pre-commit (HEAD) state of backlog/planning files, or explicitly exclude additions in the currently-staged diff from the ID-existence scan, ensuring an ID cannot be introduced and satisfied in the same commit.
+
+---
+
+## HIB-077 — Comprehensive Schema-Drift Migration Across Non-Session SQLite Tables
+
+**Date**: 2026-07-24
+**Source**: Verification audit of HIB-059
+**Pillar**: State Persistence / SQLite Index
+**Status**: 📋 Backlog (Target Release: v1.4.12)
+
+The HIB-059 schema drift fix implemented `PRAGMA table_info` column inspection and `ALTER TABLE` auto-migration in `state_persistence.py` specifically for the `sessions` table (lines 130–143). However, sibling tables `review_events` and `spec_acceptance` lack equivalent column-drift inspection loops. If future harness releases add new columns to `review_events` or `spec_acceptance` in an existing `~/.aisdlc/harness.db`, queries against those tables will raise `OperationalError: no such column` without auto-migration.
+
+**Fix Direction**: Extend `_ensure_schema()` in `state_persistence.py` to inspect and auto-migrate missing columns across all defined SQLite tables (`sessions`, `review_events`, `spec_acceptance`), ensuring backwards-compatible schema migration for long-lived user databases.
+
+---
+
+## HIB-078 — GATE_ADVISORY Audit Log Batching and Rotation Under Ratchet Posture
+
+**Date**: 2026-07-24
+**Source**: `SPEC-enforcement-postures.md` review
+**Pillar**: Log Management / Audit Trail
+**Status**: 📋 Backlog (Target Release: v1.4.12 follow-up)
+
+On large brownfield repositories operating under `enforcement.posture: ratchet`, a single gate run can emit hundreds of `GATE_ADVISORY` events for pre-existing debt. While live log snapshotting (HIB-063) isolates session snapshots, high-frequency advisory logging could increase `harness_events.jsonl` size and execution time.
+
+**Fix Direction**: Evaluate whether `GATE_ADVISORY` audit-log events under `ratchet` posture require batching, summary aggregation, or dedicated log rotation threshold rules when event volume exceeds standard single-session limits.
+
+---
+
+## HIB-079 — Index-Drift Inspection and Auto-Creation for SQLite Tables
+
+**Date**: 2026-07-24
+**Source**: Second multi-persona review of SPEC-v1.4.12
+**Pillar**: State Persistence / SQLite Performance
+**Status**: 📋 Backlog (Unscheduled / Feature Follow-up)
+
+While `HIB-077` handles column-drift auto-migration across SQLite tables (`sessions`, `review_events`, `spec_acceptance`), future harness releases that introduce secondary non-primary-key indexes on existing tables could result in index drift on existing user databases.
+
+**Fix Direction**: Extend `_ensure_schema()` in `state_persistence.py` to inspect `PRAGMA index_list(<table_name>)` alongside column inspection, executing `CREATE INDEX IF NOT EXISTS` for required secondary indexes whenever secondary indexes are added to table definitions.
+
+
+
+
+
 
