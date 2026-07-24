@@ -23,11 +23,33 @@ def test_gate_context_defaults():
         diff_hash="hash123",
         changed_files=["file1.py"]
     )
-    assert ctx.schema_version == "1.0"
+    assert ctx.schema_version == "1.1"
+    assert ctx.posture == "strict"
+    assert ctx.dispositions == []
     assert ctx.arch_violations == []
     assert ctx.co_change_warnings == []
     assert ctx.review_intensity == "standard"
     assert ctx.todo_delta is None
+
+def test_v1_0_schema_loads_cleanly():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir) / "gate_context_current.json"
+        
+        # Write v1.0 schema document
+        v1_data = {
+            "schema_version": "1.0",
+            "diff_text": "diff",
+            "diff_hash": "hash123",
+            "changed_files": ["src/foo.py"]
+        }
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(v1_data, f)
+            
+        loaded = load_gate_context(tmp_path)
+        assert loaded is not None
+        assert loaded.schema_version == "1.0"
+        assert loaded.posture == "strict"
+        assert loaded.dispositions == []
 
 def test_atomic_write_and_load():
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -10,7 +10,23 @@ import sys
 from pathlib import Path
 
 # Add project root to path for imports
-sys.path.append(os.getcwd())
+def _find_project_root() -> Path:
+    try:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
+            return parent
+    return p.parents[2] if len(p.parents) > 2 else p.parent
+
+PROJECT_ROOT = _find_project_root()
+_src_scripts = PROJECT_ROOT / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
 
 # Fix: Ensure UTF-8 encoding for stdout/stderr on Windows
 if sys.platform == "win32":

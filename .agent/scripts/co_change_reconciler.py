@@ -14,16 +14,26 @@ import yaml
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.append(str(SCRIPT_DIR))
 
-# Find default project root (traverse upwards until .git is found)
 def _find_project_root() -> Path:
-    curr = Path(__file__).resolve().parent
-    for _ in range(10):
-        if (curr / ".git").exists():
-            return curr
-        curr = curr.parent
-    return Path(__file__).resolve().parent.parent
+    try:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
+            return parent
+    return p.parents[2] if len(p.parents) > 2 else p.parent
 
 PROJECT_ROOT = _find_project_root()
+_src_scripts = PROJECT_ROOT / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+_agent_scripts = PROJECT_ROOT / ".agent" / "scripts"
+if _agent_scripts.exists() and str(_agent_scripts) not in sys.path:
+    sys.path.insert(0, str(_agent_scripts))
 
 # Import co_change_core logic
 try:

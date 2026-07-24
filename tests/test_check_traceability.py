@@ -156,24 +156,28 @@ def test_multiple_ids_scanned_once(mock_trace_env):
     docs_dir = mock_trace_env / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
     backlog_file = docs_dir / "backlog.md"
-    backlog_file.write_text("- [ ] HIB-001\n- [ ] BUG-002\n- [ ] T1-A-01\n", encoding="utf-8")
+    backlog_content = "- [ ] HIB-001\n- [ ] BUG-002\n- [ ] T1-A-01\n"
+    backlog_file.write_text(backlog_content, encoding="utf-8")
     
     msg_file = mock_trace_env / ".git" / "COMMIT_EDITMSG"
     msg_file.write_text("Fixes [HIB-001], [BUG-002], and [T1-A-01]", encoding="utf-8")
     
-    with patch("subprocess.run") as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]):
-        mock_run.return_value.stdout = "src/main.py\n"
-        
-        real_read_text = Path.read_text
-        def mock_read_text_impl(self, *args, **kwargs):
-            return real_read_text(self, *args, **kwargs)
-            
-        with patch.object(Path, 'read_text', autospec=True, side_effect=mock_read_text_impl) as mock_read_text:
-            with pytest.raises(SystemExit) as excinfo:
-                check_traceability.main()
-            assert excinfo.value.code == 0
-            calls = [call for call in mock_read_text.call_args_list if call[0][0].name == 'backlog.md']
-            assert len(calls) == 1
+    def mock_subprocess_run(cmd, *args, **kwargs):
+        mock_obj = MagicMock()
+        if isinstance(cmd, list) and len(cmd) >= 2 and cmd[0] == "git" and cmd[1] == "show":
+            mock_obj.stdout = backlog_content
+            mock_obj.returncode = 0
+            return mock_obj
+        mock_obj.stdout = "src/main.py\n"
+        mock_obj.returncode = 0
+        return mock_obj
+
+    with patch("subprocess.run", side_effect=mock_subprocess_run) as mock_run, patch("sys.argv", ["check_traceability.py", str(msg_file)]):
+        with pytest.raises(SystemExit) as excinfo:
+            check_traceability.main()
+        assert excinfo.value.code == 0
+        git_show_calls = [c for c in mock_run.call_args_list if len(c[0]) > 0 and isinstance(c[0][0], list) and c[0][0][:2] == ["git", "show"]]
+        assert len(git_show_calls) == 1
 
 def test_missing_docs_dir(mock_trace_env, capsys):
     import shutil
@@ -209,3 +213,29 @@ def test_huge_file_skipped(mock_trace_env, capsys):
         captured = capsys.readouterr()
         assert "Skipping" in captured.out
         assert "huge.md" in captured.out
+
+
+def test_hib_076_self_ratification_prevented(mock_trace_env):
+    docs_dir = mock_trace_env / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    backlog_file = docs_dir / "backlog.md"
+    backlog_file.write_text("- [ ] HIB-076\n", encoding="utf-8")
+    
+    msg_file = mock_trace_env / ".git" / "COMMIT_EDITMSG"
+    msg_file.write_text("Fixes [HIB-076]", encoding="utf-8")
+    
+    def mock_subprocess_run(cmd, *args, **kwargs):
+        mock_obj = MagicMock()
+        if isinstance(cmd, list) and len(cmd) >= 2 and cmd[0] == "git" and cmd[1] == "show":
+            mock_obj.stdout = "- [ ] HIB-001\n"
+            mock_obj.returncode = 0
+            return mock_obj
+        mock_obj.stdout = "src/main.py\n"
+        mock_obj.returncode = 0
+        return mock_obj
+        
+    with patch("subprocess.run", side_effect=mock_subprocess_run), patch("sys.argv", ["check_traceability.py", str(msg_file)]):
+        with pytest.raises(SystemExit) as excinfo:
+            check_traceability.main()
+        assert excinfo.value.code == 1
+

@@ -307,7 +307,7 @@ def test_pass1_smoke_all_three_specs():
     specs = [
         "docs/planning/specs/archive/SPEC-v1.4.10-governance-hardening.md",
         "docs/planning/specs/archive/SPEC-v1.4.9.1-first-commit-hotfix.md",
-        "docs/planning/specs/SPEC-v1.4.11-installer-onboarding.md",
+        "docs/planning/specs/archive/SPEC-v1.4.11-installer-onboarding.md",
     ]
 
     checked_count = 0

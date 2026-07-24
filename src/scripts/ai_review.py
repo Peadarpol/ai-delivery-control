@@ -834,10 +834,19 @@ def _write_halt_file(msg: str):
 
 
 def _handle_api_unavailable(reason: str, changed_files: List[str], active_domains: List[str], diff_text: str = "none") -> int:
-    """Handle API/provider unavailability with high-risk fail-closed enforcement (T1-L-08)."""
+    """Handle API/provider unavailability with high-risk fail-closed enforcement (T1-L-08 & HIB-074)."""
     is_high_risk, matched_patterns = classify_commit_risk(changed_files, active_domains)
     _log_gate_skipped("PROVIDER_ERROR", diff_text)
     _persist_verdict(fail_open_reason=reason)
+    
+    log_harness_event({
+        "event_type": "review_network_error",
+        "severity": "WARNING",
+        "payload": {
+            "reason": reason,
+            "high_risk": is_high_risk
+        }
+    })
     
     if is_high_risk:
         print("[REVIEW] API unavailable + high-risk commit → FAIL CLOSED")
@@ -859,6 +868,26 @@ def _handle_api_unavailable(reason: str, changed_files: List[str], active_domain
         print(f"⚠️  AI review skipped (fail-open): {reason}")
         print("   Allowing commit. Review manually if this persists.")
         return 0
+
+
+def _handle_local_error(reason: str, exc: Exception, changed_files: List[str], active_domains: List[str], diff_text: str = "none") -> int:
+    """Handle local execution/runtime exceptions cleanly without blaming network providers (HIB-074)."""
+    import traceback
+    tb = traceback.format_exc()
+    _persist_verdict(fail_open_reason=reason)
+    
+    print(f"❌ [REVIEW-GATE] Local Runtime Error during AI review: {reason}")
+    
+    log_harness_event({
+        "event_type": "review_local_error",
+        "severity": "ERROR",
+        "payload": {
+            "reason": reason,
+            "traceback": tb,
+            "changed_files": changed_files
+        }
+    })
+    return 1
 
 
 def _handle_parse_failure(reason: str, changed_files: List[str], active_domains: List[str]) -> int:
@@ -1244,7 +1273,7 @@ def render_review(review: Dict[str, Any], churn_info: str) -> None:
 
     print(f"  Summary: {summary}")
     print("─" * 60 + "\n")
-def _log_gate_skipped(skip_reason: str, diff_text: str = "none") -> None:
+def _log_gate_skipped(skip_reason: str, diff_text: str = "none", deprecated_bypass: bool = False) -> None:
     """Log a gate skipped event to audit logs and event logs."""
     try:
         session_id = _get_active_session_id() or "unknown"
@@ -1268,7 +1297,8 @@ def _log_gate_skipped(skip_reason: str, diff_text: str = "none") -> None:
             "verdict": "GATE_SKIPPED",
             "skip_reason": skip_reason,
             "diff_hash": diff_hash,
-            "harness_version": harness_version
+            "harness_version": harness_version,
+            "deprecated_bypass": deprecated_bypass,
         }
         log_path = PROJECT_ROOT / ".ai-review-log.jsonl"
         with open(log_path, "a", encoding="utf-8") as f:
@@ -1282,7 +1312,8 @@ def _log_gate_skipped(skip_reason: str, diff_text: str = "none") -> None:
             "severity": "INFO",
             "payload": {
                 "skip_reason": skip_reason,
-                "diff_hash": diff_hash
+                "diff_hash": diff_hash,
+                "deprecated_bypass": deprecated_bypass,
             }
         })
     except Exception:
@@ -1606,12 +1637,16 @@ def _run_review(commit_msg_file: str | None = None) -> int:
 
             return 0
         else:
+            print("⚠️  [DEPRECATION WARNING] SKIP_AI_REVIEW bypass is deprecated. Use 'enforcement.posture: observe' in .agent/config.yaml instead.")
             print("⚡ AI review skipped (SKIP_AI_REVIEW=1)")
+            _log_gate_skipped("SKIP_AI_REVIEW", "none", deprecated_bypass=True)
             return 0
 
     # Allow bypass via sentinel file (for pre-commit env var propagation issues)
     if (PROJECT_ROOT / ".skip-ai-review").exists():
-        print("\u26a1 AI review skipped (.skip-ai-review file found)")
+        print("⚠️  [DEPRECATION WARNING] .skip-ai-review bypass file is deprecated. Use 'enforcement.posture: observe' in .agent/config.yaml instead.")
+        print("⚡ AI review skipped (.skip-ai-review file found)")
+        _log_gate_skipped(".skip-ai-review", "none", deprecated_bypass=True)
         return 0
 
     # Get the staged diff
@@ -2167,14 +2202,15 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     except urllib.error.URLError as e:
         elapsed = time.time() - start_time
         reason = f"Network error ({elapsed:.1f}s): {e}"
-        return _handle_api_unavailable(reason, changed_files, active_domains)
+        return _handle_api_unavailable(reason, changed_files, active_domains, diff)
     except json.JSONDecodeError as e:
         reason = f"JSON parse error: {e}"
         _handle_parse_failure(reason, changed_files, active_domains)
         return 1
     except Exception as e:
-        reason = str(e)
-        return _handle_api_unavailable(reason, changed_files, active_domains)
+        elapsed = time.time() - start_time
+        reason = f"Local execution error ({elapsed:.1f}s): {e}"
+        return _handle_local_error(reason, e, changed_files, active_domains, diff)
 
     elapsed = time.time() - start_time
 
@@ -2322,12 +2358,52 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         fail_reason = f"ReviewVerdict validation failed: {exc}"
         return _handle_api_unavailable(fail_reason, changed_files, active_domains)
 
-    # Write back final RouteDecision and ReviewVerdict (T1-G-13)
+    # ── Posture Disposition Evaluation (T1-G-18 Phase P3) ──
+    try:
+        import posture
+        posture_cfg = posture.load_enforcement_config(PROJECT_ROOT)
+        effective_posture = posture_cfg["effective_posture"]
+        rule_overrides = posture_cfg["rule_overrides"]
+        baseline_data = posture.load_baseline(PROJECT_ROOT)
+        touched_files, _ = posture.get_touched_files(PROJECT_ROOT)
+    except Exception:
+        posture = None
+        effective_posture = "strict"
+        rule_overrides = {}
+        baseline_data = None
+        touched_files = set()
+
+    blocking_issues_count = 0
+    if posture is not None and typed_verdict.issues:
+        for issue in typed_verdict.issues:
+            concern = issue.get("concern", "GENERAL")
+            sev = issue.get("severity", "MEDIUM")
+            loc = str(issue.get("location", "")).split(":")[0].strip()
+
+            disp = posture.disposition(
+                rule=concern,
+                severity=sev,
+                file_path=loc,
+                posture=effective_posture,
+                baseline=baseline_data,
+                rule_overrides=rule_overrides,
+                touched_files=touched_files,
+            )
+            issue["disposition"] = disp.to_dict()
+            if disp.outcome == posture.Outcome.BLOCK:
+                blocking_issues_count += 1
+
+    # Write back final RouteDecision and ReviewVerdict (T1-G-13 & SPEC v1.1)
     if gate_context:
         try:
             from gate_context import write_gate_context
             gate_context.route_decision = route_decision.model_dump() if route_decision else None
             gate_context.verdict = typed_verdict.model_dump()
+            gate_context.posture = effective_posture
+            if posture is not None and typed_verdict.issues:
+                gate_context.dispositions = [
+                    issue.get("disposition") for issue in typed_verdict.issues if issue.get("disposition")
+                ]
             write_gate_context(gate_context)
         except Exception as e:
             print(f"⚠️  [GATE] Failed to write back final GateContext: {e}")
@@ -2341,9 +2417,12 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     print(f"  \u23f1\ufe0f  Review completed in {elapsed:.1f}s\n")
 
     if typed_verdict.verdict == "FAIL":
-        print("\u274c Commit BLOCKED by AI review. Fix HIGH severity issues or run:")
-        print("   SKIP_AI_REVIEW=1 git commit ...  to bypass")
-        print("   -- or create a .skip-ai-review file in the project root\n")
+        if posture is not None and blocking_issues_count == 0:
+            print(f"\n⚡ [POSTURE ADVISORY] AI review verdict FAIL demoted to ADVISORY (posture: {effective_posture}). Commit proceeding.\n")
+            return 0
+        print("❌ Commit BLOCKED by AI review. Fix HIGH severity issues or run:")
+        print("   python .agent/scripts/rebuttal.py  to submit a technical rebuttal")
+        print("   -- or set 'enforcement.posture: observe' in .agent/config.yaml\n")
         return 1
     elif typed_verdict.verdict == "WARN":
         print("\u26a0\ufe0f  Warnings noted. Commit proceeding.\n")

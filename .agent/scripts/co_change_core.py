@@ -6,18 +6,28 @@ All function bodies are unchanged. Only get_git_co_changes receives new paramete
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
-import sys
-try:
-    from harness_utils import _safe_git_env
-except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "scripts"))
-    from harness_utils import _safe_git_env
+def _find_project_root() -> Path:
+    try:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
+            return parent
+    return p.parents[2] if len(p.parents) > 2 else p.parent
 
-# Resolve PROJECT_ROOT
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent.parent
+PROJECT_ROOT = _find_project_root()
+_src_scripts = PROJECT_ROOT / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+from harness_utils import _safe_git_env
+
 CACHE_PATH = PROJECT_ROOT / ".agent" / "state" / "co_change_map.json"
 REPO_CACHE_PATH = PROJECT_ROOT / ".agent" / "state" / "repo_graph_cache.json"
 

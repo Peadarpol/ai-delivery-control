@@ -38,7 +38,20 @@ def load_domain_registry(config_path: "Path | None" = None) -> dict:
     This logic intentionally matches other agentic utilities (like circuit_breaker)
     that prefer safe degraded operation over fatal crashes when agent-specific config is absent.
     """
-    scripts_dir = Path(__file__).resolve().parent.parent.parent / "src" / "scripts"
+    def _find_project_root() -> Path:
+        try:
+            res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+            if res.returncode == 0 and res.stdout.strip():
+                return Path(res.stdout.strip())
+        except Exception:
+            pass
+        p = Path(__file__).resolve()
+        for parent in p.parents:
+            if (parent / ".git").exists() or (parent / ".agent").exists():
+                return parent
+        return p.parents[2] if len(p.parents) > 2 else p.parent
+
+    scripts_dir = _find_project_root() / "src" / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
     from harness_utils import get_harness_config

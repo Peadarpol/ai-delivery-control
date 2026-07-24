@@ -51,11 +51,13 @@ def test_large_diff_lines_fail_open_logging():
          unittest.mock.patch.object(ai_review, "get_staged_diff", return_value=big_diff_lines), \
          unittest.mock.patch.object(sys, "argv", ["ai_review.py"]):
 
-        res = ai_review.main()
-        assert res == 0
-        mock_persist.assert_called_once()
-        assert "diff too large" in mock_persist.call_args[1]["fail_open_reason"]
-        assert any(c[0][0].get("event_type") == "large_diff_fail_open" for c in mock_log.call_args_list)
+        no_preflight = ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note="full review")
+        with unittest.mock.patch.object(ai_review, "check_preflight_shortcut", return_value=no_preflight):
+            res = ai_review._run_review()
+            assert res == 0
+            mock_persist.assert_called_once()
+            assert "diff too large" in mock_persist.call_args[1]["fail_open_reason"]
+            assert any(c[0][0].get("event_type") == "large_diff_fail_open" for c in mock_log.call_args_list)
 
 
 def test_large_diff_chars_fail_open_logging():
@@ -70,8 +72,10 @@ def test_large_diff_chars_fail_open_logging():
          unittest.mock.patch.object(ai_review, "get_staged_diff", return_value=big_diff_chars), \
          unittest.mock.patch.object(sys, "argv", ["ai_review.py"]):
 
-        res = ai_review.main()
-        assert res == 0
-        mock_persist.assert_called_once()
-        assert "diff too large" in mock_persist.call_args[1]["fail_open_reason"]
-        assert any(c[0][0].get("event_type") == "large_diff_fail_open" for c in mock_log.call_args_list)
+        no_preflight = ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note="full review")
+        with unittest.mock.patch.object(ai_review, "check_preflight_shortcut", return_value=no_preflight):
+            res = ai_review._run_review()
+            assert res == 0
+            mock_persist.assert_called_once()
+            assert "diff too large" in mock_persist.call_args[1]["fail_open_reason"]
+            assert any(c[0][0].get("event_type") == "large_diff_fail_open" for c in mock_log.call_args_list)

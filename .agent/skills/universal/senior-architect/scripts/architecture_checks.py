@@ -696,6 +696,19 @@ def main():
                 adr_domains.extend(extract_adr_annotations(f))
         gate_context.adr_domains = list(set(adr_domains))
 
+        # Explicit RULE_SEVERITY_MAP for deterministic severity derivation (T1-G-18)
+        RULE_SEVERITY_MAP = {
+            "LAYER_BOUNDARY": "FAIL",
+            "HIGH_COUPLING": "WARN",
+            "BRANCH_FILTER": "FAIL",
+            "AGGREGATE_ROOT": "FAIL",
+            "INTERFACE_SEGREGATION": "FAIL",
+            "ASGI_LIFESPAN": "WARN",
+            "FORBIDDEN_PATTERN": "FAIL",
+            "TYPE_CHECKING_CAST": "WARN",
+            "ARCHITECTURE_RULE": "FAIL",
+        }
+
         # Parse all_errors into ArchViolation
         violations = []
         for err in all_errors:
@@ -713,25 +726,26 @@ def main():
                 line = 1
                 msg = err.strip()
 
-            severity = "FAIL"
-            if "coupling" in msg.lower() or "lifespan" in msg.lower() or "nameerror" in msg.lower():
-                severity = "WARN"
-
+            msg_lower = msg.lower()
             rule = "ARCHITECTURE_RULE"
-            if "layer violation" in msg.lower():
+            if "layer violation" in msg_lower:
                 rule = "LAYER_BOUNDARY"
-            elif "coupling" in msg.lower():
+            elif "coupling" in msg_lower:
                 rule = "HIGH_COUPLING"
-            elif "conditional branch filter" in msg.lower():
+            elif "conditional branch filter" in msg_lower:
                 rule = "BRANCH_FILTER"
-            elif "aggregate root" in msg.lower():
+            elif "aggregate root" in msg_lower:
                 rule = "AGGREGATE_ROOT"
-            elif "concrete infrastructure" in msg.lower():
+            elif "concrete infrastructure" in msg_lower:
                 rule = "INTERFACE_SEGREGATION"
-            elif "lifespan" in msg.lower():
+            elif "lifespan" in msg_lower:
                 rule = "ASGI_LIFESPAN"
-            elif "forbidden pattern" in msg.lower():
+            elif "forbidden pattern" in msg_lower:
                 rule = "FORBIDDEN_PATTERN"
+            elif "nameerror" in msg_lower or "type checking" in msg_lower:
+                rule = "TYPE_CHECKING_CAST"
+
+            severity = RULE_SEVERITY_MAP.get(rule, "FAIL")
 
             violations.append(
                 ArchViolation(file=filepath, line=line, rule=rule, severity=severity)
@@ -742,13 +756,54 @@ def main():
     except Exception as e:
         print(f"[ARCH] Warning: Failed to populate GateContext: {e}")
 
-    if all_errors:
-        print(f"\n[FAIL] Found {len(all_errors)} architectural violations:")
-        for err in all_errors:
+    # ── Evaluate violations through Posture Engine (T1-G-18 Phase P1) ──
+    try:
+        sys.path.insert(0, str(find_project_root() / "src" / "scripts"))
+        import posture
+        posture_cfg = posture.load_enforcement_config(find_project_root())
+        effective_posture = posture_cfg["effective_posture"]
+        rule_overrides = posture_cfg["rule_overrides"]
+    except Exception:
+        posture = None
+        effective_posture = "strict"
+        rule_overrides = {}
+
+    blocking_errors = []
+    advisory_errors = []
+
+    for err, violation in zip(all_errors, violations if 'violations' in locals() else []):
+        if posture is not None:
+            disp = posture.disposition(
+                rule=violation.rule,
+                severity=violation.severity,
+                file_path=violation.file,
+                line=violation.line,
+                posture=effective_posture,
+                rule_overrides=rule_overrides,
+            )
+            if disp.outcome == posture.Outcome.BLOCK:
+                blocking_errors.append((err, disp))
+            else:
+                advisory_errors.append((err, disp))
+        else:
+            if violation.severity == "FAIL":
+                blocking_errors.append((err, None))
+            else:
+                advisory_errors.append((err, None))
+
+    if advisory_errors:
+        print(f"\n[ADVISORY] {len(advisory_errors)} architectural warning(s):")
+        for err, disp in advisory_errors:
+            out_str = f" ({disp.outcome.value})" if disp else ""
+            print(f"  - {err}{out_str}")
+
+    if blocking_errors:
+        print(f"\n[FAIL] Found {len(blocking_errors)} blocking architectural violation(s) (posture: {effective_posture}):")
+        for err, disp in blocking_errors:
             print(f"  - {err}")
         sys.exit(1)
 
-    print("[PASS] Architectural checks passed!")
+    print(f"[PASS] Architectural checks passed! (posture: {effective_posture})")
     sys.exit(0)
 
 

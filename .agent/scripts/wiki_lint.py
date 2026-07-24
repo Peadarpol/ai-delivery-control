@@ -50,9 +50,22 @@ SYMBOL_CHECK = _safe_symbol("✅", "[OK]")
 SYMBOL_WARN = _safe_symbol("⚠️", "[WARN]")
 
 
+def _find_project_root() -> Path:
+    try:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
+            return parent
+    return p.parents[2] if len(p.parents) > 2 else p.parent
+
 # Resolve paths relative to project root
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent.parent
+PROJECT_ROOT = _find_project_root()
 CONFIG_PATH = PROJECT_ROOT / ".agent" / "config.yaml"
 WIKI_DIR = PROJECT_ROOT / ".agent" / "wiki"
 CONTEXT_FILE = PROJECT_ROOT / "src" / "scripts" / "review_context.md"
