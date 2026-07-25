@@ -2,8 +2,8 @@
 
 **Status**: Active Development
 **Current Version**: 1.4.12
-**Target Release**: v1.5.0 (Quality Signal Maturity — planning complete, see milestone entry below)
-**Last Updated**: 2026-07-25 (v1.4.12 shipped; gate enforcement postures, 11-script import pathing hardening, provider error disambiguation, traceability self-ratification fix, SQLite schema drift auto-migration across all tables. Note: architecture_checks.py's ratchet-posture baseline wiring was scoped only to ai_review.py in this release — see HIB-080, filed 2026-07-25, target v1.4.13.)
+**Target Release**: v1.4.13 (Stabilization Release — see milestone entry below)
+**Last Updated**: 2026-07-25 (v1.4.12 shipped; v1.4.13 & v1.4.14 milestone specs drafted.)
 
 ---
 
@@ -428,6 +428,35 @@ practice). Input: `cold-start-field-observations-2026-07-18.md`.
 
 ---
 
+### v1.4.13 — Stabilization Release 📋 PLANNED (2026-07-25)
+
+**Goal**: Address posture enforcement integrity (`HIB-080`), data integrity (`BUG-19`, `HIB-049`), gate findings freeze (`HIB-047`/`HIB-048`), pytest stdout capture wrapping (`BUG-11`), and framework decoupling / config-driven schema hardening exemptions with upgrade auto-migration (Phase 5).
+
+**Planned items**:
+- Phase 0: HIB-080 — `architecture_checks.py` ratchet posture baseline/touched-files wiring
+- Phase 1: BUG-19 (`decisions_log.md` tab corruption), HIB-049 (`REMEDIATED` rebuttal type)
+- Phase 2: HIB-047 + HIB-048 (rebuttal finding surfacing + freeze via `.agent/state/gate_findings_{session_id}.json`)
+- Phase 3: BUG-11 (pytest stdout capture wrapping fix in `harness_utils.py`)
+- Phase 4: Housekeeping (Documentation status markers & release ledger verification)
+- Phase 5: Framework Decoupling & Upgrade Migration (`schema_hardening` config in `.agent/config.yaml`, `v1_4_12_to_v1_4_13.py` extraction & banner, `harness_health.py` title banner, `ai_review.py` import consolidation)
+
+**Spec**: `SPEC-v1.4.13-stabilization.md`.
+
+---
+
+### v1.4.14 — Loop Closure Verification 📋 PLANNED (2026-07-25)
+
+**Goal**: Deliver spec-to-test loop closure verification (`T1-K-19` / `HIB-081`) across three phases: (A) spec-scenario cross-reference parser & matcher; (B) static multi-consumer AST wiring audit (`wiring_audit.py`); (C) E2E scenario classification & hermetic fixture-based outcome-equivalence test pattern.
+
+**Planned items**:
+- Phase A: `.agent/scripts/loop_closure_check.py` (spec-scenario cross-reference reporter)
+- Phase B: `.agent/scripts/wiring_audit.py` + `.agent/config/wiring_consumers.yaml` (static wiring audit)
+- Phase C: E2E classification + `tests/helpers/outcome_equivalence.py` fixture pattern
+
+**Spec**: `SPEC-loop-closure-verification.md`.
+
+---
+
 
 ### Deferred Scope Candidates — Under Consideration
 
@@ -518,6 +547,7 @@ to pull forward if the release runs light.
 The original roadmap scoped v1.5.0 as the skill-quality release (T1-B-04/05/06/07).
 That scope is deferred to v1.5.2, pending T1-E-01 (Tool ABC formalisation) which
 is confirmed ⬜ undelivered. T1-E-01 is the sole content of v1.5.1.
+Note: T1-K-19 (Loop Closure Verification) is sequenced into standalone release v1.4.14 prior to v1.5.0 to solidify outcome-verification testing across the harness test suite before Quality Signal Maturity work commences.
 
 ---
 
@@ -672,10 +702,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.5.0 (v1.4.12 shipped 2026-07-25)
+**Active milestone**: v1.4.13 (v1.4.12 shipped 2026-07-25)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅, v1.4.12 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅, v1.4.12 ✅, v1.4.13 📋, v1.4.14 📋
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
