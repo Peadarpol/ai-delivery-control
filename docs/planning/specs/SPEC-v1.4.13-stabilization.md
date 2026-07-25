@@ -9,6 +9,7 @@
 - v1.1 (2026-07-25, Gemini/Peter): Reconciled with v1.4.12 delivery evidence. Removed HIB-073, HIB-074, HIB-076, HIB-077 from scope (all confirmed delivered in v1.4.12). Refocused v1.4.13 strictly on HIB-080 (Phase 0), data integrity (BUG-19, HIB-049), rebuttal freeze (HIB-047/048), test infrastructure (BUG-11), and documentation housekeeping.
 - v1.2 (2026-07-25, Gemini/Peter): Added Phase 5 (GymBase-specific residue cleanups) with config-driven exemptions (`.agent/config.yaml`), preserved GymBase legacy exemptions at project configuration level, and explicit decision pinning `ai_review.py` import ceiling at 32 via internal import consolidation.
 - v1.3 (2026-07-25, Gemini/Peter): Extended Phase 5 to mandate upgrade-path migration (`bootstrap/migrations/v1_4_12_to_v1_4_13.py`). Migration script extracts installed `WHITELIST` and `exempt_tables` literals from target project files before overwrite, writes them forward into `.agent/config.yaml` under `schema_hardening`, and prints an explicit confirmation banner naming auto-migrated items. Added Scenario 8 acceptance criterion.
+- v1.4 (2026-07-25, Gemini/Peter): Multi-persona review refinements folded: AST parse-failure fallback clarification for HIB-080 (`extract_ast_region_sha256()`), defensive type coercion in `get_harness_config()`, AST+Regex extraction with additive set union in `v1_4_12_to_v1_4_13.py`, and un-mocked entry point assertions for Scenarios 1 & 2.
 
 ---
 
@@ -65,11 +66,11 @@ Every item in this spec's scope was verified against current filesystem and git 
 
 ## 3. Assumptions & Design Decisions
 
-- `[Resolved: HIB-080's fix is scoped to architecture_checks.py's disposition call site only — posture.py's disposition() signature already accepts baseline, touched_files, and region_sha256 as optional parameters.]`
+- `[Resolved: HIB-080's fix is scoped to architecture_checks.py's disposition call site only — posture.py's disposition() signature already accepts baseline, touched_files, and region_sha256 as optional parameters. Note that extract_ast_region_sha256() (reused from baseline.py) already degrades gracefully on AST parse failure via whole-file SHA-256 fallback — no new fallback logic is required in architecture_checks.py's posture-evaluation block.]`
 - `[Resolved: BUG-19's fix requires input sanitization / string formatting guards in record_decision() and decisions_log.md write helpers.]`
 - `[Resolved: HIB-047/048 creates .agent/state/gate_findings_{session_id}.json at gate fail time and consumes it during --rebuttal.]`
-- `[Resolved: Config-Driven Schema Hardening Exemptions — enforce_hardened_schemas.py and analyze_schema.py will read schema_hardening configuration from .agent/config.yaml via get_harness_config(). New greenfield projects default to empty whitelist and standard system migration tables (alembic_version, schema_migrations, sqlite_sequence). Existing GymBase exemptions are explicitly configured in GymBase's .agent/config.yaml to guarantee zero regression.]`
-- `[Resolved: Upgrade Path Safety — Stock v1.4.12 target files will checksum-match upgrade.py's baseline. To prevent silent loss of load-bearing exemptions on GymBase (or any v1.4.12 project), v1_4_12_to_v1_4_13.py must extract installed WHITELIST and exempt_tables literals before file replacement, write them to .agent/config.yaml, and display an explicit operator confirmation banner.]`
+- `[Resolved: Config-Driven Schema Hardening Exemptions — enforce_hardened_schemas.py and analyze_schema.py will read schema_hardening configuration from .agent/config.yaml via get_harness_config(). New greenfield projects default to empty whitelist and standard system migration tables (alembic_version, schema_migrations, sqlite_sequence). Existing GymBase exemptions are explicitly configured in GymBase's .agent/config.yaml to guarantee zero regression. get_harness_config() parsing defensively coerces whitelist and exempt_tables values to set(), filtering out None or non-string elements.]`
+- `[Resolved: Upgrade Path Safety — Stock v1.4.12 target files will checksum-match upgrade.py's baseline. To prevent silent loss of load-bearing exemptions on GymBase (or any v1.4.12 project), v1_4_12_to_v1_4_13.py must extract installed WHITELIST and exempt_tables literals before file replacement, write them additively to .agent/config.yaml under schema_hardening, and display an explicit operator confirmation banner. AST parsing is attempted first for literal extraction, falling back to regex set-literal matching if AST parsing fails. Extracted sets are additively merged with existing .agent/config.yaml entries (existing_config | extracted_set).]`
 - `[Resolved: Import Ceiling Maintenance — ai_review.py contains a duplicate import (from gate_context import write_gate_context at lines 2040 and 2399). Consolidating write_gate_context import removes the duplicate AST node added during v1.4.12 posture integration, bringing top-level AST import count back to 32. The test ceiling in test_ai_review.py MUST NOT be increased.]`
 
 ---
@@ -81,11 +82,13 @@ Given a project configured with `enforcement.posture: ratchet` and a valid `.age
 When `architecture_checks.py` runs its posture-evaluation block
 Then `posture.load_baseline()` and `posture.get_touched_files()` are invoked before any `disposition()` call
 And the matching violation dispositions to `GRANDFATHERED` with exit code 0, not `BLOCK`.
+*(Note: Verified via end-to-end function invocation without mocking posture.disposition().)*
 
 ### Scenario 2: Ratchet posture still blocks on touched-file violations (HIB-080 regression guard)
 Given the same baseline as Scenario 1
 When the diff modifies the file containing the baseline-matched violation
 Then the region hash is re-evaluated and, if changed, the finding dispositions to `BLOCK`.
+*(Note: Verified via end-to-end function invocation without mocking posture.disposition().)*
 
 ### Scenario 3: decisions_log.md rejects corrupting writes (BUG-19)
 Given the `record_decision()` helper
@@ -117,7 +120,7 @@ Then `ast.walk` counts `<= 32` imports without modifying the test ceiling thresh
 ### Scenario 8: Upgrade preserves existing schema-hardening exemptions (Phase 5)
 Given a project on v1.4.12 with hardcoded `WHITELIST`/`exempt_tables` values in its installed `enforce_hardened_schemas.py`/`analyze_schema.py`
 When `bootstrap/upgrade.py` migrates it to v1.4.13
-Then `v1_4_12_to_v1_4_13.py` extracts those values and writes them into the project's `.agent/config.yaml` under `schema_hardening`, and prints an explicit confirmation banner naming what was migrated, before the old files are overwritten.
+Then `v1_4_12_to_v1_4_13.py` extracts those values via AST/Regex and additively merges them (`existing_config | extracted_set`) into the project's `.agent/config.yaml` under `schema_hardening`, printing an explicit confirmation banner naming what was migrated before the old files are overwritten.
 
 ---
 
@@ -143,7 +146,7 @@ Then `v1_4_12_to_v1_4_13.py` extracts those values and writes them into the proj
 |---|---|---|
 | `.agent/skills/universal/senior-architect/scripts/architecture_checks.py` | Load baseline + touched files; pass into `disposition()`; compute `region_sha256` per violation | 0 |
 | `.agent/scripts/baseline.py` | Expose `extract_ast_region_sha256()` for reuse by the live gate | 0 |
-| `tests/unit/test_posture.py` / `tests/test_architecture_checks.py` | Seeded-violation ratchet/grandfather regression test | 0 |
+| `tests/unit/test_posture.py` / `tests/test_architecture_checks.py` | Seeded-violation ratchet/grandfather regression test (unmocked disposition) | 0 |
 | `record_decision()` helper / `harness_utils.py` | Input sanitization at write boundary for decisions_log | 1 |
 | `src/scripts/rebuttal.py`, `gate_rebuttal_template.json`, `AGENTS.md §8.6` | Add `REMEDIATED` rebuttal type | 1 |
 | `src/scripts/capability_calibration.py` | Exclude `REMEDIATED` from false-positive weight adjustments | 1 |
@@ -152,8 +155,8 @@ Then `v1_4_12_to_v1_4_13.py` extracts those values and writes them into the proj
 | `.agent/scripts/harness_health.py` | Update banner string to project-neutral name | 5 |
 | `.agent/scripts/enforce_hardened_schemas.py` | Config-driven whitelist (`schema_hardening.whitelist`), default empty `set()` | 5 |
 | `.agent/skills/universal/database-design/scripts/analyze_schema.py` | Config-driven table exemptions (`schema_hardening.exempt_tables`), default migration tables | 5 |
-| `bootstrap/migrations/v1_4_12_to_v1_4_13.py` (new) | Parse target files for `WHITELIST` and `exempt_tables`, write forward to target `.agent/config.yaml`, emit confirmation banner | 5 |
-| `tests/test_upgrade.py` / `tests/unit/test_migration_v1_4_12_to_v1_4_13.py` | Migration unit tests verifying literal extraction, `.agent/config.yaml` preservation, and banner | 5 |
+| `bootstrap/migrations/v1_4_12_to_v1_4_13.py` (new) | Parse target files for `WHITELIST` and `exempt_tables` via AST/Regex, additively merge (`existing | extracted`) forward to target `.agent/config.yaml`, emit confirmation banner | 5 |
+| `tests/test_upgrade.py` / `tests/unit/test_migration_v1_4_12_to_v1_4_13.py` | Migration unit tests verifying literal extraction, additive `.agent/config.yaml` merge, and banner | 5 |
 | `.agent/config.yaml` (and templates) | Define `schema_hardening` section preserving GymBase operational exemptions | 5 |
 | `src/scripts/ai_review.py` | Consolidate duplicate `write_gate_context` import (keep AST import count <= 32) | 5 |
 | `.agent/tests/*.py` | Replace hardcoded fallback path `c:/projects/Gym_App` with `_find_project_root()` | 5 |
