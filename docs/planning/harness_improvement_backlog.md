@@ -1319,6 +1319,22 @@ While `HIB-077` handles column-drift auto-migration across SQLite tables (`sessi
 
 **Cross-reference**: This is a generalization of **T1-K-09**'s "gates actually gate" principle (seed a violation, assert non-zero exit) from binary pass/fail to the full disposition/outcome space, and is the mechanism-level root cause behind HIB-080. Treat this HIB entry as the supporting evidence case for **T1-K-19** — do not develop remediation here independently; the design lives in `docs/planning/specs/SPEC-loop-closure-verification.md`.
 
+---
+
+## HIB-082 — No CLI wrapper for record_decision()/archive_old_decisions(), causing recurring ModuleNotFoundError
+
+**Date**: 2026-07-25
+**Source**: Peter — observed recurring across multiple Gemini sessions
+**Pillar**: Environment Legibility / Bootstrap Consistency
+**Status**: 📋 Backlog (Target Release: v1.4.13)
+
+**Symptom**: `record_decision()` and `archive_old_decisions()` (T1-L-20, `harness_utils.py`) are only ever invoked inline via `python -c "from harness_utils import ...; record_decision(...)"`. Every other stateful harness action (`baseline.py`, `check_traceability.py`, `init_session.py`, `harness_health.py`) is invoked as a standalone script under `.agent/scripts/`, each carrying its own `_find_project_root()` + `sys.path.insert(0, str(project_root / "src" / "scripts"))` bootstrap. Decision-logging has no such script, so every invocation is a hand-rolled one-liner with no bootstrap — and `python -c` uses cwd/no-path-insertion by default, so `from harness_utils import ...` reliably fails with `ModuleNotFoundError: No module named 'harness_utils'` when run from the project root, since `harness_utils.py` lives at `src/scripts/harness_utils.py`, not root.
+
+**Evidence**: Recurred across multiple sessions independently — not a one-off typo, a structural gap. Root cause is architectural (missing CLI entry point), not a mistake in any single invocation.
+
+**Fix Direction**: Add `.agent/scripts/log_decision.py` — a thin CLI wrapper carrying the same bootstrap pattern as every other harness script, exposing `record_decision`/`archive_old_decisions` via argparse: `python .agent/scripts/log_decision.py "title" "what" "why" "impact"`. This is the same fix class as HIB-073 (script pathing consistency) applied to a script that was simply never created in the first place, rather than one that existed with a bug.
+
+
 
 
 

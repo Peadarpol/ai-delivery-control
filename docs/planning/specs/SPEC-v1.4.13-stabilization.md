@@ -2,7 +2,7 @@
 
 **Status**: DRAFT — awaiting review and approval
 **Author**: Claude / Gemini (planning & spec refinement) — source analysis: Claude Opus 4.6 / Gemini 3.6
-**Tracked under**: HIB-080 (new), BUG-19, BUG-11, HIB-047, HIB-048, HIB-049, HIB-050, HIB-051
+**Tracked under**: HIB-080 (new), HIB-082 (new), BUG-19, BUG-11, HIB-047, HIB-048, HIB-049, HIB-050, HIB-051
 **Related**: T1-G-18 (enforcement postures — HIB-080 is a direct follow-on defect against this capability), SPEC-enforcement-postures.md, T1-D-07/T1-D-09/T1-L-15/T1-L-16 (v1.5.0 items whose foundations this spec protects)
 **Changelog**:
 - v1.0 (2026-07-25, Claude): Initial draft.
@@ -10,6 +10,7 @@
 - v1.2 (2026-07-25, Gemini/Peter): Added Phase 5 (GymBase-specific residue cleanups) with config-driven exemptions (`.agent/config.yaml`), preserved GymBase legacy exemptions at project configuration level, and explicit decision pinning `ai_review.py` import ceiling at 32 via internal import consolidation.
 - v1.3 (2026-07-25, Gemini/Peter): Extended Phase 5 to mandate upgrade-path migration (`bootstrap/migrations/v1_4_12_to_v1_4_13.py`). Migration script extracts installed `WHITELIST` and `exempt_tables` literals from target project files before overwrite, writes them forward into `.agent/config.yaml` under `schema_hardening`, and prints an explicit confirmation banner naming auto-migrated items. Added Scenario 8 acceptance criterion.
 - v1.4 (2026-07-25, Gemini/Peter): Multi-persona review refinements folded: AST parse-failure fallback clarification for HIB-080 (`extract_ast_region_sha256()`), defensive type coercion in `get_harness_config()`, AST+Regex extraction with additive set union in `v1_4_12_to_v1_4_13.py`, and un-mocked entry point assertions for Scenarios 1 & 2.
+- v1.5 (2026-07-25, Gemini/Peter): Added Phase 6 (Operational CLI Consistency — `.agent/scripts/log_decision.py`) to resolve HIB-082 (recurring `ModuleNotFoundError` from ad hoc `python -c` decision logging). Added Scenario 9 acceptance criterion.
 
 ---
 
@@ -20,6 +21,7 @@ Release **v1.4.13** is a targeted stabilization pass following the v1.4.12 relea
 1. **HIB-080** (Phase 0): Auditing v1.4.12 ahead of GymBase's upgrade revealed that `ratchet` posture's baseline-grandfathering was integrated into `ai_review.py` but omitted from `architecture_checks.py` — the exact gate whose 129-violation wall motivated T1-G-18 in the first place (`SPEC-enforcement-postures.md` §0). GymBase adopting `ratchet` today would get silent `strict`-equivalent blocking from `architecture_checks.py`.
 2. **Data & Rebuttal Integrity** (Phases 1–3): Fixes for `decisions_log.md` tab corruption (`BUG-19`), the `REMEDIATED` rebuttal type (`HIB-049`), rebuttal finding surfacing & freezing (`HIB-047`/`HIB-048`), and pytest stdout wrapping (`BUG-11`).
 3. **Framework Decoupling & Safe Upgrade Migration** (Phase 5): De-coupling remaining GymBase domain artifacts from scripts and skill tools (`harness_health.py` title banner, `enforce_hardened_schemas.py`, `analyze_schema.py`, internal test paths). Hardcoded GymBase domain exemptions are extracted into project-level `.agent/config.yaml` (`schema_hardening`). Crucially, `bootstrap/upgrade.py` and its migration unit (`v1_4_12_to_v1_4_13.py`) auto-extract legacy Python literals from upgrading targets before file overwrite, writing them forward into `.agent/config.yaml` and emitting a mandatory operator confirmation banner.
+4. **Operational CLI Consistency** (Phase 6): Adding `.agent/scripts/log_decision.py` CLI wrapper around `record_decision()` / `archive_old_decisions()` to eliminate `ModuleNotFoundError` during session close operations.
 
 Starting v1.5.0 without these fixes means building new capabilities (recidivism tracking, driver counters, memory retention) on top of known-corrupt or uncalibrated base data.
 
@@ -36,6 +38,7 @@ Every item in this spec's scope was verified against current filesystem and git 
   - `HIB-047`/`HIB-048`/`HIB-049`/`HIB-050`/`HIB-051`: Rebuttal protocol findings freeze and `REMEDIATED` classification missing.
   - **GymBase Residue & Decoupling**: `harness_health.py` title banner, hardcoded `WHITELIST` in `enforce_hardened_schemas.py`, hardcoded `exempt_tables` in `analyze_schema.py`.
   - **Upgrade Blind Spot**: Stock v1.4.12 `enforce_hardened_schemas.py` and `analyze_schema.py` in target projects match the shipped baseline checksums and would be silently overwritten by `upgrade.py` without AST/literal extraction into `.agent/config.yaml`.
+  - `HIB-082`: Decision logging lacks a standalone `.agent/scripts/` CLI wrapper, forcing fragile `python -c` invocations that raise `ModuleNotFoundError` from the project root.
 
 ---
 
@@ -54,6 +57,8 @@ Every item in this spec's scope was verified against current filesystem and git 
   - Update `harness_health.py` banner to project-neutral string.
   - Fix internal test fallback paths in `.agent/tests/*.py`.
   - Consolidate duplicate imports in `ai_review.py` to preserve import ceiling at 32 without raising test thresholds.
+- **Phase 6 (operational CLI consistency):**
+  - Create `.agent/scripts/log_decision.py`: a CLI wrapper around `record_decision()` / `archive_old_decisions()` (`harness_utils.py`, T1-L-20) carrying standard `_find_project_root()` bootstrap. Closes HIB-082.
 
 ### Out-of-Scope (Non-Goals)
 - `HIB-073`, `HIB-074`, `HIB-076`, `HIB-077` (already shipped in v1.4.12).
@@ -72,6 +77,7 @@ Every item in this spec's scope was verified against current filesystem and git 
 - `[Resolved: Config-Driven Schema Hardening Exemptions — enforce_hardened_schemas.py and analyze_schema.py will read schema_hardening configuration from .agent/config.yaml via get_harness_config(). New greenfield projects default to empty whitelist and standard system migration tables (alembic_version, schema_migrations, sqlite_sequence). Existing GymBase exemptions are explicitly configured in GymBase's .agent/config.yaml to guarantee zero regression. get_harness_config() parsing defensively coerces whitelist and exempt_tables values to set(), filtering out None or non-string elements.]`
 - `[Resolved: Upgrade Path Safety — Stock v1.4.12 target files will checksum-match upgrade.py's baseline. To prevent silent loss of load-bearing exemptions on GymBase (or any v1.4.12 project), v1_4_12_to_v1_4_13.py must extract installed WHITELIST and exempt_tables literals before file replacement, write them additively to .agent/config.yaml under schema_hardening, and display an explicit operator confirmation banner. AST parsing is attempted first for literal extraction, falling back to regex set-literal matching if AST parsing fails. Extracted sets are additively merged with existing .agent/config.yaml entries (existing_config | extracted_set).]`
 - `[Resolved: Import Ceiling Maintenance — ai_review.py contains a duplicate import (from gate_context import write_gate_context at lines 2040 and 2399). Consolidating write_gate_context import removes the duplicate AST node added during v1.4.12 posture integration, bringing top-level AST import count back to 32. The test ceiling in test_ai_review.py MUST NOT be increased.]`
+- `[Resolved: CLI Wrapper for Decision Logging — log_decision.py provides an entry point with standard path bootstrapping so decision logging can be executed as python .agent/scripts/log_decision.py "title" "what" "why" "impact" without relying on inline python -c imports.]`
 
 ---
 
@@ -122,6 +128,11 @@ Given a project on v1.4.12 with hardcoded `WHITELIST`/`exempt_tables` values in 
 When `bootstrap/upgrade.py` migrates it to v1.4.13
 Then `v1_4_12_to_v1_4_13.py` extracts those values via AST/Regex and additively merges them (`existing_config | extracted_set`) into the project's `.agent/config.yaml` under `schema_hardening`, printing an explicit confirmation banner naming what was migrated before the old files are overwritten.
 
+### Scenario 9: Decision logging works as a standalone CLI invocation (HIB-082)
+Given a fresh shell with CWD at the project root and no manual `sys.path`/`PYTHONPATH` modification
+When `python .agent/scripts/log_decision.py "title" "what" "why" "impact"` is run
+Then the decision is correctly appended to `decisions_log.md` without any `ModuleNotFoundError`, and `archive_old_decisions()` runs as part of the same invocation.
+
 ---
 
 ## 5. Proposed Phasing
@@ -137,6 +148,8 @@ Then `v1_4_12_to_v1_4_13.py` extracts those values via AST/Regex and additively 
   - Update `harness_health.py` banner to project-neutral string.
   - Consolidate duplicate `write_gate_context` import in `ai_review.py` to maintain import ceiling at 32.
   - Update `.agent/tests/*.py` fallback paths.
+- **Phase 6 — Operational CLI Consistency**:
+  - Create `.agent/scripts/log_decision.py` CLI wrapper for `record_decision()` / `archive_old_decisions()`.
 
 ---
 
@@ -160,6 +173,7 @@ Then `v1_4_12_to_v1_4_13.py` extracts those values via AST/Regex and additively 
 | `.agent/config.yaml` (and templates) | Define `schema_hardening` section preserving GymBase operational exemptions | 5 |
 | `src/scripts/ai_review.py` | Consolidate duplicate `write_gate_context` import (keep AST import count <= 32) | 5 |
 | `.agent/tests/*.py` | Replace hardcoded fallback path `c:/projects/Gym_App` with `_find_project_root()` | 5 |
+| `.agent/scripts/log_decision.py` (new) | CLI wrapper for `record_decision()` / `archive_old_decisions()` with standard `_find_project_root()` bootstrap | 6 |
 
 ---
 
