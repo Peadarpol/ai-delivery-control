@@ -1181,7 +1181,7 @@ The Clean Architecture checks hook (`.agent/skills/universal/senior-architect/sc
 **Date**: 2026-07-19
 **Source**: AT-03 import pathing audit (F3)
 **Pillar**: Gating / Architecture
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (spot-checked init_session.py; uses depth-agnostic _find_project_root() bootstrap, not hardcoded "src" literal)
 
 While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architecture_checks.py` (the primary blocker for the first-commit onboarding), there are 11 other scripts/skills identified in the AT-03 pathing audit that remain vulnerable to hardcoded source paths (`"src"`) or CWD execution drift:
 1. `check_spec.py`
@@ -1206,7 +1206,7 @@ These scripts must be refactored in v1.4.12 to use the dynamic `sys.path` bootst
 **Date**: 2026-07-20
 **Source**: Operational session review / SPEC-v1.4.9.1
 **Pillar**: Gating / Diagnosis
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (ai_review.py's _handle_local_error, distinct from _handle_api_unavailable; providers.py raises RuntimeError distinctly for local validation limits)
 
 When the review provider throws a local exception (e.g. `RuntimeError: Content too large` in the provider class), the wrapper execution in `ai_review.py` catches the generic exception and reports it to the developer and event logs as a network/API failure (`PROVIDER_ERROR` and `API unavailable`). This conflates local validation limits with genuine external API outages or credential availability issues, causing troubleshooting confusion and potentially generating incorrect audit logs.
 
@@ -1234,7 +1234,7 @@ Recommend normalising all tracked Markdown docs under `docs/` (and `.agent/` whe
 **Date**: 2026-07-24
 **Source**: Incident analysis `incident-chain-2026-07-15.md` §(d) (Incident commit `9d51019` / `HIB-149` ref)
 **Pillar**: Gating / Requirement Traceability
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (check_traceability.py resolves backlog IDs via `git show HEAD:{path}`, explicit code comment cites HIB-076)
 
 `check_traceability.py` recursively scans the entire `docs/` tree for ID references at gate time against the post-commit working tree. A commit can reference a brand-new, never-approved ID in its commit message, and simultaneously stage a line elsewhere under `docs/` mentioning that same ID string (e.g. a to-do bullet in a planning document). The gate resolves the reference as "found" and passes, even though the only place the ID exists is in the commit currently being introduced. Documented incident: commit `9d51019` self-ratified `HIB-149` this way.
 
@@ -1249,7 +1249,7 @@ This is structurally distinct from the `--no-trace` authentication gap (T1-K-13 
 **Date**: 2026-07-24
 **Source**: Verification audit of HIB-059
 **Pillar**: State Persistence / SQLite Index
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (state_persistence.py's _ensure_schema() now loops table_schemas over sessions/review_events/spec_acceptance, explicit code comment cites HIB-059 & HIB-077)
 
 The HIB-059 schema drift fix implemented `PRAGMA table_info` column inspection and `ALTER TABLE` auto-migration in `state_persistence.py` specifically for the `sessions` table (lines 130–143). However, sibling tables `review_events` and `spec_acceptance` lack equivalent column-drift inspection loops. If future harness releases add new columns to `review_events` or `spec_acceptance` in an existing `~/.aisdlc/harness.db`, queries against those tables will raise `OperationalError: no such column` without auto-migration.
 
@@ -1280,6 +1280,25 @@ On large brownfield repositories operating under `enforcement.posture: ratchet`,
 While `HIB-077` handles column-drift auto-migration across SQLite tables (`sessions`, `review_events`, `spec_acceptance`), future harness releases that introduce secondary non-primary-key indexes on existing tables could result in index drift on existing user databases.
 
 **Fix Direction**: Extend `_ensure_schema()` in `state_persistence.py` to inspect `PRAGMA index_list(<table_name>)` alongside column inspection, executing `CREATE INDEX IF NOT EXISTS` for required secondary indexes whenever secondary indexes are added to table definitions.
+
+---
+
+## HIB-080 — `architecture_checks.py` posture disposition call omits baseline and touched-files wiring, silently defeating `ratchet` grandfathering
+
+**Date**: 2026-07-25
+**Source**: Claude (Sonnet) — pre-upgrade adversarial verification ahead of GymBase v1.4.7 → v1.4.12 harness upgrade
+**Pillar**: Gating / Enforcement Postures (T1-G-18)
+**Status**: 📋 Backlog (Target Release: v1.4.13)
+
+**Symptom**: Under `enforcement.posture: ratchet`, `ai_review.py`'s LLM-based findings correctly grandfather against `.agent/baseline.json`, but `architecture_checks.py`'s deterministic findings (layer boundary, coupling, aggregate root, branch filter, forbidden pattern, ASGI lifespan, type-checking cast) do not. Every FAIL-severity finding from this gate blocks under `ratchet` exactly as it would under `strict`, with no error or warning distinguishing the two — the operator reasonably concludes the baseline didn't take or ratchet mode is broken, when in fact the wiring to the baseline was simply never added at this call site.
+
+**Root cause**: `src/scripts/posture.py`'s `disposition()` accepts optional `baseline` and `touched_files` parameters that gate `ratchet`-posture grandfathering logic. `ai_review.py` calls `posture.load_baseline(PROJECT_ROOT)` and `posture.get_touched_files(PROJECT_ROOT)` before its `disposition()` call and passes both through. `architecture_checks.py`'s equivalent call site (`main()`, "Evaluate violations through Posture Engine" block) calls `posture.disposition(rule=..., severity=..., file_path=..., line=..., posture=effective_posture, rule_overrides=rule_overrides)` — omitting `baseline=`, `touched_files=`, and `region_sha256=` entirely, and never calling `posture.load_baseline()` at all. With `baseline` defaulting to `None`, `disposition()`'s ratchet branch (`if baseline and "_index" in baseline`) never finds a match, so every FAIL falls through to `"ratchet posture: not found in baseline -> BLOCK"` regardless of `.agent/baseline.json`'s actual contents.
+
+**Why this matters specifically for T1-G-18's motivating scenario**: `SPEC-enforcement-postures.md` §0 names GymBase's 129-violation wall — surfaced by `architecture_checks.py`, not `ai_review.py` — as the motivating case for `ratchet` posture. `.agent/scripts/baseline.py` correctly scans `architecture_checks.py`'s output, computes AST region hashes, and writes a well-formed, tamper-checked `baseline.json` (`baseline.py report` even independently re-implements the comparison and reports correctly) — but none of that data reaches the gate's live disposition path. The one gate the spec was written to relieve is the one gate the fix doesn't actually reach.
+
+**Fix Direction**: Mirror `ai_review.py`'s pattern in `architecture_checks.py`'s posture-evaluation block: call `posture.load_baseline(find_project_root())` and `posture.get_touched_files(find_project_root())` once per run, and pass both into each `disposition()` call alongside a computed `region_sha256` per violation (reusing `baseline.py`'s `extract_ast_region_sha256()` — currently only invoked from the baseline CLI, not from the live gate) so ratchet-mode grandfathering can verify content-hash match rather than only rule+file identity. Add a regression test asserting a baseline-matched FAIL-severity architecture violation dispositions to `GRANDFATHERED` (not `BLOCK`) under `ratchet` when the violating file is untouched in the diff — the same class of seeded-violation gate test T1-K-09 already established as the project's standard ("gates actually gate" / here, "ratchet actually ratchets").
+
+**Scope note**: `capability_calibration.py`'s invariant-floor pinning (the other T1-G-18 retroactive fix) was independently verified correct — `get_calibrated_weight()` checks `is_invariant_pinned()` and returns `1.0` when pinned. The `TYPE_CHECKING_CAST → WARN` regression trap the spec flagged as a shipping prerequisite was also verified correctly landed in `RULE_SEVERITY_MAP`. This entry is scoped only to the baseline-wiring gap.
 
 
 
