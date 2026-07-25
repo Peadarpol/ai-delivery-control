@@ -1300,6 +1300,26 @@ While `HIB-077` handles column-drift auto-migration across SQLite tables (`sessi
 
 **Scope note**: `capability_calibration.py`'s invariant-floor pinning (the other T1-G-18 retroactive fix) was independently verified correct — `get_calibrated_weight()` checks `is_invariant_pinned()` and returns `1.0` when pinned. The `TYPE_CHECKING_CAST → WARN` regression trap the spec flagged as a shipping prerequisite was also verified correctly landed in `RULE_SEVERITY_MAP`. This entry is scoped only to the baseline-wiring gap.
 
+---
+
+## HIB-081 — Test suite validates component mechanics, not cross-component outcome claims ("loop closure" gap)
+
+**Date**: 2026-07-25
+**Source**: Claude (Sonnet) — pattern identified across two incidents in the same session
+**Pillar**: Test Infrastructure / Verification Methodology
+**Status**: 📋 Backlog — design exists (T1-K-19), not yet built
+
+**Symptom**: The framework's test suite (550/550 passing) validates that individual functions behave correctly given controlled inputs, but does not systematically validate that a spec's cross-component *outcome claims* actually hold when components are exercised together through their real call sites. A suite can be fully green while a documented capability is silently non-functional for one of its stated consumers.
+
+**Evidence — two incidents in one session**:
+1. **HIB-080**: `posture.py`'s `disposition()` function is correctly tested in isolation, and `ai_review.py`'s call site correctly passes `baseline=`/`touched_files=`. `architecture_checks.py`'s call site — the other documented consumer per `SPEC-enforcement-postures.md` — never passes either parameter, defeating `ratchet` grandfathering for that gate entirely. No test failed, because no test exercised `architecture_checks.py`'s actual call site against a real baseline fixture; the engine's unit tests and `ai_review.py`'s wiring tests both passed independently.
+2. **Schema-hardening exemption regression** (caught pre-merge during `feat/v1.4.13-stabilization` review, not shipped): a refactor replaced GymBase's operational `WHITELIST`/`exempt_tables` values with empty/generic defaults. Full test suite passed (550/550) because no test asserted that the specific *data* GymBase depends on survived the refactor — only that the code still executed without error.
+
+**Root cause**: Most of the suite mocks at component boundaries (`patch("posture.disposition")`, `patch("ai_review.load_review_context")`, etc.). This is correct practice for isolating unit behavior, but it structurally prevents the suite from ever noticing that a caller doesn't actually reach across the boundary the way a spec claims — mocking the seam is exactly how a broken seam goes unnoticed.
+
+**Cross-reference**: This is a generalization of **T1-K-09**'s "gates actually gate" principle (seed a violation, assert non-zero exit) from binary pass/fail to the full disposition/outcome space, and is the mechanism-level root cause behind HIB-080. Treat this HIB entry as the supporting evidence case for **T1-K-19** — do not develop remediation here independently; the design lives in `docs/planning/specs/SPEC-loop-closure-verification.md`.
+
+
 
 
 
