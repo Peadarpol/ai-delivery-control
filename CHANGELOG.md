@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.4.13 — 2026-07-26
+
+### Stabilization Release (SPEC-v1.4.13-stabilization) — 6 Phases
+
+- **Posture enforcement integrity (Phase 0 / HIB-080)**: Wired `.agent/baseline.json` content-hashed manifest and touched-files set into `architecture_checks.py` disposition so that `ratchet` and `observe` postures correctly skip baseline-matching files and `strict` posture always fires. `baseline.py` now passes a `files` argument to `get_disposition()`.
+- **Rebuttal protocol integrity (Phase 1+2 / HIB-049, HIB-047/048, BUG-19)**: Added tab-corruption sanitization in `harness_utils.py`; introduced `REMEDIATED` rebuttal type in `rebuttal.py`; implemented gate-findings freeze/surface so accepted rebuttals land in calibration context on next review (`capability_calibration.py`).
+- **stdio consolidation (Phase 3 / HIB-083, BUG-11)**: Consolidated UTF-8 output wrapping into `harness_utils.py`; added `safe_symbol()` for cross-platform Unicode fallback; fixed pytest capture detection so tests using `capsys` no longer trigger spurious encoding errors.
+- **DELIVERED spec status (Phase 4)**: Added third spec lifecycle status `DELIVERED` (alongside DRAFT/APPROVED); retroactively applied to all five already-archived specs. `AGENTS.md` updated to document the archival → DELIVERED transition rule.
+- **Config-driven exemptions & auto-migration (Phase 5)**: `check_exception_standards.py` now reads exemptions from `.agent/config.yaml` and auto-migrates legacy inline lists on schema upgrade. Canonical cross-platform `_find_project_root()` (git-query + walk-up fallback, 5 s timeout) replaces fragile hardcoded depth path (HIB-084).
+- **log_decision.py CLI wrapper (Phase 6 / HIB-082)**: New `src/scripts/log_decision.py` provides a command-line interface to `record_decision()` in `harness_utils.py`, enabling decision logging from shell scripts and pre-commit hooks without importing Python internals.
+
+### Loop-Closure Verification (SPEC-loop-closure-verification)
+
+- **check_traceability.py HEAD-index validation**: Traceability gate now resolves referenced spec/backlog IDs against `HEAD` git-index (`git show :rel_path`) rather than the working-tree filesystem, closing the self-ratification loophole where a new commit could introduce and immediately satisfy its own traceability ID.
+
+### Bookkeeping & Release Closure
+
+- Archived `SPEC-v1.4.13-stabilization.md` and `SPEC-loop-closure-verification.md` to `docs/planning/specs/archive/` with `Status: DELIVERED`.
+- Marked HIB-080, HIB-082, HIB-083 as `✅ Delivered in v1.4.13` in `harness_improvement_backlog.md`. Recorded HIB-084 as a delivered addendum.
+- Bumped `harness_version.txt` to `1.4.13`.
+- Regenerated `bootstrap/checksums.py` — 654 framework files hashed.
+
 ## v1.4.12 — 2026-07-25
 
 ### Governance Hardening & Gate Enforcement Postures

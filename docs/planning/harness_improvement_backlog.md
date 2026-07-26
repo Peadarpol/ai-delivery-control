@@ -1262,7 +1262,7 @@ The HIB-059 schema drift fix implemented `PRAGMA table_info` column inspection a
 **Date**: 2026-07-24
 **Source**: `SPEC-enforcement-postures.md` review
 **Pillar**: Log Management / Audit Trail
-**Status**: 📋 Backlog (Target Release: v1.4.12 follow-up)
+**Status**: 📋 Backlog (Unscheduled — missed v1.4.12 and v1.4.13; revisit once ratchet posture sees real production usage and GATE_ADVISORY volume can be measured, not estimated)
 
 On large brownfield repositories operating under `enforcement.posture: ratchet`, a single gate run can emit hundreds of `GATE_ADVISORY` events for pre-existing debt. While live log snapshotting (HIB-063) isolates session snapshots, high-frequency advisory logging could increase `harness_events.jsonl` size and execution time.
 

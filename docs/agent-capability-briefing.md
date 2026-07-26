@@ -1,7 +1,7 @@
 # AI Delivery Control — Agent Capability Briefing
 
-**Framework version**: v1.4.11
-**Last updated**: 2026-07-24
+**Framework version**: v1.4.13
+**Last updated**: 2026-07-26
 **Update trigger**: Update this document when a backlog item moves to ✅ delivered,
 when a capability is materially changed, or when a "not yet built" item ships.
 
@@ -22,7 +22,7 @@ any LLM-based agent (Claude Code, Gemini CLI, Cursor, Windsurf) through
 
 ---
 
-## Currently Delivered Capabilities (v1.0.0–v1.4.11)
+## Currently Delivered Capabilities (v1.0.0–v1.4.13)
 
 ### Session lifecycle management
 
@@ -380,6 +380,8 @@ Backlog detail: `docs/planning/FRAMEWORK_BACKLOG.md`.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.4.13 | 2026-07-26 | **Stabilization release (SPEC-v1.4.13-stabilization, 6 phases)**: (Phase 0/HIB-080) wire `baseline.json` / touched-files into `architecture_checks.py` posture disposition; (Phase 1+2/HIB-049/047/048/BUG-19) tab-corruption sanitization, `REMEDIATED` rebuttal type, gate-findings freeze/surface in `rebuttal.py` & `capability_calibration.py`; (Phase 3/HIB-083/BUG-11) consolidate UTF-8 wraps into `harness_utils.py`, add `safe_symbol()`, fix pytest capture detection; (Phase 4) add `DELIVERED` spec status, retroactively apply to archived specs; (Phase 5) config-driven exemptions & auto-migration on schema upgrade in `check_exception_standards.py`; (Phase 6/HIB-082) `log_decision.py` CLI wrapper for decisions log. HIB-084: canonical `_find_project_root()` with git-query + walk-up fallback in `check_exception_standards.py`. Loop-closure verification (SPEC-loop-closure-verification): `check_traceability.py` validated against HEAD git-index rather than filesystem. 654 checksum files. |
+| v1.4.12 | 2026-07-25 | **Governance Hardening & Gate Enforcement Postures**: `posture.py` disposition engine (strict/ratchet/observe); `.agent/baseline.json` content-hashed manifest; `architecture_checks.py` posture wiring (HIB-080); script import path bootstrap (`_find_project_root()`) across 11 scripts (HIB-073); provider error disambiguation `review_local_error`/`review_network_error` (HIB-074); traceability self-ratification guard against HEAD (HIB-076); SQLite schema migration `_ensure_schema()` auto-migration (HIB-077). |
 | v1.4.10 | 2026-07-20 | Unified config parser rollout across all consumers (`T1-E-04`); dynamic risk-classification `override_defaults` + fail-closed protection (`T1-L-21`); root-commit exemption, versioned spec-ID regex & merge-gate aggregator (`T1-K-12`/`T1-K-13`); TTY-aware session-start recovery stashing (`HIB-ENV-02`/`T1-I-08`); SQLite schema drift auto-migration (`HIB-059`); fail-open audit taxonomy (`T1-K-14`); live log snapshotting on close (`HIB-063`); exception standards wrapper (`T1-K-15`/`AT-04`); append-only decisions log `record_decision()` & `archive_old_decisions()` helpers (`T1-L-20`) |
 | v1.4.9.1 | 2026-07-19 | Onboarding defects fixes for bare-pip/no-Pydantic environments (F1, F2, F3, F5); post-merge code-quality remediation (FID-1 to FID-6); updated framework checksums registry |
 | v1.4.9 | 2026-07-12 | Shipped configuration parser foundation in `harness_utils.py` (DEFAULTS, `load_harness_config()`, `get_harness_config()`) (`T1-E-04` foundation); `session.json` shared contract (`T1-E-03`); regex-based traceability ID checks (`HIB-062`); parser fail-closed on invalid escapes (`HIB-065`); `check_traceability.py` performance cache/size guard (`T1-L-22`); honest outcome labeling (`T1-B-11`) |
