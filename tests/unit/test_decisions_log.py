@@ -197,3 +197,21 @@ def test_archive_old_decisions_never_empties_log(tmp_path):
     harness_utils.archive_old_decisions(threshold_lines=1, log_path=log_path, archive_path=archive_path)
     content = log_path.read_text(encoding="utf-8")
     assert "Sole Entry" in content
+
+
+def test_record_decision_prevents_tab_corruption_and_preserves_leading_t(tmp_path):
+    """Scenario 3 (BUG-19): record_decision preserves leading 't' character and strips literal tabs."""
+    log_path = tmp_path / "decisions_log.md"
+    harness_utils.record_decision(
+        title="testing leading t",
+        decision="the decision starts with t\twith tab inside",
+        context="testing context",
+        consequence="the consequence",
+        date="2026-07-26",
+        log_path=log_path,
+    )
+    content = log_path.read_text(encoding="utf-8")
+    assert "## 2026-07-26: testing leading t" in content
+    assert "- **Decision**: the decision starts with t with tab inside" in content
+    assert "\t" not in content
+

@@ -13,7 +13,7 @@
       "_comment_finding_id": "REQUIRED: The ID of the finding you are contesting (e.g., 'FID-1').",
       "finding_id": "<finding-id>",
 
-      "_comment_rebuttal_type": "REQUIRED: The category of your rebuttal. Must be one of: 'FALSE_POSITIVE', 'SPEC_REQUIREMENT', 'ARCHITECTURAL_INVARIANT', 'OUT_OF_SCOPE'.",
+      "_comment_rebuttal_type": "REQUIRED: The category of your rebuttal. Must be one of: 'FALSE_POSITIVE', 'SPEC_REQUIREMENT', 'ARCHITECTURAL_INVARIANT', 'OUT_OF_SCOPE', 'REMEDIATED'.",
       "rebuttal_type": "<rebuttal-type>",
 
       "_comment_spec_reference": "REQUIRED for 'SPEC_REQUIREMENT' and 'ARCHITECTURAL_INVARIANT' types: Link or path to the specification file (e.g., 'docs/planning/specs/SPEC-123.md#L45-L50') and quote the relevant section verbatim.",

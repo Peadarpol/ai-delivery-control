@@ -370,6 +370,15 @@ def _reset_config_cache() -> None:
     _CONFIG_CACHE.clear()
 
 
+def _sanitize_decision_field(text: str) -> str:
+    """Sanitize text fields for decisions_log.md to prevent tab corruption (BUG-19)."""
+    if not isinstance(text, str):
+        text = str(text)
+    # Replace literal tab characters with spaces to prevent tab corruption
+    sanitized = text.replace("\t", " ")
+    return sanitized.strip()
+
+
 def record_decision(
     title: str,
     decision: str,
@@ -384,7 +393,12 @@ def record_decision(
     This is the ONLY sanctioned way to write to this file — never edit it directly with file-write tools.
     Always appends to the true end of the file; never prepends or inserts mid-file.
     """
-    if not title.strip() or not decision.strip() or not context.strip() or not consequence.strip():
+    title = _sanitize_decision_field(title)
+    decision = _sanitize_decision_field(decision)
+    context = _sanitize_decision_field(context)
+    consequence = _sanitize_decision_field(consequence)
+
+    if not title or not decision or not context or not consequence:
         raise ValueError("record_decision() requires non-empty title, decision, context, and consequence.")
 
     entry_date = date or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
@@ -412,15 +426,15 @@ def record_decision(
                 )
 
     entry_lines = [
-        f"\n## {entry_date}: {title.strip()}",
-        f"- **Decision**: {decision.strip()}",
-        f"- **Context**: {context.strip()}",
-        f"- **Consequence**: {consequence.strip()}",
+        f"\n## {entry_date}: {title}",
+        f"- **Decision**: {decision}",
+        f"- **Context**: {context}",
+        f"- **Consequence**: {consequence}",
     ]
 
     if extra_fields:
         for k, v in extra_fields.items():
-            entry_lines.append(f"- **{k.strip()}**: {v.strip()}")
+            entry_lines.append(f"- **{_sanitize_decision_field(k)}**: {_sanitize_decision_field(v)}")
 
     entry_str = "\n".join(entry_lines) + "\n"
 
