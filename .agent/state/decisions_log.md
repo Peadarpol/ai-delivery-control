@@ -1,9 +1,4 @@
 # Decisions Log
-## 2026-06-02: Added S0-24 and BUG-11 through BUG-13 to Backlog
-- **Decision**: Added S0-24 (De-GymBase-ify functional code), BUG-11 (distill_dream.py reads wrong field), BUG-12 (wiki compile cold-start failure), and BUG-13 (E2E test project runs stale ai_review.py) to `FRAMEWORK_BACKLOG.md` and synced `FRAMEWORK_ROADMAP.md` milestone planned items.
-- **Context**: Resolving GymBase hardcoding, dream phase pattern domain detection, cold-start wiki failure cooldown issues, and E2E review script drift is essential for broad framework adoption and robustness.
-- **Consequence**: Added tracking and priority for these critical porting and reliability issues in the backlog. All 184 tests pass.
-
 ## 2026-06-02: Hardened Session Token Budget Wiring and Graceful Lock Acquisition (T1-I-07)
 - **Decision**: Implemented rolling budget tracking summing regular, reasoning, and cache read tokens, coupled with atomic structured JSON HALT writes, and 80%/100% Warn/Halt warnings. Wrapped all `_lock_session` context managers in `try-except` blocks to print warning messages to stderr and proceed gracefully if concurrency lock acquisition fails.
 - **Context**: Prevent budget undercounting of reasoning/cache tokens, log session_id in the HALT file dictionary, and ensure the review gate does not crash due to temporary locking issues under concurrent execution.
@@ -146,3 +141,8 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: Regenerated bootstrap/checksums.py for version 1.4.10 and bumped harness_version.txt.
 - **Context**: These steps were missed during the initial v1.4.10 implementation session and caught during pre-merge review.
 - **Consequence**: bootstrap/upgrade.py's pre-flight checksum validation (HIB-037) can now correctly validate v1.4.10 installations instead of comparing against stale v1.4.9 hashes.
+
+## 2026-07-26: Resequence v1.4.14/v1.4.15
+- **Decision**: PunchCard Preparation moved ahead of Loop Closure Verification
+- **Context**: Both releases are independent — Loop Closure Verification's HIB-080 precondition is satisfied by v1.4.13 regardless of ship order; resequencing reflects near-term priority on the PunchCard experiment
+- **Consequence**: SPEC-loop-closure-verification.md retagged to v1.4.15, FRAMEWORK_ROADMAP.md milestone entries swapped, SPEC-v1.4.14-punchcard-preparation.md is now the active v1.4.14
