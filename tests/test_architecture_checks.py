@@ -110,3 +110,106 @@ def test_main_passes_when_layers_contain_python_files(tmp_path):
     # Should pass (0) — one file found, no violations
     assert code == 0, "Expected exit(0) when layers exist and contain Python files"
 
+
+def test_ratchet_posture_grandfathers_untouched_violation(tmp_path):
+    """Scenario 1 (HIB-080): Ratchet posture grandfathers pre-existing architecture_checks.py violations in untouched files."""
+    import json
+    import hashlib
+    from unittest.mock import patch
+
+    agent_dir = tmp_path / ".agent"
+    agent_dir.mkdir()
+    src_dir = tmp_path / "src" / "domain"
+    src_dir.mkdir(parents=True)
+    model_file = src_dir / "model.py"
+    model_file.write_text("import src.infrastructure.db\n", encoding="utf-8")
+
+    config_content = (
+        "enforcement:\n"
+        "  posture: ratchet\n"
+        "architecture:\n"
+        "  layers:\n"
+        "    - name: domain\n"
+        "      path: src/domain\n"
+        "      forbidden_imports:\n"
+        "        - src.infrastructure\n"
+    )
+    (agent_dir / "config.yaml").write_text(config_content, encoding="utf-8")
+
+    entries = [
+        {
+            "file": "src/domain/model.py",
+            "line": 1,
+            "rule": "LAYER_BOUNDARY",
+            "severity": "FAIL",
+            "region_sha256": None,
+        }
+    ]
+    canonical_bytes = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    manifest_sha256 = hashlib.sha256(canonical_bytes).hexdigest()
+    baseline_manifest = {
+        "header": {
+            "version": "1.0",
+            "manifest_sha256": manifest_sha256,
+            "created_at": "2026-07-26T00:00:00Z"
+        },
+        "entries": entries
+    }
+    (agent_dir / "baseline.json").write_text(json.dumps(baseline_manifest, indent=2), encoding="utf-8")
+
+    with patch("posture.get_touched_files", return_value=(set(), False)):
+        code = _run_main_in(tmp_path)
+    assert code == 0, "Expected exit(0) under ratchet posture when violation is grandfathered in untouched file"
+
+
+def test_ratchet_posture_blocks_on_touched_file_violation(tmp_path):
+    """Scenario 2 (HIB-080): Ratchet posture blocks when touched file contains a baseline violation."""
+    import json
+    import hashlib
+    from unittest.mock import patch
+
+    agent_dir = tmp_path / ".agent"
+    agent_dir.mkdir()
+    src_dir = tmp_path / "src" / "domain"
+    src_dir.mkdir(parents=True)
+    model_file = src_dir / "model.py"
+    model_file.write_text("import src.infrastructure.db\n", encoding="utf-8")
+
+    config_content = (
+        "enforcement:\n"
+        "  posture: ratchet\n"
+        "architecture:\n"
+        "  layers:\n"
+        "    - name: domain\n"
+        "      path: src/domain\n"
+        "      forbidden_imports:\n"
+        "        - src.infrastructure\n"
+    )
+    (agent_dir / "config.yaml").write_text(config_content, encoding="utf-8")
+
+    entries = [
+        {
+            "file": "src/domain/model.py",
+            "line": 1,
+            "rule": "LAYER_BOUNDARY",
+            "severity": "FAIL",
+            "region_sha256": None,
+        }
+    ]
+    canonical_bytes = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    manifest_sha256 = hashlib.sha256(canonical_bytes).hexdigest()
+    baseline_manifest = {
+        "header": {
+            "version": "1.0",
+            "manifest_sha256": manifest_sha256,
+            "created_at": "2026-07-26T00:00:00Z"
+        },
+        "entries": entries
+    }
+    (agent_dir / "baseline.json").write_text(json.dumps(baseline_manifest, indent=2), encoding="utf-8")
+
+    with patch("posture.get_touched_files", return_value=({"src/domain/model.py"}, False)):
+        code = _run_main_in(tmp_path)
+    assert code == 1, "Expected exit(1) under ratchet posture when touched file contains a violation"
+
+

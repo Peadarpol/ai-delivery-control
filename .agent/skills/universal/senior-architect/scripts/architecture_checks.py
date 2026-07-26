@@ -756,30 +756,49 @@ def main():
     except Exception as e:
         print(f"[ARCH] Warning: Failed to populate GateContext: {e}")
 
-    # ── Evaluate violations through Posture Engine (T1-G-18 Phase P1) ──
+    # ── Evaluate violations through Posture Engine (T1-G-18 Phase P1 & HIB-080) ──
     try:
         sys.path.insert(0, str(find_project_root() / "src" / "scripts"))
         import posture
         posture_cfg = posture.load_enforcement_config(find_project_root())
         effective_posture = posture_cfg["effective_posture"]
         rule_overrides = posture_cfg["rule_overrides"]
+        baseline_data = posture.load_baseline(find_project_root())
+        touched_files, _ = posture.get_touched_files(find_project_root())
     except Exception:
         posture = None
         effective_posture = "strict"
         rule_overrides = {}
+        baseline_data = None
+        touched_files = set()
+
+    try:
+        sys.path.insert(0, str(find_project_root() / ".agent" / "scripts"))
+        from baseline import extract_ast_region_sha256
+    except Exception:
+        extract_ast_region_sha256 = None
 
     blocking_errors = []
     advisory_errors = []
 
     for err, violation in zip(all_errors, violations if 'violations' in locals() else []):
         if posture is not None:
+            region_hash = None
+            if extract_ast_region_sha256 and violation.file:
+                vf_path = find_project_root() / violation.file
+                if vf_path.exists():
+                    region_hash = extract_ast_region_sha256(vf_path, violation.line)
+
             disp = posture.disposition(
                 rule=violation.rule,
                 severity=violation.severity,
                 file_path=violation.file,
                 line=violation.line,
+                region_sha256=region_hash,
                 posture=effective_posture,
+                baseline=baseline_data,
                 rule_overrides=rule_overrides,
+                touched_files=touched_files,
             )
             if disp.outcome == posture.Outcome.BLOCK:
                 blocking_errors.append((err, disp))
