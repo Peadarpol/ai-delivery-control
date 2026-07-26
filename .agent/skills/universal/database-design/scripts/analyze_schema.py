@@ -21,16 +21,17 @@ sys.path.insert(0, str(project_root))
 
 try:
     from sqlalchemy import inspect
-
     from src.infrastructure.database.connection import engine
-except ImportError as e:
-    print(f"Import error: {e}")
-    print("Make sure to run with: poetry run python <script>")
-    sys.exit(1)
+except ImportError:
+    inspect = None
+    engine = None
 
 
 def analyze_tables():
     """Analyze all tables in the database schema."""
+    if engine is None or inspect is None:
+        print("SQLAlchemy engine not available.")
+        return
     inspector = inspect(engine)
     tables = inspector.get_table_names()
 
@@ -73,13 +74,35 @@ def analyze_tables():
                 print(f"    - {unique}{idx['name']}: {idx['column_names']}")
 
 
+def load_exempt_tables(project_root: Path | None = None) -> set[str]:
+    """Load table exemptions from .agent/config.yaml under schema_hardening.exempt_tables."""
+    default_exempt = {"alembic_version", "schema_migrations", "sqlite_sequence"}
+    try:
+        from pathlib import Path
+        import sys
+        root = project_root or Path(__file__).resolve().parents[4]
+        sys.path.insert(0, str(root / "src" / "scripts"))
+        from harness_utils import get_harness_config
+        raw = get_harness_config("schema_hardening", "exempt_tables", default=list(default_exempt), config_path=root / ".agent" / "config.yaml", strict=True)
+    except Exception:
+        raw = list(default_exempt)
+
+    if isinstance(raw, (list, tuple, set)):
+        configured = {str(x).strip() for x in raw if x and isinstance(x, str)}
+        return configured | default_exempt
+    return default_exempt
+
+
 def check_branch_id_compliance():
     """Check if all operational tables have branch_id."""
+    if engine is None or inspect is None:
+        print("SQLAlchemy engine not available.")
+        return
     inspector = inspect(engine)
     tables = inspector.get_table_names()
 
     # Tables that should have branch_id (operational tables)
-    exempt_tables = {"alembic_version", "gym_businesses", "branches", "session_tokens"}
+    exempt_tables = load_exempt_tables()
 
     print("\n" + "=" * 60)
     print("BRANCH_ID COMPLIANCE CHECK")
@@ -106,6 +129,9 @@ def check_branch_id_compliance():
 
 def suggest_indexes():
     """Suggest potential missing indexes based on foreign keys."""
+    if engine is None or inspect is None:
+        print("SQLAlchemy engine not available.")
+        return
     inspector = inspect(engine)
     tables = inspector.get_table_names()
 
