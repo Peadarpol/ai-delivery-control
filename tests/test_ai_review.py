@@ -1800,12 +1800,14 @@ class TestCapabilityCalibrationIntegration:
                 {
                     "severity": "HIGH",
                     "concern": "INTENT_ALIGNMENT",
+                    "location": "src/main.py:10",
                     "description": "High intent alignment concern",
                     "remediation": "remediate"
                 },
                 {
                     "severity": "MEDIUM",
                     "concern": "BRANCH_ISOLATION",
+                    "location": "src/main.py:20",
                     "description": "Medium branch isolation concern",
                     "remediation": "remediate"
                 }
@@ -1834,7 +1836,8 @@ class TestCapabilityCalibrationIntegration:
              patch("ai_review.PROJECT_ROOT", tmp_path), \
              patch("ai_review.load_config", return_value=config), \
              patch("ai_review._persist_verdict"), \
-             patch("ai_review.render_review"):
+             patch("ai_review.render_review"), \
+             patch("posture.get_touched_files", return_value=({"src/main.py"}, False)):
 
             exit_code = ai_review._run_review()
             # Since INTENT_ALIGNMENT was HIGH -> demoted to MEDIUM,

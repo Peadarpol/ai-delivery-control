@@ -297,7 +297,7 @@ def main():
                 content = ""
                 try:
                     res = subprocess.run(
-                        ["git", "show", f"HEAD:{rel_path}"],
+                        ["git", "show", f":{rel_path}"],
                         capture_output=True,
                         text=True,
                         encoding="utf-8",
@@ -313,13 +313,6 @@ def main():
                         content = ""
                 if content:
                     docs_lines.extend(content.splitlines())
-                # Also include working copy lines so newly added formal backlog entries in current session are recognized
-                try:
-                    working_content = backlog_file.read_text(encoding="utf-8", errors="ignore") or ""
-                    if working_content:
-                        docs_lines.extend(working_content.splitlines())
-                except Exception:
-                    pass
 
     # If spec matches are present, verify spec files
     for spec_id in spec_matches:

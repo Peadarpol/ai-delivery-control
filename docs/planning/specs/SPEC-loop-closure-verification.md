@@ -1,6 +1,6 @@
 # SPEC: Loop Closure Verification (T1-K-19)
 
-**Status**: DRAFT — awaiting review and approval
+**Status**: APPROVED
 **Author**: Claude (drafting)
 **Tracked under**: T1-K-19
 **Target Release**: v1.4.14

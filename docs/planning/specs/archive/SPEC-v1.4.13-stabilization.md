@@ -1,6 +1,6 @@
 # SPEC: v1.4.13 — Stabilization Release (Posture Enforcement Fix, Pre-v1.5.x Data Integrity, Rebuttal Protocol Cluster, Framework Decoupling)
 
-**Status**: APPROVED
+**Status**: DELIVERED
 **Author**: Claude / Gemini (planning & spec refinement) — source analysis: Claude Opus 4.6 / Gemini 3.6
 **Tracked under**: HIB-080 (new), HIB-082 (new), HIB-083 (new), BUG-19, BUG-11, HIB-047, HIB-048, HIB-049, HIB-050, HIB-051
 **Related**: T1-G-18 (enforcement postures — HIB-080 is a direct follow-on defect against this capability), SPEC-enforcement-postures.md, T1-D-07/T1-D-09/T1-L-15/T1-L-16 (v1.5.0 items whose foundations this spec protects)

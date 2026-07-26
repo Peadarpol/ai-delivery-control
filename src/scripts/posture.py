@@ -283,10 +283,14 @@ def disposition(
     touched_files: Set[str] | None = None,
 ) -> Disposition:
     """
-    Determine disposition outcome (BLOCK | ADVISORY | GRANDFATHERED) for a finding.
-    
-    Order of Evaluation:
-    1. Invariant Floor Check (pinned rules always BLOCK)
+    Evaluate the disposition (BLOCK vs ADVISORY) for a detected violation.
+
+    Accepts both overall verdict strings (PASS, WARN, FAIL) and issue-level
+    severity strings (HIGH, MEDIUM, LOW). Both FAIL and HIGH severity levels
+    are evaluated as blocking conditions under strict and ratchet postures.
+
+    Resolution Order:
+    1. Invariant Floor Check (PINNED_INVARIANTS -> BLOCK)
     2. Per-rule Config Overrides (block|warn|off, rejected on pinned rules)
     3. Posture Evaluation (strict vs observe vs ratchet baseline lookup)
     """
@@ -316,14 +320,15 @@ def disposition(
         chain.append("observe posture: downgraded to ADVISORY")
         return Disposition(outcome=Outcome.ADVISORY, chain=chain)
 
-    # 4. Non-FAIL findings under any posture disposition to ADVISORY
-    if sev_upper != "FAIL":
+    # 4. Non-FAIL/HIGH findings under any posture disposition to ADVISORY
+    # Note: severity accepts verdict-level (FAIL) or issue-level (HIGH) strings.
+    if sev_upper not in ("FAIL", "HIGH"):
         chain.append(f"severity {sev_upper} -> ADVISORY")
         return Disposition(outcome=Outcome.ADVISORY, chain=chain)
 
     # 5. Strict Posture (§5.1 & Scenario 1)
     if posture_lower == "strict":
-        chain.append("strict posture + FAIL severity -> BLOCK")
+        chain.append(f"strict posture + {sev_upper} severity -> BLOCK")
         return Disposition(outcome=Outcome.BLOCK, chain=chain)
 
     # 6. Ratchet Posture (§5.2 & Scenario 2)

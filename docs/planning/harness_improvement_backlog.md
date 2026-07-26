@@ -1331,7 +1331,7 @@ While `HIB-077` handles column-drift auto-migration across SQLite tables (`sessi
 **Date**: 2026-07-26
 **Source**: Peter — observed session_health.py UnicodeEncodeError crash; Claude traced root cause and audited all of .agent/scripts/
 **Pillar**: Environment Legibility / Windows Compatibility
-**Status**: 📋 Backlog (Target Release: v1.4.13, folded into Phase 3)
+**Status**: ✅ Delivered in v1.4.13
 
 **Symptom**: `session_health.py` crashed with `UnicodeEncodeError: 'charmap' codec can't encode characters` on `print("\u2500" * 41)` under Windows cp1252. Root cause: the script does not import `harness_utils` at all — it carries its own inline duplicate of the UTF-8 stdout/stderr fix, missing the stderr half, with a bare `except Exception: pass` that silently swallows whatever caused the wrap to fail on this system.
 
@@ -1346,11 +1346,23 @@ While `HIB-077` handles column-drift auto-migration across SQLite tables (`sessi
 
 **Fix Direction**: Delete all local inline duplicates across the 10 identified scripts; replace each with a plain `import harness_utils` (or reuse of `harness_utils._setup_sys_path()` where the script already does its own path bootstrap), matching `onboarding.py`'s already-correct pattern. Promote the `_safe_symbol()` fallback pattern (currently only in `check_repo.py`/`wiki_lint.py`) into `harness_utils.py` itself as a shared helper (e.g. `safe_symbol(emoji, fallback)`), so any script wanting graceful degradation on top of the UTF-8 wrap gets it for free rather than reinventing it. Regression test: assert none of the 10 scripts contain a local `io.TextIOWrapper(sys.stdout` or `sys.stdout.reconfigure` pattern after the fix (an AST/grep-based check, not just "it runs without crashing").
 
+---
 
+## HIB-084 — Four divergent _find_project_root() implementations across the codebase instead of one canonical bootstrap
 
+**Date**: 2026-07-26
+**Source**: Peter — observed project-root path-detection logic repeatedly changing/reverting across sessions; Claude audited and found four distinct implementations
+**Pillar**: Environment Legibility / Cross-Platform Compatibility
+**Status**: 📋 Backlog (Unscheduled — same root-cause class as HIB-073/082/083, next in the series)
 
+**Symptom**: At least four functionally different `_find_project_root()` implementations exist across `.agent/scripts/` and `src/scripts/`:
+- Pattern A (`circuit_breaker.py`, `co_change_core.py`, `co_change_reconciler.py`, `baseline.py`): git-first, then walk-up-from-file.
+- Pattern B (`architecture_checks.py`, `session_health.py`): cwd-first with no git subprocess at all, checks `.agent/config.yaml` specifically rather than `.agent/`.
+- Pattern C (`harness_utils.py` itself — the intended canonical source): cwd-first, then git, but **missing the walk-up-from-file fallback** entirely.
+- Pattern D (`check_exception_standards.py`, fixed under HIB-080-adjacent work): hardcoded `Path(__file__).resolve().parent.parent.parent` with no search logic at all — the most fragile variant, and the one that broke first.
 
+No single canonical implementation exists for any script to import; each was hand-written independently, which is why edits to one never propagate and the logic appears to "drift" across sessions.
 
+**Fix Direction**: Adopt one canonical `_find_project_root()` — cwd fast-path → `git rev-parse --show-toplevel` → walk-up-from-`__file__` → fixed-depth last resort (see `SPEC-v1.4.13-stabilization.md`'s Commit 3 fix to `check_exception_standards.py` for the reference implementation) — as the version in `harness_utils.py`, and replace all local duplicates across every script that currently hand-rolls this logic with either a direct `harness_utils` import or an identical bootstrap snippet where `harness_utils` isn't yet importable. Add a regression test in the style of `test_stdio_consolidation.py`'s Scenario 10 — an AST/text scan asserting every script's project-root bootstrap block is textually identical to the canonical version, so drift is caught mechanically rather than discovered by a human noticing the logic "changed again."
 
-
-
+**Cross-platform note**: the canonical version uses only `pathlib.Path`, list-form `subprocess.run` (never `shell=True`), and delegates OS-specific path semantics to git's own `rev-parse --show-toplevel` output — verified compatible with Windows, macOS, and Linux as written; no drive-letter or POSIX-root assumptions anywhere in the logic.
