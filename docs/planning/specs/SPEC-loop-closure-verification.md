@@ -3,10 +3,11 @@
 **Status**: APPROVED
 **Author**: Claude (drafting)
 **Tracked under**: T1-K-19
-**Target Release**: v1.4.14
+**Target Release**: v1.4.15
 **Related**: T1-K-09 (consistency gate — "gates actually gate," binary precedent this generalizes), HIB-080 (direct evidence case), HIB-081 (supporting evidence case, do not develop independently), SPEC-enforcement-postures.md (the spec whose cross-gate claim HIB-080 silently violated), T1-L-18 (Gherkin scenario coverage for outer-loop docs — a sibling concern at the spec-completeness layer rather than the test-coverage layer)
 **Changelog**:
 - v1.0 (2026-07-25, Claude): Initial draft, motivated by two incidents in one session (HIB-080; a pre-merge schema-exemption regression) that a fully green 550/550 test suite did not catch.
+- v1.1 (2026-07-26, Claude): Retagged Target Release from v1.4.14 to v1.4.15 — resequenced behind SPEC-v1.4.14-punchcard-preparation.md at Peter's direction. The two releases are independent; this spec's HIB-080 precondition is satisfied by v1.4.13 regardless of ship order. See decisions_log.md for the resequencing rationale.
 
 ---
 
