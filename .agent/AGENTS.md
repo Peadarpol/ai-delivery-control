@@ -65,6 +65,8 @@ Before any task involving code changes across more than one file or layer:
 | Tests only | `/test-engineer` |
 | Release / changelog | `/release` |
 
+**Specification Lifecycle**: Specifications transition from `Status: DRAFT` during drafting, to `Status: APPROVED` upon human sign-off, to `Status: DELIVERED` when archived to `docs/planning/specs/archive/` upon feature completion. When a spec is moved to `docs/planning/specs/archive/`, its `Status` field must be updated to `DELIVERED` in the same commit.
+
 ---
 
 ## 3. Agent Conduct

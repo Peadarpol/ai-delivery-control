@@ -1,8 +1,8 @@
 # SPEC: v1.4.13 — Stabilization Release (Posture Enforcement Fix, Pre-v1.5.x Data Integrity, Rebuttal Protocol Cluster, Framework Decoupling)
 
-**Status**: DRAFT — awaiting review and approval
+**Status**: APPROVED
 **Author**: Claude / Gemini (planning & spec refinement) — source analysis: Claude Opus 4.6 / Gemini 3.6
-**Tracked under**: HIB-080 (new), HIB-082 (new), BUG-19, BUG-11, HIB-047, HIB-048, HIB-049, HIB-050, HIB-051
+**Tracked under**: HIB-080 (new), HIB-082 (new), HIB-083 (new), BUG-19, BUG-11, HIB-047, HIB-048, HIB-049, HIB-050, HIB-051
 **Related**: T1-G-18 (enforcement postures — HIB-080 is a direct follow-on defect against this capability), SPEC-enforcement-postures.md, T1-D-07/T1-D-09/T1-L-15/T1-L-16 (v1.5.0 items whose foundations this spec protects)
 **Changelog**:
 - v1.0 (2026-07-25, Claude): Initial draft.
@@ -11,6 +11,7 @@
 - v1.3 (2026-07-25, Gemini/Peter): Extended Phase 5 to mandate upgrade-path migration (`bootstrap/migrations/v1_4_12_to_v1_4_13.py`). Migration script extracts installed `WHITELIST` and `exempt_tables` literals from target project files before overwrite, writes them forward into `.agent/config.yaml` under `schema_hardening`, and prints an explicit confirmation banner naming auto-migrated items. Added Scenario 8 acceptance criterion.
 - v1.4 (2026-07-25, Gemini/Peter): Multi-persona review refinements folded: AST parse-failure fallback clarification for HIB-080 (`extract_ast_region_sha256()`), defensive type coercion in `get_harness_config()`, AST+Regex extraction with additive set union in `v1_4_12_to_v1_4_13.py`, and un-mocked entry point assertions for Scenarios 1 & 2.
 - v1.5 (2026-07-25, Gemini/Peter): Added Phase 6 (Operational CLI Consistency — `.agent/scripts/log_decision.py`) to resolve HIB-082 (recurring `ModuleNotFoundError` from ad hoc `python -c` decision logging). Added Scenario 9 acceptance criterion.
+- v1.6 (2026-07-26, Gemini/Peter): Folded HIB-083 into Phase 3. Consolidated UTF-8 stdio wraps across 10 scripts into harness_utils imports, promoted safe_symbol() helper into harness_utils.py as shared infrastructure, and added Scenarios 10 & 11.
 
 ---
 
@@ -48,8 +49,8 @@ Every item in this spec's scope was verified against current filesystem and git 
 - **Phase 0 (blocking for GymBase adoption of v1.4.12):** HIB-080 — Wire `.agent/baseline.json` and touched-file lapsing into `architecture_checks.py`'s posture disposition call, matching `ai_review.py`'s pattern.
 - **Phase 1 (data integrity):** BUG-19 (decisions_log tab-corruption), HIB-049 (REMEDIATED rebuttal type — prevents false-positive calibration pollution).
 - **Phase 2 (gate integrity):** HIB-047 + HIB-048 (rebuttal finding surfacing + freeze using `.agent/state/gate_findings_{session_id}.json`).
-- **Phase 3 (test infrastructure):** BUG-11 (pytest stdout wrapping interference).
-- **Phase 4 (housekeeping):** Verification pass over documentation status markers and release ledger.
+- **Phase 3 (test infrastructure & stdout consolidation):** BUG-11 (pytest stdout wrapping interference in `harness_utils.py`) **and** HIB-083 (delete duplicated, inconsistently-guarded inline UTF-8 stdout/stderr wraps across 10 scripts in `.agent/scripts/`, replacing each with a plain `harness_utils` import; promote the `_safe_symbol()` fallback pattern into `harness_utils.py` as shared infrastructure).
+- **Phase 4 (housekeeping):** Verification pass over documentation status markers and release ledger. Adopt a third spec status, `DELIVERED` (alongside existing `DRAFT`/`APPROVED`), set when a spec is archived to `docs/planning/specs/archive/`. Retroactively apply to already-archived specs.
 - **Phase 5 (framework decoupling & safe upgrade migration):**
   - Refactor `enforce_hardened_schemas.py` and `analyze_schema.py` to read `schema_hardening.whitelist` and `schema_hardening.exempt_tables` from `.agent/config.yaml` via `get_harness_config()`. Default fallback for greenfield projects is empty whitelist and standard system migration tables (`alembic_version`, `schema_migrations`, `sqlite_sequence`).
   - Build `bootstrap/migrations/v1_4_12_to_v1_4_13.py` migration script: auto-extract `WHITELIST` and `exempt_tables` literals from target project files before file overwrite and append them into target's `.agent/config.yaml` under `schema_hardening`.
@@ -133,6 +134,21 @@ Given a fresh shell with CWD at the project root and no manual `sys.path`/`PYTHO
 When `python .agent/scripts/log_decision.py "title" "what" "why" "impact"` is run
 Then the decision is correctly appended to `decisions_log.md` without any `ModuleNotFoundError`, and `archive_old_decisions()` runs as part of the same invocation.
 
+### Scenario 10: No script duplicates the UTF-8 stdout/stderr wrap (HIB-083)
+Given the 10 scripts identified in HIB-083 (`session_health.py`, `audit_logger.py`, `check_halt.py`, `check_repo.py`, `circuit_breaker.py`, `co_change_reconciler.py`, `eval_runner.py`, `false_positive_to_eval.py`, `pm_scaffold.py`, `wiki_compile.py`, `wiki_lint.py`)
+When each is inspected after the fix
+Then none contain a local `io.TextIOWrapper(sys.stdout` / `io.TextIOWrapper(sys.stderr` / `sys.stdout.reconfigure` pattern, and each correctly imports `harness_utils` (directly or transitively) to obtain UTF-8-safe stdio.
+
+### Scenario 11: session_health.py runs cleanly under Windows cp1252 console (HIB-083 regression guard)
+Given a Windows environment with a non-UTF-8 console codepage (e.g. cp1252)
+When `python .agent/scripts/session_health.py` is run with an active session present
+Then the report prints in full, including box-drawing characters, without raising `UnicodeEncodeError`.
+
+### Scenario 12: Spec status reflects delivery state (Phase 4)
+Given a spec has been archived to `docs/planning/specs/archive/`
+When its `Status` field is inspected
+Then it reads `DELIVERED`, not `APPROVED` or `DRAFT`.
+
 ---
 
 ## 5. Proposed Phasing
@@ -140,8 +156,8 @@ Then the decision is correctly appended to `decisions_log.md` without any `Modul
 - **Phase 0 — Posture Enforcement Integrity**: HIB-080 (`architecture_checks.py` baseline/touched-files wiring).
 - **Phase 1 — Data Integrity**: BUG-19 (decisions_log tab-corruption sanitization), HIB-049 (`REMEDIATED` rebuttal type).
 - **Phase 2 — Gate Integrity**: HIB-047 + HIB-048 (rebuttal findings freeze artifact).
-- **Phase 3 — Test Infrastructure**: BUG-11 (pytest stdout wrapping fix in `harness_utils.py`).
-- **Phase 4 — Housekeeping**: Verification pass over documentation status markers and release ledger.
+- **Phase 3 — Test Infrastructure & Stdout Consolidation**: BUG-11 (pytest stdout wrapping fix in `harness_utils.py`) and HIB-083 (stdio wrap consolidation across 10 scripts + `safe_symbol` promotion).
+- **Phase 4 — Housekeeping**: Verification pass over documentation status markers and release ledger; adopt `DELIVERED` status for archived specs.
 - **Phase 5 — Framework Decoupling & Upgrade Migration**:
   - Implement `schema_hardening` config reader in `enforce_hardened_schemas.py` and `analyze_schema.py`.
   - Author migration unit `bootstrap/migrations/v1_4_12_to_v1_4_13.py` for AST/literal extraction into target `.agent/config.yaml` and operator confirmation banner.
@@ -164,7 +180,10 @@ Then the decision is correctly appended to `decisions_log.md` without any `Modul
 | `src/scripts/rebuttal.py`, `gate_rebuttal_template.json`, `AGENTS.md §8.6` | Add `REMEDIATED` rebuttal type | 1 |
 | `src/scripts/capability_calibration.py` | Exclude `REMEDIATED` from false-positive weight adjustments | 1 |
 | `.agent/state/gate_findings_{session_id}.json` (new artifact), `src/scripts/rebuttal.py` | Freeze findings on fail; load frozen text during `--rebuttal` | 2 |
-| `src/scripts/harness_utils.py` | Conditional UTF-8 stdout wrapping logic (detect pytest capture) | 3 |
+| `src/scripts/harness_utils.py` | Conditional UTF-8 stdout wrapping logic (detect pytest capture); add shared `safe_symbol(emoji, fallback)` helper | 3 |
+| 10 scripts listed in HIB-083 | Delete local inline UTF-8 stdout/stderr wrap; import harness_utils instead | 3 |
+| Regression test (new or extend `tests/test_harness_config.py`) | AST/grep check confirming no script re-introduces a local `TextIOWrapper`/`reconfigure` stdio wrap | 3 |
+| `docs/planning/specs/archive/*.md` & governance rules | Update archived spec Status header fields to `DELIVERED` and document archiving status rule | 4 |
 | `.agent/scripts/harness_health.py` | Update banner string to project-neutral name | 5 |
 | `.agent/scripts/enforce_hardened_schemas.py` | Config-driven whitelist (`schema_hardening.whitelist`), default empty `set()` | 5 |
 | `.agent/skills/universal/database-design/scripts/analyze_schema.py` | Config-driven table exemptions (`schema_hardening.exempt_tables`), default migration tables | 5 |

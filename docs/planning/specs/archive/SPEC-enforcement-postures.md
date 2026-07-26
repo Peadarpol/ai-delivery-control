@@ -1,6 +1,6 @@
 # SPEC: Gate Enforcement Postures (T1-G-18)
 
-**Status**: APPROVED — multi-persona review reconciled & synchronized
+**Status**: DELIVERED — multi-persona review reconciled & synchronized
 **Author**: Claude (spec/architecture) — implementation Gemini/Antigravity (v1.4.12)
 **Tracked under**: T1-G-18
 **Related:** T1-G-13 (GateContext) ✅, T1-G-14 (Capability Calibration) ✅, T1-B-12 (CDR ledger — brownfield baseline snapshot precedent) ✅, `outer_loop.mode` (existing posture precedent for spec gates), HIB-053 (phantom completion — informs baseline tamper resistance)

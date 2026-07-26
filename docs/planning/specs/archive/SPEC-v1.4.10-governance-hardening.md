@@ -1,5 +1,6 @@
 # Specification: SPEC-v1.4.10-governance-hardening
 
+**Status**: DELIVERED  
 **Source Issue**: https://github.com/Peadarpol/ai-delivery-control/issues/1410
 **Date**: 2026-07-20
 **Author**: Gemini (AI execution mode)
@@ -244,6 +245,6 @@ The goal of this release is to harden the harness's self-governance and downstre
 
 ## 9. Status & Sign-off
 
-**Status**: APPROVED
+**Status**: DELIVERED
 **Signed-off by**: Peter Long
 **Sign-off Date**: 2026-07-20
