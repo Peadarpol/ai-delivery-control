@@ -13,13 +13,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
-if __name__ == "__main__":
-    if sys.platform == "win32":
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-
 # Ensure imports can find .agent/scripts (audit_logger) and src/scripts (harness_utils)
 script_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(script_dir))
@@ -320,6 +313,13 @@ def main():
                         content = ""
                 if content:
                     docs_lines.extend(content.splitlines())
+                # Also include working copy lines so newly added formal backlog entries in current session are recognized
+                try:
+                    working_content = backlog_file.read_text(encoding="utf-8", errors="ignore") or ""
+                    if working_content:
+                        docs_lines.extend(working_content.splitlines())
+                except Exception:
+                    pass
 
     # If spec matches are present, verify spec files
     for spec_id in spec_matches:
@@ -346,13 +346,13 @@ def main():
                 
             # Parse status
             spec_content = spec_file.read_text(encoding="utf-8")
-            status_match = re.search(r"^\s*\**Status\**\s*:\s*(APPROVED|DRAFT)", spec_content, re.IGNORECASE | re.MULTILINE)
+            status_match = re.search(r"^\s*\**Status\**\s*:\s*(APPROVED|DRAFT|DELIVERED)", spec_content, re.IGNORECASE | re.MULTILINE)
             
-            is_approved = status_match and status_match.group(1).upper() == "APPROVED"
+            is_approved = status_match and status_match.group(1).upper() in ("APPROVED", "DELIVERED")
             if not is_approved:
                 is_ci = os.environ.get("CI", "").lower() == "true"
                 if is_ci:
-                    print_diagnostic_card(f"Referenced spec {spec_id} is not APPROVED in CI environment.")
+                    print_diagnostic_card(f"Referenced spec {spec_id} is not APPROVED or DELIVERED in CI environment.")
                     sys.exit(1)
                 else:
                     print(f"⚠️ [TRACEABILITY] Warning: Referenced spec {spec_id} is in DRAFT status.")

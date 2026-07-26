@@ -22,6 +22,23 @@ import os
 import sys
 from pathlib import Path
 
+def _find_project_root() -> Path:
+    cwd = Path.cwd().resolve()
+    if (cwd / ".agent" / "config.yaml").exists() or (cwd / ".git").exists():
+        return cwd
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
+            return parent
+    return cwd
+
+
+PROJECT_ROOT = _find_project_root()
+_src_scripts = PROJECT_ROOT / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+
+import harness_utils
 import httpx
 import yaml
 
@@ -282,17 +299,6 @@ def compile_domain(
 
 
 def main() -> None:
-    # Ensure UTF-8 stdout/stderr on Windows
-    if sys.platform == "win32":
-        import io
-
-        if hasattr(sys.stdout, "buffer") and "pytest" not in sys.modules:
-            try:
-                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-            except Exception:
-                pass
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--domain", type=str)

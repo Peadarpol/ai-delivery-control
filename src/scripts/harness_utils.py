@@ -17,15 +17,30 @@ from pathlib import Path
 from typing import Any, Dict, Generator
 
 # Ensure UTF-8 stdout/stderr on Windows to prevent UnicodeEncodeError under redirected environments
-if sys.platform == "win32":
+if sys.platform == "win32" and "PYTEST_CURRENT_TEST" not in os.environ and "pytest" not in sys.modules:
     import io
     try:
         if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+            if not type(sys.stdout).__name__.startswith(("_pytest", "Capture", "EncodedFile", "DontRead")):
+                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
         if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+            if not type(sys.stderr).__name__.startswith(("_pytest", "Capture", "EncodedFile", "DontRead")):
+                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
     except Exception:
         pass
+
+
+def safe_symbol(emoji: str, fallback: str = "") -> str:
+    """
+    Return emoji/symbol if sys.stdout encoding supports it, else return fallback ASCII text.
+    Prevents UnicodeEncodeError when printing emojis or box-drawing characters on non-UTF-8 consoles.
+    """
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        emoji.encode(encoding)
+        return emoji
+    except Exception:
+        return fallback
 
 # Dynamically load contextlib to stay lean
 contextlib = __import__("contextlib")

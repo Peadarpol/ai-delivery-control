@@ -88,16 +88,6 @@ hashlib = __import__("hashlib")
 io = __import__("io")
 random = __import__("random")
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
-if sys.platform == "win32" and "pytest" not in sys.modules:
-    try:
-        if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-        if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-    except Exception:
-        pass
-
 # Optional: SQLite state persistence (T1-D-01). Non-fatal if unavailable.
 try:
     from state_persistence import sync_review_event_to_db as _sync_review_event_to_db
@@ -350,26 +340,15 @@ def build_branch_isolation_roster(patterns: list[str], base_classes: list[str], 
     return {}
 
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError with emojis
-if sys.platform == "win32" and "pytest" not in sys.modules:
-    if (
-        hasattr(sys.stdout, "buffer")
-        and getattr(sys.stdout, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if (
-        hasattr(sys.stderr, "buffer")
-        and getattr(sys.stderr, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-
-
 def _safe_symbol(emoji: str, fallback: str) -> str:
     """Return emoji if stdout supports UTF-8, else ASCII fallback."""
+    hu = sys.modules.get("harness_utils")
+    if hu is not None and hasattr(hu, "safe_symbol"):
+        return hu.safe_symbol(emoji, fallback)
     try:
         emoji.encode(sys.stdout.encoding or "utf-8")
         return emoji
-    except (UnicodeEncodeError, AttributeError):
+    except Exception:
         return fallback
 
 
@@ -2421,7 +2400,7 @@ def _run_review(commit_msg_file: str | None = None) -> int:
             gate_context.route_decision = route_decision.model_dump() if route_decision else None
             gate_context.verdict = typed_verdict.model_dump()
             gate_context.posture = effective_posture
-            if hasattr(gate_context, "dispositions") and hasattr(typed_verdict, "issues"):
+            if posture is not None and typed_verdict.issues:
                 gate_context.dispositions = [
                     issue.get("disposition") for issue in typed_verdict.issues if issue.get("disposition")
                 ]

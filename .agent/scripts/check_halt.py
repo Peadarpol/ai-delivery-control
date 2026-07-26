@@ -11,22 +11,13 @@ import json
 import datetime
 from pathlib import Path
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError with emojis
-if sys.platform == "win32" and "pytest" not in sys.modules:
-    import io
-
-    if (
-        hasattr(sys.stdout, "buffer")
-        and getattr(sys.stdout, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if (
-        hasattr(sys.stderr, "buffer")
-        and getattr(sys.stderr, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_src_scripts = PROJECT_ROOT / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+
+import harness_utils
+
 HALT_PATH = PROJECT_ROOT / ".agent" / "state" / "HALT"
 EVENTS_FILE = PROJECT_ROOT / ".agent" / "state" / "harness_events.jsonl"
 SESSION_FILE = PROJECT_ROOT / ".agent" / "state" / "session.json"
