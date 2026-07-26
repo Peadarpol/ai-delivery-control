@@ -1,6 +1,6 @@
 # SPEC-v1.4.11-installer-onboarding
 
-**Status**: Approved  
+**Status**: DELIVERED  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.11  
 **Tracked under**: `F7` / `F8` / `T1-K-17` / `F-COLD-1` / `F-COLD-2` / `F-COLD-3` / `F-COLD-5`

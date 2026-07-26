@@ -915,6 +915,62 @@ class TestStructuredRebuttal:
                 res = ai_review._run_rebuttal(args)
                 assert res == 1
 
+    def test_gate_findings_frozen_and_surfaced_at_rebuttal(self, ai_review, tmp_path, capsys):
+        """Scenario 5 (HIB-047/048): Gate findings are written to gate_findings_{session_id}.json at FAIL time and surfaced during rebuttal."""
+        state_dir = tmp_path / ".agent" / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        
+        freeze_file = state_dir / "gate_findings_test-sess-123.json"
+        freeze_data = {
+            "session_id": "test-sess-123",
+            "timestamp": "2026-07-26T00:00:00Z",
+            "diff_hash": "diffhash123",
+            "verdict": "FAIL",
+            "findings": [
+                {
+                    "finding_id": "FID-99",
+                    "concern": "LAYER_BOUNDARY",
+                    "severity": "FAIL",
+                    "location": "src/domain/model.py:10",
+                    "details": "Forbidden import of infrastructure"
+                }
+            ]
+        }
+        freeze_file.write_text(json.dumps(freeze_data, indent=2), encoding="utf-8")
+
+        rebuttal_file = state_dir / "gate_rebuttal.json"
+        rebuttal_data = {
+            "original_fail_session_id": "test-sess-123",
+            "original_fail_timestamp": "2026-07-26T00:00:00Z",
+            "normalized_diff_hash": "diffhash123",
+            "findings": [
+                {
+                    "finding_id": "FID-99",
+                    "rebuttal_type": "REMEDIATED",
+                    "evidence": "Fixed layer boundary"
+                }
+            ]
+        }
+        rebuttal_file.write_text(json.dumps(rebuttal_data, indent=2), encoding="utf-8")
+
+        import rebuttal
+        with patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("rebuttal.PROJECT_ROOT", tmp_path), \
+             patch("rebuttal._get_active_ai_review", return_value=None), \
+             patch("rebuttal.get_staged_diff", return_value="staged-diff"), \
+             patch("rebuttal._get_normalized_diff_hash", return_value="diffhash123"), \
+             patch("rebuttal._scan_logs_for_rebuttal", return_value=({"session_id": "test-sess-123", "issues": [{"finding_id": "FID-99"}]}, [])), \
+             patch.object(rebuttal, "get_provider", side_effect=RuntimeError("stop early")):
+            
+            args = MagicMock()
+            args.rebutted_by_agent = False
+            rebuttal._run_rebuttal(args)
+            
+            captured = capsys.readouterr().out
+            assert "FROZEN GATE FINDINGS" in captured
+            assert "FID-99" in captured
+            assert "Forbidden import of infrastructure" in captured
+
     @patch("time.time", return_value=1748260000.0)
     def test_rebuttal_updates_session_token_budget(self, mock_time, ai_review, tmp_path):
         with patch("ai_review.PROJECT_ROOT", tmp_path):
@@ -1744,12 +1800,14 @@ class TestCapabilityCalibrationIntegration:
                 {
                     "severity": "HIGH",
                     "concern": "INTENT_ALIGNMENT",
+                    "location": "src/main.py:10",
                     "description": "High intent alignment concern",
                     "remediation": "remediate"
                 },
                 {
                     "severity": "MEDIUM",
                     "concern": "BRANCH_ISOLATION",
+                    "location": "src/main.py:20",
                     "description": "Medium branch isolation concern",
                     "remediation": "remediate"
                 }
@@ -1778,7 +1836,8 @@ class TestCapabilityCalibrationIntegration:
              patch("ai_review.PROJECT_ROOT", tmp_path), \
              patch("ai_review.load_config", return_value=config), \
              patch("ai_review._persist_verdict"), \
-             patch("ai_review.render_review"):
+             patch("ai_review.render_review"), \
+             patch("posture.get_touched_files", return_value=({"src/main.py"}, False)):
 
             exit_code = ai_review._run_review()
             # Since INTENT_ALIGNMENT was HIGH -> demoted to MEDIUM,

@@ -11,18 +11,39 @@ import sys
 import subprocess
 from pathlib import Path
 
-# Ensure UTF-8 encoding on Windows
-if sys.platform == "win32":
-    import io
+def _find_project_root() -> Path:
+    """Find the project root: cwd fast-path, then authoritative git query, then
+    walk-up-from-file fallback, then fixed-depth last resort."""
     try:
-        if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-        if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+        cwd = Path.cwd().resolve()
+        if (cwd / ".git").exists() or (cwd / ".agent").exists():
+            return cwd
     except Exception:
         pass
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, encoding="utf-8", timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return Path(result.stdout.strip())
+    except Exception:
+        pass
+    try:
+        current = Path(__file__).resolve()
+        for parent in [current] + list(current.parents):
+            if (parent / ".git").exists() or (parent / ".agent").exists():
+                return parent
+    except Exception:
+        pass
+    return Path(__file__).resolve().parent.parent.parent
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+PROJECT_ROOT = _find_project_root()
+_src_scripts = Path(__file__).resolve().parent
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+
+import harness_utils
 
 
 def check_exception_standards() -> int:

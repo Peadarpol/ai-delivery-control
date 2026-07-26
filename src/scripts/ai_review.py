@@ -88,16 +88,6 @@ hashlib = __import__("hashlib")
 io = __import__("io")
 random = __import__("random")
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError
-if sys.platform == "win32" and "pytest" not in sys.modules:
-    try:
-        if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-        if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-    except Exception:
-        pass
-
 # Optional: SQLite state persistence (T1-D-01). Non-fatal if unavailable.
 try:
     from state_persistence import sync_review_event_to_db as _sync_review_event_to_db
@@ -212,7 +202,7 @@ try:
     VALID_REBUTTAL_TYPES = rebuttal.VALID_REBUTTAL_TYPES
 except ImportError:
     rebuttal = None
-    VALID_REBUTTAL_TYPES = ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE")
+    VALID_REBUTTAL_TYPES = ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED")
     class RebuttedFinding(BaseModel):
         finding_id: str
         rebuttal_type: str
@@ -260,8 +250,10 @@ def _run_rebuttal(args):
 
 try:
     import gate_context
+    from gate_context import write_gate_context
 except ImportError:
     gate_context = None
+    write_gate_context = None
 
 def gather_pytest_evidence(changed_files):
     if gate_context is not None and hasattr(gate_context, "gather_pytest_evidence"):
@@ -348,26 +340,15 @@ def build_branch_isolation_roster(patterns: list[str], base_classes: list[str], 
     return {}
 
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError with emojis
-if sys.platform == "win32" and "pytest" not in sys.modules:
-    if (
-        hasattr(sys.stdout, "buffer")
-        and getattr(sys.stdout, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if (
-        hasattr(sys.stderr, "buffer")
-        and getattr(sys.stderr, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-
-
 def _safe_symbol(emoji: str, fallback: str) -> str:
     """Return emoji if stdout supports UTF-8, else ASCII fallback."""
+    hu = sys.modules.get("harness_utils")
+    if hu is not None and hasattr(hu, "safe_symbol"):
+        return hu.safe_symbol(emoji, fallback)
     try:
         emoji.encode(sys.stdout.encoding or "utf-8")
         return emoji
-    except (UnicodeEncodeError, AttributeError):
+    except Exception:
         return fallback
 
 
@@ -1250,6 +1231,23 @@ def render_review(review: Dict[str, Any], churn_info: str) -> None:
                 diff_hash = "active-staged-diff-hash"
             session_id = _get_active_session_id() or "unknown-session"
             timestamp = datetime.datetime.now().isoformat()
+
+            # Freeze gate findings to artifact (HIB-047 / HIB-048)
+            try:
+                state_dir = PROJECT_ROOT / ".agent" / "state"
+                state_dir.mkdir(parents=True, exist_ok=True)
+                findings_freeze_data = {
+                    "session_id": session_id,
+                    "timestamp": timestamp,
+                    "diff_hash": diff_hash,
+                    "verdict": "FAIL",
+                    "findings": issues,
+                }
+                freeze_path = state_dir / f"gate_findings_{session_id}.json"
+                freeze_path.write_text(json.dumps(findings_freeze_data, indent=2), encoding="utf-8")
+                (state_dir / "gate_findings_latest.json").write_text(json.dumps(findings_freeze_data, indent=2), encoding="utf-8")
+            except Exception as freeze_err:
+                print(f"[GATE] Warning: Could not freeze gate findings: {freeze_err}")
             
             scaffold = {
                 "original_fail_session_id": session_id,
@@ -1527,13 +1525,14 @@ def _run_review(commit_msg_file: str | None = None) -> int:
             if not bypass_data and sys.stdin.isatty():
                 print("[BYPASS] High-risk commit bypass interactive wizard active (Vector C)...")
                 rebuttal_type = ""
-                while rebuttal_type not in ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE"):
+                while rebuttal_type not in ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED"):
                     print("Select rebuttal type:")
                     print("  1. FALSE_POSITIVE")
                     print("  2. SPEC_REQUIREMENT")
                     print("  3. ARCHITECTURAL_INVARIANT")
                     print("  4. OUT_OF_SCOPE")
-                    choice = input("Choice (1-4): ").strip()
+                    print("  5. REMEDIATED")
+                    choice = input("Choice (1-5): ").strip()
                     if choice == "1":
                         rebuttal_type = "FALSE_POSITIVE"
                     elif choice == "2":
@@ -1542,6 +1541,8 @@ def _run_review(commit_msg_file: str | None = None) -> int:
                         rebuttal_type = "ARCHITECTURAL_INVARIANT"
                     elif choice == "4":
                         rebuttal_type = "OUT_OF_SCOPE"
+                    elif choice == "5":
+                        rebuttal_type = "REMEDIATED"
 
                 finding_ids_str = input("Finding IDs (comma-separated, e.g. T1-G-07,T1-L-10): ").strip()
                 finding_ids = [fid.strip() for fid in finding_ids_str.split(",") if fid.strip()]
@@ -2037,8 +2038,8 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         
         # Save updated GateContext
         try:
-            from gate_context import write_gate_context
-            write_gate_context(gate_context)
+            if write_gate_context:
+                write_gate_context(gate_context)
         except Exception as e:
             print(f"⚠️  [GATE] Failed to save GateContext: {e}")
 
@@ -2396,7 +2397,6 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     # Write back final RouteDecision and ReviewVerdict (T1-G-13 & SPEC v1.1)
     if gate_context:
         try:
-            from gate_context import write_gate_context
             gate_context.route_decision = route_decision.model_dump() if route_decision else None
             gate_context.verdict = typed_verdict.model_dump()
             gate_context.posture = effective_posture
@@ -2404,7 +2404,8 @@ def _run_review(commit_msg_file: str | None = None) -> int:
                 gate_context.dispositions = [
                     issue.get("disposition") for issue in typed_verdict.issues if issue.get("disposition")
                 ]
-            write_gate_context(gate_context)
+            if write_gate_context:
+                write_gate_context(gate_context)
         except Exception as e:
             print(f"⚠️  [GATE] Failed to write back final GateContext: {e}")
 

@@ -31,6 +31,7 @@ PROJECT_ROOT = _find_project_root()
 _src_scripts = PROJECT_ROOT / "src" / "scripts"
 if _src_scripts.exists() and str(_src_scripts) not in sys.path:
     sys.path.insert(0, str(_src_scripts))
+import harness_utils
 _agent_scripts = PROJECT_ROOT / ".agent" / "scripts"
 if _agent_scripts.exists() and str(_agent_scripts) not in sys.path:
     sys.path.insert(0, str(_agent_scripts))
@@ -66,14 +67,6 @@ def boundary_of(file_path: str, layers: dict[str, str]) -> str | None:
 
 
 def main():
-    # Fix: Ensure UTF-8 encoding for stdout/stderr on Windows
-    if sys.platform == "win32":
-        try:
-            sys.stdout.reconfigure(encoding="utf-8")
-            sys.stderr.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
-
     parser = argparse.ArgumentParser(
         description="Reconcile historical co-changes against declared architectural boundaries."
     )

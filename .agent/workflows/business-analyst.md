@@ -8,7 +8,7 @@ This workflow defines the process of capturing user requirements, exposing unsta
 
 - **Governance Role**: The `/ba` workflow is the authoritative source for "what to build and why."
 - **Scope Boundary with T1-L-03**: Effort estimation, task breakdown, and sprint planning are explicitly out of scope for `/ba` and belong to the `/project-manager` workflow (`T1-L-03`). The specification template contains no backlog or estimation sections.
-- **Human in the Loop**: The agent *drafts* the specification; the human architect must *approve* it by setting `**Status**: APPROVED` prior to implementation.
+- **Human in the Loop**: The agent *drafts* the specification; the human architect must *approve* it by setting `**Status**: APPROVED` prior to implementation. When a spec is moved to `docs/planning/specs/archive/`, its `Status` field must be updated to `DELIVERED` in the same commit.
 
 ---
 

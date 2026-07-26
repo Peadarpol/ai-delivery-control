@@ -1,6 +1,6 @@
 # SPEC-v1.4.9.1-first-commit-hotfix
 
-**Status**: APPROVED  
+**Status**: DELIVERED  
 **Author**: Gemini (AI execution mode)  
 **Feeds into**: Release v1.4.9.1  
 **Tracked under**: `T1-K-15` / `T1-B-15` / `T1-B-16` / `HIB-069` / `HIB-070` / `HIB-071` / `HIB-072`

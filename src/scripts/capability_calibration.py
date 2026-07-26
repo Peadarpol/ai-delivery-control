@@ -39,11 +39,12 @@ def save_calibration(calibration_data: Dict[str, Any], project_root: Path) -> No
 def update_calibration_rebuttal(
     capability: str,
     verdict: str,  # "REBUTTAL_ACCEPTED" or "REBUTTAL_REJECTED" or "UNCONTESTED"
-    project_root: Path
+    project_root: Path,
+    rebuttal_type: str | None = None,
 ) -> None:
     """Updates tp/fp counters and weight based on rebuttal outcome.
-    - REBUTTAL_ACCEPTED (false positive confirmed): fp += 1, weight *= 0.9
-    - REBUTTAL_REJECTED or uncontested (true positive): tp += 1, weight *= 1.05
+    - REBUTTAL_ACCEPTED for non-REMEDIATED (false positive confirmed): fp += 1, weight *= 0.9
+    - REBUTTAL_REJECTED, uncontested, or REMEDIATED (true positive): tp += 1, weight *= 1.05
     Clamped to [0.5, 1.5].
     """
     data = load_calibration(project_root)
@@ -54,10 +55,10 @@ def update_calibration_rebuttal(
     fp = cap_data.get("fp", 1)
     weight = cap_data.get("weight", 1.0)
     
-    if verdict == "REBUTTAL_ACCEPTED":
+    if verdict == "REBUTTAL_ACCEPTED" and rebuttal_type != "REMEDIATED":
         fp += 1
         weight *= 0.9
-    elif verdict in ("REBUTTAL_REJECTED", "UNCONTESTED"):
+    elif verdict in ("REBUTTAL_REJECTED", "UNCONTESTED") or (verdict == "REBUTTAL_ACCEPTED" and rebuttal_type == "REMEDIATED"):
         tp += 1
         weight *= 1.05
         

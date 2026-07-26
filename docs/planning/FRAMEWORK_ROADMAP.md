@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.11
-**Target Release**: v1.4.12 (Installer & validator onboarding hardening shipped in v1.4.11; see decisions_log.md 2026-07-23)
-**Last Updated**: 2026-07-24 (v1.4.11 shipped; installer & validator onboarding hardening, sandbox dry-run, API preflight)
+**Current Version**: 1.4.12
+**Target Release**: v1.4.13 (Stabilization Release — see milestone entry below)
+**Last Updated**: 2026-07-25 (v1.4.12 shipped; v1.4.13 & v1.4.14 milestone specs drafted.)
 
 ---
 
@@ -412,6 +412,52 @@ practice). Input: `cold-start-field-observations-2026-07-18.md`.
 
 ---
 
+### v1.4.12 — Governance Hardening & Enforcement Postures ✅ SHIPPED (2026-07-25)
+
+**Goal**: Equip the harness for brownfield enterprise adoption by introducing gate enforcement postures (`T1-G-18`), hard-code import pathing bootstrapping across 11 scripts (`HIB-073`), disambiguate local provider exception logging from network outages (`HIB-074`), close the traceability self-ratification gap (`HIB-076`), and expand SQLite schema-drift auto-migration across all tables (`HIB-077`).
+
+**Delivered items**:
+- Core Feature: Gate Enforcement Postures (`T1-G-18`) — `posture.py` disposition engine, `.agent/baseline.json` content-hashed manifest format, `.agent/scripts/baseline.py` human-only CLI (`init`/`refresh`/`report`), `observe` posture expiration safeguards, and `ai_review.py` integration. *(Note: `architecture_checks.py` ratchet/baseline integration deferred to `v1.4.13` under `HIB-080`)*.
+- `HIB-073`: Dynamic root discovery and import path bootstrapping refactored across 11 scripts/skills (`check_spec.py`, `circuit_breaker.py`, `co_change_core.py`, `co_change_reconciler.py`, `init_session.py`, `onboarding.py`, `wiki_compile.py`, `wiki_lint.py`, `repo_map.py`, `validate.py`, `harness_health.py`).
+- `HIB-074`: Provider local exception disambiguation distinguishing runtime validation errors (`review_local_error`) from network API failures (`review_network_error`).
+- `HIB-076`: Traceability gate self-ratification prevention by checking referenced IDs against HEAD state of tracked backlog/planning files.
+- `HIB-077`: SQLite auto-migration extended to `review_events` and `spec_acceptance` tables in `state_persistence.py`.
+- `T1-B-14`–`17`: Backlog status marker synchronization for v1.4.11 onboarding items.
+
+**Spec**: `SPEC-v1.4.12-governance-hardening-and-postures.md` and `SPEC-enforcement-postures.md`.
+
+---
+
+### v1.4.13 — Stabilization Release 📋 PLANNED (2026-07-25)
+
+**Goal**: Address posture enforcement integrity (`HIB-080`), data integrity (`BUG-19`, `HIB-049`), gate findings freeze (`HIB-047`/`HIB-048`), pytest stdout capture wrapping (`BUG-11`), and framework decoupling / config-driven schema hardening exemptions with upgrade auto-migration (Phase 5).
+
+**Planned items**:
+- Phase 0: HIB-080 — `architecture_checks.py` ratchet posture baseline/touched-files wiring
+- Phase 1: BUG-19 (`decisions_log.md` tab corruption), HIB-049 (`REMEDIATED` rebuttal type)
+- Phase 2: HIB-047 + HIB-048 (rebuttal finding surfacing + freeze via `.agent/state/gate_findings_{session_id}.json`)
+- Phase 3: BUG-11 (pytest stdout capture wrapping fix in `harness_utils.py`)
+- Phase 4: Housekeeping (Documentation status markers & release ledger verification)
+- Phase 5: Framework Decoupling & Upgrade Migration (`schema_hardening` config in `.agent/config.yaml`, `v1_4_12_to_v1_4_13.py` extraction & banner, `harness_health.py` title banner, `ai_review.py` import consolidation)
+
+**Spec**: `SPEC-v1.4.13-stabilization.md`.
+
+---
+
+### v1.4.14 — Loop Closure Verification 📋 PLANNED (2026-07-25)
+
+**Goal**: Deliver spec-to-test loop closure verification (`T1-K-19` / `HIB-081`) across three phases: (A) spec-scenario cross-reference parser & matcher; (B) static multi-consumer AST wiring audit (`wiring_audit.py`); (C) E2E scenario classification & hermetic fixture-based outcome-equivalence test pattern.
+
+**Planned items**:
+- Phase A: `.agent/scripts/loop_closure_check.py` (spec-scenario cross-reference reporter)
+- Phase B: `.agent/scripts/wiring_audit.py` + `.agent/config/wiring_consumers.yaml` (static wiring audit)
+- Phase C: E2E classification + `tests/helpers/outcome_equivalence.py` fixture pattern
+
+**Spec**: `SPEC-loop-closure-verification.md`.
+
+---
+
+
 ### Deferred Scope Candidates — Under Consideration
 
 **F-COLD-4 — Retrofit mode** (identified 2026-07-18, live cold-start session):
@@ -501,6 +547,7 @@ to pull forward if the release runs light.
 The original roadmap scoped v1.5.0 as the skill-quality release (T1-B-04/05/06/07).
 That scope is deferred to v1.5.2, pending T1-E-01 (Tool ABC formalisation) which
 is confirmed ⬜ undelivered. T1-E-01 is the sole content of v1.5.1.
+Note: T1-K-19 (Loop Closure Verification) is sequenced into standalone release v1.4.14 prior to v1.5.0 to solidify outcome-verification testing across the harness test suite before Quality Signal Maturity work commences.
 
 ---
 
@@ -655,10 +702,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.4.12 (v1.4.11 shipped 2026-07-24)
+**Active milestone**: v1.4.13 (v1.4.12 shipped 2026-07-25)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅, v1.4.12 ✅, v1.4.13 📋, v1.4.14 📋
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:
@@ -791,9 +838,9 @@ Scope:
 
 **Dream phase fix sequencing**: HIB-DREAM-01 and HIB-DREAM-02 are prerequisites for HIB-DREAM-03. The field name fix (01) ensures keyword matching reads the correct schema fields; the catalog addition (02) ensures `INTENT_MISMATCH` patterns route correctly. Both must land before HIB-DREAM-03 so the revised threshold has valid, correctly-routed input data to test against. Deliver 01 and 02 in the same commit; 03 in a subsequent commit after verifying dry-run output.
 
-**Active milestone**: v1.4.12 (v1.4.11 shipped 2026-07-24)
+**Active milestone**: v1.5.0 (v1.4.12 shipped 2026-07-25)
 **v1.3.x family**: v1.3.0 ✅, v1.3.1 ✅, v1.3.2 ❌ (deferred), v1.3.3 ✅, v1.3.4 ✅
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅, v1.4.12 ✅
 *v1.4.5 Note: Refactored and decomposed ai_review.py into roster_builder, context_loader, route_decision, rebuttal, and gate_context modules with no API changes.*
 **Next major milestone**: v1.5.0 (planning complete — see milestone entry above)
 

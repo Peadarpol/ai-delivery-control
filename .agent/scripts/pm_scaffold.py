@@ -14,7 +14,8 @@ from pathlib import Path
 # Ensure imports can find the src scripts (providers) and .agent/scripts (audit_logger)
 script_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(script_dir))
-sys.path.insert(0, str(script_dir.parent.parent))
+sys.path.insert(0, str(script_dir.parent.parent / "src" / "scripts"))
+import harness_utils
 
 from src.scripts.providers import get_provider
 from audit_logger import log_action
@@ -279,8 +280,4 @@ Format your response exactly under these four headers:
     print(f"✅ [PM_SCAFFOLD] Sprint task backlog scaffolded successfully at {output_file}")
 
 if __name__ == "__main__":
-    if sys.platform == "win32":
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
     main()

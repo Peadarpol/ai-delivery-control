@@ -98,6 +98,19 @@ def test_update_calibration_rebuttal():
         data = load_calibration(tmp_path)
         assert data["capabilities"]["TEST_COVERAGE"]["weight"] == 0.5
 
+
+def test_update_calibration_rebuttal_remediated_does_not_pollute_fp():
+    """Scenario 4 (HIB-049): REMEDIATED rebuttal type does not treat rebuttal as false positive or reduce weight."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        update_calibration_rebuttal("SECURITY_CHECK", "REBUTTAL_ACCEPTED", tmp_path, rebuttal_type="REMEDIATED")
+        data = load_calibration(tmp_path)
+        cap = data["capabilities"]["SECURITY_CHECK"]
+        assert cap["tp"] == 2
+        assert cap["fp"] == 1
+        assert pytest.approx(cap["weight"]) == 1.05
+
+
         # Check clamping upper bound 1.5
         for _ in range(40):
             update_calibration_rebuttal("TEST_COVERAGE", "REBUTTAL_REJECTED", tmp_path)

@@ -18,29 +18,27 @@ from pathlib import Path
 
 import yaml
 
-# Fix: Ensure UTF-8 encoding for stdout/stderr on Windows to prevent UnicodeEncodeError with emojis
-if sys.platform == "win32" and "pytest" not in sys.modules:
-    import io
+def _find_project_root() -> Path:
+    cwd = Path.cwd().resolve()
+    if (cwd / ".agent" / "config.yaml").exists() or (cwd / ".git").exists():
+        return cwd
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
+            return parent
+    return cwd
 
-    if (
-        hasattr(sys.stdout, "buffer")
-        and getattr(sys.stdout, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if (
-        hasattr(sys.stderr, "buffer")
-        and getattr(sys.stderr, "encoding", "").lower() != "utf-8"
-    ):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+
+PROJECT_ROOT = _find_project_root()
+_src_scripts = PROJECT_ROOT / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+
+import harness_utils
 
 
 def _safe_symbol(emoji: str, fallback: str) -> str:
-    """Return emoji if stdout supports UTF-8, else ASCII fallback."""
-    try:
-        emoji.encode(sys.stdout.encoding or "utf-8")
-        return emoji
-    except (UnicodeEncodeError, AttributeError):
-        return fallback
+    return harness_utils.safe_symbol(emoji, fallback)
 
 
 SYMBOL_START = _safe_symbol("⚡", "[START]")

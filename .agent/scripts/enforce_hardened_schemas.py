@@ -9,36 +9,23 @@ ENFORCE_PATHS = [
     "src/presentation/api/schemas",
 ]
 
-# Files that are allowed to use BaseModel (Legacy whitelist)
-# In Phase 4, we will clear this list.
-WHITELIST = {
-    "src/domain/schemas/workout_schemas.py",
-    "src/domain/schemas/training_plan_schemas.py",
-    "src/domain/schemas/ticket_schema.py",
-    "src/domain/schemas/system.py",
-    "src/domain/schemas/staff_schemas.py",
-    "src/domain/schemas/session_schemas.py",
-    "src/domain/schemas/report_schemas.py",
-    "src/domain/schemas/pos_schemas.py",
-    "src/domain/schemas/payment_gateway_schemas.py",
-    "src/domain/schemas/member_schemas.py",
-    "src/domain/schemas/member_note_schemas.py",
-    "src/domain/schemas/membership_plan_schemas.py",
-    "src/domain/schemas/invoice_schemas.py",
-    "src/domain/schemas/gym_business_schemas.py",
-    "src/domain/schemas/equipment_schemas.py",
-    "src/domain/schemas/entitlement_schemas.py",
-    "src/domain/schemas/email_schemas.py",
-    "src/domain/schemas/checkin_schemas.py",
-    "src/domain/schemas/chat_schemas.py",
-    "src/domain/schemas/branch_schemas.py",
-    "src/domain/schemas/audit_schemas.py",
-    "src/domain/schemas/base.py",
-}
+def load_whitelist(project_root: Path) -> set[str]:
+    """Load schema whitelist from .agent/config.yaml under schema_hardening.whitelist."""
+    try:
+        sys.path.insert(0, str(project_root / "src" / "scripts"))
+        from harness_utils import get_harness_config
+        raw = get_harness_config("schema_hardening", "whitelist", default=[], config_path=project_root / ".agent" / "config.yaml", strict=True)
+    except Exception:
+        raw = []
+
+    if isinstance(raw, (list, tuple, set)):
+        return {str(x).strip().replace("\\", "/") for x in raw if x and isinstance(x, str)}
+    return set()
 
 
 def main():
     project_root = Path(__file__).parents[2]
+    whitelist = load_whitelist(project_root)
     violations = []
 
     # Pattern to find direct BaseModel inheritance
@@ -52,7 +39,7 @@ def main():
         for py_file in path.glob("**/*.py"):
             rel_path = py_file.relative_to(project_root).as_posix()
 
-            if rel_path in WHITELIST:
+            if rel_path in whitelist:
                 continue
 
             content = py_file.read_text(encoding="utf-8")

@@ -1,6 +1,6 @@
 # SPEC: Gate Enforcement Postures (T1-G-18)
 
-**Status**: APPROVED — multi-persona review reconciled & synchronized
+**Status**: DELIVERED — multi-persona review reconciled & synchronized
 **Author**: Claude (spec/architecture) — implementation Gemini/Antigravity (v1.4.12)
 **Tracked under**: T1-G-18
 **Related:** T1-G-13 (GateContext) ✅, T1-G-14 (Capability Calibration) ✅, T1-B-12 (CDR ledger — brownfield baseline snapshot precedent) ✅, `outer_loop.mode` (existing posture precedent for spec gates), HIB-053 (phantom completion — informs baseline tamper resistance)
@@ -283,3 +283,11 @@ Suggested phasing (each phase independently shippable): **P1** severity-map fix 
 
 ---
 **Per standing protocol:** this spec stops here for review and approval. No code, schema, or script implementation proceeds until sign-off. On approval, backlog entry T1-G-18 should be created referencing this document, and the P1–P4 phasing adopted as the delivery sequence.
+
+---
+
+## Post-Delivery Note (2026-07-25)
+
+`SPEC-enforcement-postures.md` was delivered in release `v1.4.12` (commit `5a505c1`).
+**Implementation Caveat / Known Defect**: Baseline grandfathering under `ratchet` posture was integrated into `src/scripts/ai_review.py` but **not** into `.agent/skills/universal/senior-architect/scripts/architecture_checks.py` (which evaluates `strict`/`observe` dispositions but omits `baseline` and `touched_files` arguments in its `disposition()` calls). This gap is tracked as **HIB-080** and targeted for remediation in `v1.4.13`.
+

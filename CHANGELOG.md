@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.4.13 — 2026-07-26
+
+### Stabilization Release (SPEC-v1.4.13-stabilization) — 6 Phases
+
+- **Posture enforcement integrity (Phase 0 / HIB-080)**: Wired `.agent/baseline.json` content-hashed manifest and touched-files set into `architecture_checks.py` disposition so that `ratchet` and `observe` postures correctly skip baseline-matching files and `strict` posture always fires. `baseline.py` now passes a `files` argument to `get_disposition()`.
+- **Rebuttal protocol integrity (Phase 1+2 / HIB-049, HIB-047/048, BUG-19)**: Added tab-corruption sanitization in `harness_utils.py`; introduced `REMEDIATED` rebuttal type in `rebuttal.py`; implemented gate-findings freeze/surface so accepted rebuttals land in calibration context on next review (`capability_calibration.py`).
+- **stdio consolidation (Phase 3 / HIB-083, BUG-11)**: Consolidated UTF-8 output wrapping into `harness_utils.py`; added `safe_symbol()` for cross-platform Unicode fallback; fixed pytest capture detection so tests using `capsys` no longer trigger spurious encoding errors.
+- **DELIVERED spec status (Phase 4)**: Added third spec lifecycle status `DELIVERED` (alongside DRAFT/APPROVED); retroactively applied to all five already-archived specs. `AGENTS.md` updated to document the archival → DELIVERED transition rule.
+- **Config-driven exemptions & auto-migration (Phase 5)**: `check_exception_standards.py` now reads exemptions from `.agent/config.yaml` and auto-migrates legacy inline lists on schema upgrade. Canonical cross-platform `_find_project_root()` (git-query + walk-up fallback, 5 s timeout) replaces fragile hardcoded depth path (HIB-084).
+- **log_decision.py CLI wrapper (Phase 6 / HIB-082)**: New `src/scripts/log_decision.py` provides a command-line interface to `record_decision()` in `harness_utils.py`, enabling decision logging from shell scripts and pre-commit hooks without importing Python internals.
+
+### Loop-Closure Verification (SPEC-loop-closure-verification)
+
+- **check_traceability.py HEAD-index validation**: Traceability gate now resolves referenced spec/backlog IDs against `HEAD` git-index (`git show :rel_path`) rather than the working-tree filesystem, closing the self-ratification loophole where a new commit could introduce and immediately satisfy its own traceability ID.
+
+### Bookkeeping & Release Closure
+
+- Archived `SPEC-v1.4.13-stabilization.md` and `SPEC-loop-closure-verification.md` to `docs/planning/specs/archive/` with `Status: DELIVERED`.
+- Marked HIB-080, HIB-082, HIB-083 as `✅ Delivered in v1.4.13` in `harness_improvement_backlog.md`. Recorded HIB-084 as a delivered addendum.
+- Bumped `harness_version.txt` to `1.4.13`.
+- Regenerated `bootstrap/checksums.py` — 654 framework files hashed.
+
+## v1.4.12 — 2026-07-25
+
+### Governance Hardening & Gate Enforcement Postures
+- **Gate Enforcement Postures (`T1-G-18`)**: Added `src/scripts/posture.py` disposition engine supporting `strict`, `ratchet`, and `observe` postures. Integrated `.agent/baseline.json` content-hashed manifest format and human-only CLI (`.agent/scripts/baseline.py init|refresh|report`). Wired posture disposition into `ai_review.py` and deprecated `.skip-ai-review` / `SKIP_AI_REVIEW=1` bypasses with explicit warnings pointing to `enforcement.posture: observe`. *(Note: `architecture_checks.py` ratchet/baseline integration deferred to v1.4.13 under HIB-080)*.
+- **Script Import Pathing Bootstrap (`HIB-073`)**: Standardized dynamic root discovery (`_find_project_root()`) and path bootstrapping across 11 scripts/skills (`check_spec.py`, `circuit_breaker.py`, `co_change_core.py`, `co_change_reconciler.py`, `init_session.py`, `onboarding.py`, `wiki_compile.py`, `wiki_lint.py`, `repo_map.py`, `validate.py`, `harness_health.py`).
+- **Provider Error Disambiguation (`HIB-074`)**: Refactored `ai_review.py` and `providers.py` to distinguish local validation/runtime exceptions (`review_local_error`) from external network API outages (`review_network_error`).
+- **Traceability Self-Ratification Guard (`HIB-076`)**: Refactored `check_traceability.py` to resolve referenced IDs against `HEAD` state of tracked backlog/planning files, preventing newly introduced IDs from self-ratifying within the same commit.
+- **SQLite Schema Migration (`HIB-077`)**: Extended `_ensure_schema()` auto-migration in `state_persistence.py` across all SQLite tables (`sessions`, `review_events`, `spec_acceptance`).
+- **Bookkeeping & Calibration**: Synchronized v1.4.11 backlog status markers (`T1-B-14`–`17`) and pinned invariant rules against calibration weight suppression.
+
 ## v1.4.11 — 2026-07-24
 
 ### Installer & Validator Hardening

@@ -76,7 +76,7 @@ def _find_project_root() -> Path:
 PROJECT_ROOT = _find_project_root()
 
 
-RebuttalType = Literal["FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE"]
+RebuttalType = Literal["FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED"]
 VALID_REBUTTAL_TYPES = get_args(RebuttalType)
 
 
@@ -456,8 +456,30 @@ def _run_rebuttal(args: Any) -> int:
         print(f"   Last failed review: {last_fail.get('session_id')}")
         return 1
         
-    # Legacy check
     original_issues = last_fail.get("issues", [])
+    # Load frozen findings if present (HIB-047/048)
+    frozen_file = project_root / ".agent" / "state" / f"gate_findings_{dev_rebuttal.original_fail_session_id}.json"
+    if not frozen_file.exists():
+        frozen_file = project_root / ".agent" / "state" / "gate_findings_latest.json"
+
+    if frozen_file.exists():
+        try:
+            fdata = json.loads(frozen_file.read_text(encoding="utf-8"))
+            if fdata.get("session_id") == dev_rebuttal.original_fail_session_id or fdata.get("session_id") == "unknown-session":
+                if fdata.get("findings"):
+                    original_issues = fdata.get("findings", [])
+        except Exception:
+            pass
+
+    print("\n" + "─" * 60)
+    print("📌 FROZEN GATE FINDINGS (Rebuttal Target)")
+    print("─" * 60)
+    for issue in original_issues:
+        print(f"  • [{issue.get('finding_id', 'FID')}] {issue.get('concern', 'GENERAL')}: {issue.get('location', '')}")
+        if issue.get("details"):
+            print(f"    {issue.get('details')}")
+    print("─" * 60 + "\n")
+
     has_finding_ids = any("finding_id" in issue for issue in original_issues)
     if not has_finding_ids:
         print("❌ [REBUTTAL] This FAIL predates the structured rebuttal protocol. Use SKIP_AI_REVIEW=1 with SKIP_REASON instead.")
@@ -672,7 +694,9 @@ def _run_rebuttal(args: Any) -> int:
             if issue:
                 cap = issue.get("concern")
                 if cap:
-                    capability_calibration.update_calibration_rebuttal(cap, rf.verdict, project_root)
+                    dev_finding = next((df for df in dev_rebuttal.findings if df.finding_id == rf.finding_id), None)
+                    r_type = dev_finding.rebuttal_type if dev_finding else None
+                    capability_calibration.update_calibration_rebuttal(cap, rf.verdict, project_root, rebuttal_type=r_type)
                     
         # Uncontested findings
         for fid, issue in original_issues_map.items():

@@ -1,6 +1,6 @@
 # SPEC: Release v1.4.12 — Gate Enforcement Postures & Governance Hardening
 
-**Status**: APPROVED — multi-persona review reconciled & synchronized
+**Status**: DELIVERED — multi-persona review reconciled & synchronized
 **Author**: Gemini / Antigravity (planning & spec drafting) — Claude architecture review reconciled
 **Tracked under**: `v1.4.12`
 **Source Issue**: v1.4.12 Scope Handoff (Milestone v1.4.12)

@@ -5,6 +5,25 @@ import os
 import sys
 from pathlib import Path
 
+def _find_project_root() -> Path:
+    cwd = Path.cwd().resolve()
+    if (cwd / ".agent" / "config.yaml").exists() or (cwd / ".git").exists():
+        return cwd
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
+            return parent
+    return cwd
+
+
+PROJECT_ROOT = _find_project_root()
+_src_scripts = PROJECT_ROOT / "src" / "scripts"
+if _src_scripts.exists() and str(_src_scripts) not in sys.path:
+    sys.path.insert(0, str(_src_scripts))
+
+import harness_utils
+
+
 def main():
     session_file = Path(".agent/state/session.json")
     events_file = Path(".agent/state/harness_events.jsonl")

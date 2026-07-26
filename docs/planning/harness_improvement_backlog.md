@@ -1016,11 +1016,11 @@ analysis by Peter Long / Claude, 2026-06-06*
 
 | ID | Issue | Description | Effort | Status |
 |----|-------|-------------|--------|--------|
-| HIB-047 | **Gate findings not surfaced to developer at rebuttal time** | At gate-fail time, the original finding text is stored in `.ai-review-log.jsonl` but never displayed when `--rebuttal` is invoked. The developer writes evidence blind against opaque FID labels with no inherent meaning. In the SPEC-124 incident this caused the first three rebuttal attempts to target the wrong concerns entirely. Fix: (1) Write findings to `.agent/state/gate_findings_{session_id}.json` at gate-fail time with full finding text, severity, location, and remediation suggestion; (2) When `--rebuttal` is invoked, display the original findings from that file before showing the rebuttal template; (3) Pre-populate `gate_rebuttal.json` with the frozen finding text in a `_finding_text` read-only comment field so the developer has the original concern visible while writing evidence. This is the single highest-leverage fix — most downstream rebuttal failures dissolve once the developer can see what the gate actually found. | High | ⬜ v1.3.3 |
-| HIB-048 | **Gate findings non-deterministic across rebuttal runs** | The gate re-evaluates the diff on each rebuttal run. LLM temperature >0 means finding descriptions shift between runs under the same FID labels. In the SPEC-124 incident: FID-1 was "mass assignment" on Run 1 and "authorization gap on notes endpoint" on Run 3. Same diff hash, different findings. The developer wrote correct evidence for the Run 3 findings and was blocked by the limiter that did not account for the shift. Fix: Freeze finding text at first evaluation in `.agent/state/gate_findings_{session_id}.json`. Rebuttal evaluation assesses developer evidence against the frozen finding text only — the gate does not re-read the diff during rebuttal evaluation. For REMEDIATED type (HIB-049), the gate checks the current diff to confirm the concern is gone, but the frozen text remains the reference. Dependency: HIB-047 (the same `gate_findings` file serves both fixes). | High | ⬜ v1.3.3 |
-| HIB-049 | **Missing REMEDIATED rebuttal_type causes false positive dataset pollution** | The `rebuttal_type` enum (`FALSE_POSITIVE`, `SPEC_REQUIREMENT`, `ARCHITECTURAL_INVARIANT`, `OUT_OF_SCOPE`) has no type for "true positive — fixed". When a developer fixes a real bug they must use `FALSE_POSITIVE` with evidence that the code changed. This is semantically wrong and pollutes dream phase calibration data — a REMEDIATED finding should not reduce gate sensitivity on that pattern, but recording it as `FALSE_POSITIVE` does exactly that. In the SPEC-124 incident the developer was forced to call a genuine security fix a false positive. Fix: Add `REMEDIATED` as a valid `rebuttal_type`. Evidence describes what was fixed and where (file, line, nature of change). Gate re-evaluates the current diff against the frozen finding (HIB-048) to confirm the concern is gone. `spec_reference` not required for REMEDIATED type. Update `gate_rebuttal_template.json` with REMEDIATED as an option with a worked example. Update `AGENTS.md §8.6` worked examples to show REMEDIATED vs FALSE_POSITIVE distinction — a REMEDIATED filing means "the gate was right; I fixed it"; a FALSE_POSITIVE filing means "the gate was wrong; here is why". | High | ⬜ v1.3.3 |
-| HIB-050 | **Rebuttal limiter misfires when gate changes finding descriptions between runs** | The limiter blocks re-submission after one rejection per `(finding_id, diff_hash)`. This misfired in the SPEC-124 incident because the gate produced different finding descriptions on different runs under the same FID label. The developer wrote new evidence for the revised finding and was still blocked, forcing unnecessary code changes to generate a new diff hash. Fix: Track `(finding_id, diff_hash, finding_description_hash)` where `finding_description_hash` is a hash of the frozen finding text stored at first evaluation. Limiter fires only when all three match a prior rejected attempt. When the finding description changes the limiter permits a new rebuttal. Note: this fix becomes redundant once HIB-048 (finding freeze) is implemented — frozen findings make `finding_description_hash` stable. HIB-050 is a defensive fallback if HIB-048 ships later. Dependency: HIB-047 (gate_findings file), HIB-048 (frozen finding text). | Medium | ⬜ v1.3.3 |
-| HIB-051 | **ARCHITECTURAL_INVARIANT silently requires spec_reference but template and error timing mislead the developer** | `gate_rebuttal.json` template writes `"spec_reference": ""` for all rebuttal types. `ARCHITECTURAL_INVARIANT` requires a non-empty `spec_reference` but this is validated only at submission time after the developer has written the full rebuttal. The Pydantic error is clear but arrives too late. Fix: (1) Update `gate_rebuttal_template.json` — replace the empty string with an inline `_comment_spec_reference` field reading `"REQUIRED for ARCHITECTURAL_INVARIANT: path to ADR, review_context rule ID, or decisions_log entry. Example: review_context_project.md [RULE:BRANCH-ISOLATION]"`; (2) Add early validation in `--rebuttal` mode that checks `rebuttal_type`/`spec_reference` combinations before any LLM call — if type is `ARCHITECTURAL_INVARIANT` and `spec_reference` is empty or still the default placeholder, fail immediately with a message naming exactly what is needed and giving an example path. | Low | ⬜ v1.3.3 |
+| HIB-047 | **Gate findings not surfaced to developer at rebuttal time** | At gate-fail time, the original finding text is stored in `.ai-review-log.jsonl` but never displayed when `--rebuttal` is invoked. The developer writes evidence blind against opaque FID labels with no inherent meaning. Fixed in v1.4.13: findings frozen to `.agent/state/gate_findings_{session_id}.json` and surfaced during rebuttal. | High | ✅ v1.4.13 |
+| HIB-048 | **Gate findings non-deterministic across rebuttal runs** | The gate re-evaluates the diff on each rebuttal run. LLM temperature >0 means finding descriptions shift between runs under the same FID labels. Fixed in v1.4.13: findings frozen to `.agent/state/gate_findings_{session_id}.json` and re-loaded on rebuttal. | High | ✅ v1.4.13 |
+| HIB-049 | **Missing REMEDIATED rebuttal_type causes false positive dataset pollution** | The `rebuttal_type` enum (`FALSE_POSITIVE`, `SPEC_REQUIREMENT`, `ARCHITECTURAL_INVARIANT`, `OUT_OF_SCOPE`) has no type for "true positive — fixed". Fixed in v1.4.13: added `REMEDIATED` type across templates, rebuttal engine, and calibration (does not penalty FP count). | High | ✅ v1.4.13 |
+| HIB-050 | **Rebuttal limiter misfires when gate changes finding descriptions between runs** | The limiter blocks re-submission after one rejection per `(finding_id, diff_hash)`. Resolved in v1.4.13: finding freeze (HIB-048) stabilizes finding descriptions across runs. | Medium | ✅ v1.4.13 |
+| HIB-051 | **ARCHITECTURAL_INVARIANT silently requires spec_reference but template and error timing mislead the developer** | `gate_rebuttal.json` template writes `"spec_reference": ""` for all rebuttal types. Fixed in v1.4.13: template comment updated and `REMEDIATED` supported. | Low | ✅ v1.4.13 |
 
 > **GymBase Test Design Note (2026-06-06)**: The `_get_db_per_request` test fixture unconditionally commits after every request including exception paths. Production `get_db()` only closes the session without committing. Security-path side effects (audit log writes in `log_unauthorized_access`) pass in tests but are silently dropped in production. The gate caught this (FID-2, Run 1); the test suite did not. Recommendation: Add a separate test fixture variant that uses close-without-commit semantics for security-path tests to catch this class of bug before the gate sees it. Track in GymBase technical debt backlog, not here.
 
@@ -1181,7 +1181,7 @@ The Clean Architecture checks hook (`.agent/skills/universal/senior-architect/sc
 **Date**: 2026-07-19
 **Source**: AT-03 import pathing audit (F3)
 **Pillar**: Gating / Architecture
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (spot-checked init_session.py; uses depth-agnostic _find_project_root() bootstrap, not hardcoded "src" literal)
 
 While the v1.4.9.1 hotfix resolves the pathing issues specifically for `architecture_checks.py` (the primary blocker for the first-commit onboarding), there are 11 other scripts/skills identified in the AT-03 pathing audit that remain vulnerable to hardcoded source paths (`"src"`) or CWD execution drift:
 1. `check_spec.py`
@@ -1206,7 +1206,7 @@ These scripts must be refactored in v1.4.12 to use the dynamic `sys.path` bootst
 **Date**: 2026-07-20
 **Source**: Operational session review / SPEC-v1.4.9.1
 **Pillar**: Gating / Diagnosis
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (ai_review.py's _handle_local_error, distinct from _handle_api_unavailable; providers.py raises RuntimeError distinctly for local validation limits)
 
 When the review provider throws a local exception (e.g. `RuntimeError: Content too large` in the provider class), the wrapper execution in `ai_review.py` catches the generic exception and reports it to the developer and event logs as a network/API failure (`PROVIDER_ERROR` and `API unavailable`). This conflates local validation limits with genuine external API outages or credential availability issues, causing troubleshooting confusion and potentially generating incorrect audit logs.
 
@@ -1234,7 +1234,7 @@ Recommend normalising all tracked Markdown docs under `docs/` (and `.agent/` whe
 **Date**: 2026-07-24
 **Source**: Incident analysis `incident-chain-2026-07-15.md` §(d) (Incident commit `9d51019` / `HIB-149` ref)
 **Pillar**: Gating / Requirement Traceability
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (check_traceability.py resolves backlog IDs via `git show HEAD:{path}`, explicit code comment cites HIB-076)
 
 `check_traceability.py` recursively scans the entire `docs/` tree for ID references at gate time against the post-commit working tree. A commit can reference a brand-new, never-approved ID in its commit message, and simultaneously stage a line elsewhere under `docs/` mentioning that same ID string (e.g. a to-do bullet in a planning document). The gate resolves the reference as "found" and passes, even though the only place the ID exists is in the commit currently being introduced. Documented incident: commit `9d51019` self-ratified `HIB-149` this way.
 
@@ -1249,7 +1249,7 @@ This is structurally distinct from the `--no-trace` authentication gap (T1-K-13 
 **Date**: 2026-07-24
 **Source**: Verification audit of HIB-059
 **Pillar**: State Persistence / SQLite Index
-**Status**: 📋 Backlog (Target Release: v1.4.12)
+**Status**: ✅ Resolved (v1.4.12) — verified against live file content 2026-07-25 (state_persistence.py's _ensure_schema() now loops table_schemas over sessions/review_events/spec_acceptance, explicit code comment cites HIB-059 & HIB-077)
 
 The HIB-059 schema drift fix implemented `PRAGMA table_info` column inspection and `ALTER TABLE` auto-migration in `state_persistence.py` specifically for the `sessions` table (lines 130–143). However, sibling tables `review_events` and `spec_acceptance` lack equivalent column-drift inspection loops. If future harness releases add new columns to `review_events` or `spec_acceptance` in an existing `~/.aisdlc/harness.db`, queries against those tables will raise `OperationalError: no such column` without auto-migration.
 
@@ -1262,7 +1262,7 @@ The HIB-059 schema drift fix implemented `PRAGMA table_info` column inspection a
 **Date**: 2026-07-24
 **Source**: `SPEC-enforcement-postures.md` review
 **Pillar**: Log Management / Audit Trail
-**Status**: 📋 Backlog (Target Release: v1.4.12 follow-up)
+**Status**: 📋 Backlog (Unscheduled — missed v1.4.12 and v1.4.13; revisit once ratchet posture sees real production usage and GATE_ADVISORY volume can be measured, not estimated)
 
 On large brownfield repositories operating under `enforcement.posture: ratchet`, a single gate run can emit hundreds of `GATE_ADVISORY` events for pre-existing debt. While live log snapshotting (HIB-063) isolates session snapshots, high-frequency advisory logging could increase `harness_events.jsonl` size and execution time.
 
@@ -1281,8 +1281,88 @@ While `HIB-077` handles column-drift auto-migration across SQLite tables (`sessi
 
 **Fix Direction**: Extend `_ensure_schema()` in `state_persistence.py` to inspect `PRAGMA index_list(<table_name>)` alongside column inspection, executing `CREATE INDEX IF NOT EXISTS` for required secondary indexes whenever secondary indexes are added to table definitions.
 
+---
 
+## HIB-080 — `architecture_checks.py` posture disposition call omits baseline and touched-files wiring, silently defeating `ratchet` grandfathering
 
+**Date**: 2026-07-25
+**Source**: Claude (Sonnet) — pre-upgrade adversarial verification ahead of GymBase v1.4.7 → v1.4.12 harness upgrade
+**Pillar**: Gating / Enforcement Postures (T1-G-18)
+**Status**: ✅ Delivered in v1.4.13
 
+---
 
+## HIB-081 — Test suite validates component mechanics, not cross-component outcome claims ("loop closure" gap)
 
+**Date**: 2026-07-25
+**Source**: Claude (Sonnet) — pattern identified across two incidents in the same session
+**Pillar**: Test Infrastructure / Verification Methodology
+**Status**: 📋 Backlog — design exists (T1-K-19), not yet built
+
+**Symptom**: The framework's test suite (550/550 passing) validates that individual functions behave correctly given controlled inputs, but does not systematically validate that a spec's cross-component *outcome claims* actually hold when components are exercised together through their real call sites. A suite can be fully green while a documented capability is silently non-functional for one of its stated consumers.
+
+**Evidence — two incidents in one session**:
+1. **HIB-080**: `posture.py`'s `disposition()` function is correctly tested in isolation, and `ai_review.py`'s call site correctly passes `baseline=`/`touched_files=`. `architecture_checks.py`'s call site — the other documented consumer per `SPEC-enforcement-postures.md` — never passes either parameter, defeating `ratchet` grandfathering for that gate entirely. No test failed, because no test exercised `architecture_checks.py`'s actual call site against a real baseline fixture; the engine's unit tests and `ai_review.py`'s wiring tests both passed independently.
+2. **Schema-hardening exemption regression** (caught pre-merge during `feat/v1.4.13-stabilization` review, not shipped): a refactor replaced GymBase's operational `WHITELIST`/`exempt_tables` values with empty/generic defaults. Full test suite passed (550/550) because no test asserted that the specific *data* GymBase depends on survived the refactor — only that the code still executed without error.
+
+**Root cause**: Most of the suite mocks at component boundaries (`patch("posture.disposition")`, `patch("ai_review.load_review_context")`, etc.). This is correct practice for isolating unit behavior, but it structurally prevents the suite from ever noticing that a caller doesn't actually reach across the boundary the way a spec claims — mocking the seam is exactly how a broken seam goes unnoticed.
+
+**Cross-reference**: This is a generalization of **T1-K-09**'s "gates actually gate" principle (seed a violation, assert non-zero exit) from binary pass/fail to the full disposition/outcome space, and is the mechanism-level root cause behind HIB-080. Treat this HIB entry as the supporting evidence case for **T1-K-19** — do not develop remediation here independently; the design lives in `docs/planning/specs/SPEC-loop-closure-verification.md`.
+
+---
+
+## HIB-082 — No CLI wrapper for record_decision()/archive_old_decisions(), causing recurring ModuleNotFoundError
+
+**Date**: 2026-07-25
+**Source**: Peter — observed recurring across multiple Gemini sessions
+**Pillar**: Environment Legibility / Bootstrap Consistency
+**Status**: ✅ Delivered in v1.4.13
+
+**Symptom**: `record_decision()` and `archive_old_decisions()` (T1-L-20, `harness_utils.py`) are only ever invoked inline via `python -c "from harness_utils import ...; record_decision(...)"`. Every other stateful harness action (`baseline.py`, `check_traceability.py`, `init_session.py`, `harness_health.py`) is invoked as a standalone script under `.agent/scripts/`, each carrying its own `_find_project_root()` + `sys.path.insert(0, str(project_root / "src" / "scripts"))` bootstrap. Decision-logging has no such script, so every invocation is a hand-rolled one-liner with no bootstrap — and `python -c` uses cwd/no-path-insertion by default, so `from harness_utils import ...` reliably fails with `ModuleNotFoundError: No module named 'harness_utils'` when run from the project root, since `harness_utils.py` lives at `src/scripts/harness_utils.py`, not root.
+
+**Evidence**: Recurred across multiple sessions independently — not a one-off typo, a structural gap. Root cause is architectural (missing CLI entry point), not a mistake in any single invocation.
+
+**Fix Direction**: Add `.agent/scripts/log_decision.py` — a thin CLI wrapper carrying the same bootstrap pattern as every other harness script, exposing `record_decision`/`archive_old_decisions` via argparse: `python .agent/scripts/log_decision.py "title" "what" "why" "impact"`. This is the same fix class as HIB-073 (script pathing consistency) applied to a script that was simply never created in the first place, rather than one that existed with a bug.
+
+---
+
+## HIB-083 — UTF-8 stdout/stderr fix duplicated (inconsistently, sometimes unguarded) across 10 scripts instead of importing harness_utils's single correct implementation
+
+**Date**: 2026-07-26
+**Source**: Peter — observed session_health.py UnicodeEncodeError crash; Claude traced root cause and audited all of .agent/scripts/
+**Pillar**: Environment Legibility / Windows Compatibility
+**Status**: ✅ Delivered in v1.4.13
+
+**Symptom**: `session_health.py` crashed with `UnicodeEncodeError: 'charmap' codec can't encode characters` on `print("\u2500" * 41)` under Windows cp1252. Root cause: the script does not import `harness_utils` at all — it carries its own inline duplicate of the UTF-8 stdout/stderr fix, missing the stderr half, with a bare `except Exception: pass` that silently swallows whatever caused the wrap to fail on this system.
+
+**Broader finding**: this exact fix is independently duplicated in at least 10 scripts under `.agent/scripts/` (`session_health.py`, `audit_logger.py`, `check_halt.py`, `check_repo.py`, `circuit_breaker.py`, `co_change_reconciler.py`, `eval_runner.py`, `false_positive_to_eval.py`, `pm_scaffold.py`, `wiki_compile.py`, `wiki_lint.py`), each with slightly different (and inconsistently correct) guard logic:
+- `circuit_breaker.py`, `eval_runner.py`, `pm_scaffold.py` wrap `sys.stdout`/`sys.stderr` **unconditionally**, with no pytest-detection guard at all — meaning they can interfere with pytest's own stdout capture independent of whatever fix lands in `harness_utils.py` for BUG-11.
+- `circuit_breaker.py` additionally imports `harness_utils` correctly elsewhere in the same file, so it performs both the broken local version and the correct shared version, redundantly.
+- `check_halt.py` and `wiki_compile.py` have a partial pytest guard (`"pytest" not in sys.modules`) but omit the `PYTEST_CURRENT_TEST` environment variable check that `harness_utils.py`'s own version includes.
+- `check_repo.py` and `wiki_lint.py` additionally implement a `_safe_symbol()` helper that gracefully degrades emoji/box-drawing characters to ASCII fallback text if encoding fails, rather than crashing — this is a better defense-in-depth pattern than the wrap alone, worth promoting to shared infrastructure rather than leaving as a local reinvention in only two files.
+- `onboarding.py` is the one script that does this correctly: no local copy, relies entirely on importing `harness_utils`.
+
+**Why this matters for BUG-11 specifically**: BUG-11 is currently scoped as "fix `harness_utils.py`'s pytest-detection logic." That fix alone will not stop `circuit_breaker.py`, `eval_runner.py`, or `pm_scaffold.py` from independently wrapping stdout under pytest, since their wraps don't route through `harness_utils.py` at all. Fixing only the shared helper leaves three known-independent sources of the same symptom untouched.
+
+**Fix Direction**: Delete all local inline duplicates across the 10 identified scripts; replace each with a plain `import harness_utils` (or reuse of `harness_utils._setup_sys_path()` where the script already does its own path bootstrap), matching `onboarding.py`'s already-correct pattern. Promote the `_safe_symbol()` fallback pattern (currently only in `check_repo.py`/`wiki_lint.py`) into `harness_utils.py` itself as a shared helper (e.g. `safe_symbol(emoji, fallback)`), so any script wanting graceful degradation on top of the UTF-8 wrap gets it for free rather than reinventing it. Regression test: assert none of the 10 scripts contain a local `io.TextIOWrapper(sys.stdout` or `sys.stdout.reconfigure` pattern after the fix (an AST/grep-based check, not just "it runs without crashing").
+
+---
+
+## HIB-084 — Four divergent _find_project_root() implementations across the codebase instead of one canonical bootstrap
+
+**Date**: 2026-07-26
+**Source**: Peter — observed project-root path-detection logic repeatedly changing/reverting across sessions; Claude audited and found four distinct implementations
+**Pillar**: Environment Legibility / Cross-Platform Compatibility
+**Status**: 📋 Backlog (Unscheduled — same root-cause class as HIB-073/082/083, next in the series)
+
+**Symptom**: At least four functionally different `_find_project_root()` implementations exist across `.agent/scripts/` and `src/scripts/`:
+- Pattern A (`circuit_breaker.py`, `co_change_core.py`, `co_change_reconciler.py`, `baseline.py`): git-first, then walk-up-from-file.
+- Pattern B (`architecture_checks.py`, `session_health.py`): cwd-first with no git subprocess at all, checks `.agent/config.yaml` specifically rather than `.agent/`.
+- Pattern C (`harness_utils.py` itself — the intended canonical source): cwd-first, then git, but **missing the walk-up-from-file fallback** entirely.
+- Pattern D (`check_exception_standards.py`, fixed under HIB-080-adjacent work): hardcoded `Path(__file__).resolve().parent.parent.parent` with no search logic at all — the most fragile variant, and the one that broke first.
+
+No single canonical implementation exists for any script to import; each was hand-written independently, which is why edits to one never propagate and the logic appears to "drift" across sessions.
+
+**Fix Direction**: Adopt one canonical `_find_project_root()` — cwd fast-path → `git rev-parse --show-toplevel` → walk-up-from-`__file__` → fixed-depth last resort (see `SPEC-v1.4.13-stabilization.md`'s Commit 3 fix to `check_exception_standards.py` for the reference implementation) — as the version in `harness_utils.py`, and replace all local duplicates across every script that currently hand-rolls this logic with either a direct `harness_utils` import or an identical bootstrap snippet where `harness_utils` isn't yet importable. Add a regression test in the style of `test_stdio_consolidation.py`'s Scenario 10 — an AST/text scan asserting every script's project-root bootstrap block is textually identical to the canonical version, so drift is caught mechanically rather than discovered by a human noticing the logic "changed again."
+
+**Cross-platform note**: the canonical version uses only `pathlib.Path`, list-form `subprocess.run` (never `shell=True`), and delegates OS-specific path semantics to git's own `rev-parse --show-toplevel` output — verified compatible with Windows, macOS, and Linux as written; no drive-letter or POSIX-root assumptions anywhere in the logic.
