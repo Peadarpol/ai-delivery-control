@@ -1,14 +1,4 @@
 # Decisions Log
-## 2026-06-02: Hardened Session Token Budget Wiring and Graceful Lock Acquisition (T1-I-07)
-- **Decision**: Implemented rolling budget tracking summing regular, reasoning, and cache read tokens, coupled with atomic structured JSON HALT writes, and 80%/100% Warn/Halt warnings. Wrapped all `_lock_session` context managers in `try-except` blocks to print warning messages to stderr and proceed gracefully if concurrency lock acquisition fails.
-- **Context**: Prevent budget undercounting of reasoning/cache tokens, log session_id in the HALT file dictionary, and ensure the review gate does not crash due to temporary locking issues under concurrent execution.
-- **Consequence**: Verified all 28 E2E verification scenarios and 207 unit tests pass successfully.
-
-## 2026-06-03: Two-Layer Context Architecture (UNIVERSAL_CONTEXT.md)
-- **Decision**: Consolidated shared tool context rules into `.agent/UNIVERSAL_CONTEXT.md` and converted editor-specific rules (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`) into thin shims loading it.
-- **Context**: Duplicating identity and rules across three separate files caused configuration mismatches and high maintenance overhead.
-- **Consequence**: Single source of truth for agent system context, leaving shim files clean and minimal.
-
 ## 2026-06-03: 3-Tier Memory Tiering (T1-I-01)
 - **Decision**: Implemented `memory_manager.py` to parse memory into Hot (always loaded), Warm (keyword-matched), and Cold (historical files older than 90 days), with automatic archiving.
 - **Context**: Storing large historic logs in primary agent context causes token blowups, while missing historical context blocks long-term capability retrieval.
@@ -146,3 +136,13 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: PunchCard Preparation moved ahead of Loop Closure Verification
 - **Context**: Both releases are independent — Loop Closure Verification's HIB-080 precondition is satisfied by v1.4.13 regardless of ship order; resequencing reflects near-term priority on the PunchCard experiment
 - **Consequence**: SPEC-loop-closure-verification.md retagged to v1.4.15, FRAMEWORK_ROADMAP.md milestone entries swapped, SPEC-v1.4.14-punchcard-preparation.md is now the active v1.4.14
+
+## 2026-08-01: PunchCard Experiment Target Version Selection (v1.4.14)
+- **Decision**: Run PunchCard experiment against framework version 1.4.14.
+- **Context**: SPEC-v1.4.14-punchcard-preparation establishes the required baseline stability, oversized diff streaming, and audit trail support needed for the experiment.
+- **Consequence**: PunchCard experiment executions will explicitly target version 1.4.14.
+
+## 2026-08-01: Audit Commitment for Oversized Diff Overrides in PunchCard Post-Run Analysis
+- **Decision**: Commit to inspecting harness_events.jsonl for oversized_diff_override_accepted events, focusing on agent-vs-human actor attribution, during PunchCard post-run analysis.
+- **Context**: Scenario 3 of SPEC-v1.4.14 requires that oversized diff bypasses are audit-distinguishable between human operators and AI agents.
+- **Consequence**: Oversized diff overrides will be explicitly audited and attributed to their actor during post-run evaluation.

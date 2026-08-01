@@ -209,3 +209,13 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: Keeping documentation in sync with consolidated research findings and plan refinements is necessary before starting Sprint 1 implementation.
 - **Consequence**: Ground truth documentation is updated for developers and agents. All 184 tests pass.
 
+## 2026-06-02: Hardened Session Token Budget Wiring and Graceful Lock Acquisition (T1-I-07)
+- **Decision**: Implemented rolling budget tracking summing regular, reasoning, and cache read tokens, coupled with atomic structured JSON HALT writes, and 80%/100% Warn/Halt warnings. Wrapped all `_lock_session` context managers in `try-except` blocks to print warning messages to stderr and proceed gracefully if concurrency lock acquisition fails.
+- **Context**: Prevent budget undercounting of reasoning/cache tokens, log session_id in the HALT file dictionary, and ensure the review gate does not crash due to temporary locking issues under concurrent execution.
+- **Consequence**: Verified all 28 E2E verification scenarios and 207 unit tests pass successfully.
+
+## 2026-06-03: Two-Layer Context Architecture (UNIVERSAL_CONTEXT.md)
+- **Decision**: Consolidated shared tool context rules into `.agent/UNIVERSAL_CONTEXT.md` and converted editor-specific rules (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`) into thin shims loading it.
+- **Context**: Duplicating identity and rules across three separate files caused configuration mismatches and high maintenance overhead.
+- **Consequence**: Single source of truth for agent system context, leaving shim files clean and minimal.
+

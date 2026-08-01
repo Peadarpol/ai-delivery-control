@@ -1,6 +1,6 @@
 # SPEC: v1.4.14 — PunchCard Preparation Release
 
-**Status**: APPROVED
+**Status**: DELIVERED
 **Author**: Claude (drafting); Peter (review)
 **Tracked under**: HIB-068 (primary), HIB-085 (disclosed follow-on inconsistency, not blocking)
 **Release**: v1.4.14
