@@ -73,7 +73,19 @@ def _find_project_root() -> Path:
         curr = curr.parent
     return Path(__file__).resolve().parent.parent # fallback
 
-PROJECT_ROOT = _find_project_root()
+_ORIGINAL_PROJECT_ROOT = _find_project_root()
+PROJECT_ROOT = _ORIGINAL_PROJECT_ROOT
+
+
+# PROJECT_ROOT is intentionally reassignable by tests via patch.object(rebuttal, "PROJECT_ROOT", tmp_path).
+# The inequality check detects when tests monkey-patch PROJECT_ROOT directly versus when ai_review.PROJECT_ROOT is patched.
+def _get_project_root() -> Path:
+    if PROJECT_ROOT != _ORIGINAL_PROJECT_ROOT:
+        return PROJECT_ROOT
+    ai_rev = _get_active_ai_review()
+    if ai_rev is not None and hasattr(ai_rev, "PROJECT_ROOT"):
+        return getattr(ai_rev, "PROJECT_ROOT")
+    return PROJECT_ROOT
 
 
 RebuttalType = Literal["FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED", "OVERSIZED_DIFF"]
@@ -140,18 +152,8 @@ Respond ONLY with a valid JSON object. No preamble, no markdown fences, no expla
 
 
 def _get_active_ai_review() -> Any:
-    import inspect
     import sys
-    for frame_info in inspect.stack():
-        name = frame_info.frame.f_globals.get("__name__", "")
-        if name.endswith("ai_review"):
-            class ModuleWrapper:
-                def __init__(self, globs):
-                    self.globs = globs
-                def __getattr__(self, key):
-                    return self.globs.get(key)
-            return ModuleWrapper(frame_info.frame.f_globals)
-    return sys.modules.get("src.scripts.ai_review") or sys.modules.get("ai_review")
+    return sys.modules.get("ai_review") or sys.modules.get("src.scripts.ai_review")
 
 
 def _get_active_session_id() -> Optional[str]:
@@ -172,7 +174,7 @@ def get_staged_diff() -> str:
             text=True,
             encoding="utf-8",
             errors="replace",
-            cwd=str(PROJECT_ROOT),
+            cwd=str(_get_project_root()),
         )
         return result.stdout or ""
     except Exception:
@@ -246,7 +248,7 @@ def _get_normalized_diff_hash(diff: str, target_args: Optional[List[str]] = None
             except Exception:
                 pass
 
-    project_root = getattr(ai_rev, "PROJECT_ROOT", PROJECT_ROOT) if ai_rev is not None else PROJECT_ROOT
+    project_root = _get_project_root()
     try:
         if target_args is None:
             if ai_rev is not None and hasattr(ai_rev, "_resolve_git_target"):
@@ -300,7 +302,7 @@ def _scan_logs_for_rebuttal(diff_hash: str) -> Tuple[Optional[Dict[str, Any]], L
         if func is not None and (hasattr(func, "mock_add_spec") or hasattr(func, "_mock_call")):
             return func(diff_hash)
 
-    project_root = getattr(ai_rev, "PROJECT_ROOT", PROJECT_ROOT) if ai_rev is not None else PROJECT_ROOT
+    project_root = _get_project_root()
     log_path = project_root / ".ai-review-log.jsonl"
     if not log_path.exists():
         return None, []
@@ -428,7 +430,7 @@ def _run_rebuttal(args: Any) -> int:
         if func is not None and (hasattr(func, "mock_add_spec") or hasattr(func, "_mock_call")):
             return func(args)
 
-    project_root = getattr(ai_rev, "PROJECT_ROOT", PROJECT_ROOT) if ai_rev is not None else PROJECT_ROOT
+    project_root = _get_project_root()
     rebuttal_actor = "agent" if args.rebutted_by_agent else "human"
     
     rebuttal_file = project_root / ".agent" / "state" / "gate_rebuttal.json"
@@ -460,9 +462,9 @@ def _run_rebuttal(args: Any) -> int:
     # Get the active staged or scoped diff
     reviewed_files = None
     if dev_rebuttal.original_fail_session_id:
-        fpath = PROJECT_ROOT / ".agent" / "state" / f"gate_findings_{dev_rebuttal.original_fail_session_id}.json"
+        fpath = project_root / ".agent" / "state" / f"gate_findings_{dev_rebuttal.original_fail_session_id}.json"
         if not fpath.exists():
-            fpath = PROJECT_ROOT / ".agent" / "state" / "gate_findings_latest.json"
+            fpath = project_root / ".agent" / "state" / "gate_findings_latest.json"
         if fpath.exists():
             try:
                 fdata = json.loads(fpath.read_text(encoding="utf-8"))
