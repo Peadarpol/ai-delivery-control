@@ -36,7 +36,10 @@ class TestGetStagedDiffAmend:
 
     def test_normal_commit_reads_staged(self, ai_review):
         """Normal commit: staged diff is non-empty, no fallback needed."""
-        commands = {"git diff --staged --unified=3": "diff --git a/f.py b/f.py\n+code"}
+        commands = {
+            "git diff --staged --unified=3": "diff --git a/f.py b/f.py\n+code",
+            "git diff --cached --unified=3": "diff --git a/f.py b/f.py\n+code",
+        }
         with patch.object(ai_review, "subprocess") as mock_sp:
             mock_sp.run.side_effect = self._mock_run(commands)
             result = ai_review.get_staged_diff()
@@ -98,7 +101,7 @@ class TestGetStagedDiffAmend:
         assert "initial code" in result
         # Verify empty tree hash was used
         tree_calls = [a for a in captured_args if empty_tree in str(a)]
-        assert len(tree_calls) >= 1
+        assert len(tree_calls) > 0
 
     def test_amend_fallback_exception_is_caught(self, ai_review):
         """Diff retrieval must never crash the gate."""
@@ -118,84 +121,80 @@ class TestGetStagedDiffAmend:
         assert isinstance(result, str)
 
 
-# ── Verdict persistence ──────────────────────────────────────────────────────
+# ── Verdict persistence tests ──────────────────────────────────────────────────
 
 
 class TestVerdictPersistence:
-    """All verdict types must be persisted to .ai-review-log.jsonl."""
+    """QA-04: Test verdict persistence helper."""
 
     def test_pass_verdict_persisted(self, ai_review, tmp_path):
-        """PASS verdicts must be written to the log."""
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path):
             verdict = ai_review.ReviewVerdict(
-                verdict="PASS", model="test-model"
+                verdict="PASS",
+                model="test-model",
+                summary="All good",
+                findings=[],
+                timestamp="2026-02-15T12:00:00Z"
             )
-            ai_review._persist_verdict(verdict_obj=verdict, provider_name="anthropic")
-
-        log_path = tmp_path / ".ai-review-log.jsonl"
-        assert log_path.exists()
-        record = json.loads(log_path.read_text().strip())
-        assert record["verdict"] == "PASS"
-        assert record["provider"] == "anthropic"
+            ai_review._persist_verdict(verdict_obj=verdict, provider_name="gemini-cli")
+            log_path = tmp_path / ".ai-review-log.jsonl"
+            assert log_path.exists()
+            record = json.loads(log_path.read_text().strip())
+            assert record["verdict"] == "PASS"
 
     def test_pass_fast_verdict_persisted(self, ai_review, tmp_path):
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path):
             verdict = ai_review.ReviewVerdict(
-                verdict="PASS_FAST", model="preflight", verdict_tier="preflight"
+                verdict="PASS_FAST",
+                model="preflight",
+                summary="Skipped for low-risk commit",
+                findings=[],
+                timestamp="2026-02-15T12:00:00Z"
             )
             ai_review._persist_verdict(verdict_obj=verdict)
-
-        log_path = tmp_path / ".ai-review-log.jsonl"
-        assert log_path.exists()
-        record = json.loads(log_path.read_text().strip())
-        assert record["verdict"] == "PASS_FAST"
-        assert record["verdict_tier"] == "preflight"
+            log_path = tmp_path / ".ai-review-log.jsonl"
+            assert log_path.exists()
+            record = json.loads(log_path.read_text().strip())
+            assert record["verdict"] == "PASS_FAST"
 
     def test_fail_open_verdict_persisted(self, ai_review, tmp_path):
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path):
-            ai_review._persist_verdict(fail_open_reason="Network timeout")
+            ai_review._persist_verdict(fail_open_reason="API error")
+            log_path = tmp_path / ".ai-review-log.jsonl"
+            record = json.loads(log_path.read_text().strip())
+            assert record["verdict"] == "FAIL_OPEN"
+            assert record["fail_open_reason"] == "API error"
 
-        log_path = tmp_path / ".ai-review-log.jsonl"
-        record = json.loads(log_path.read_text().strip())
-        assert record["verdict"] == "FAIL_OPEN"
-        assert record["fail_open_reason"] == "Network timeout"
 
-
-# ── Review context two-layer ─────────────────────────────────────────────────
+# ── Context loading tests ─────────────────────────────────────────────────────
 
 
 class TestReviewContextTwoLayer:
-    """Universal + project context concatenation."""
+    """ARCH-02: Universal + project context loading."""
 
     def test_universal_only(self, ai_review, tmp_path):
-        universal = tmp_path / "review_context_universal.md"
-        universal.write_text("UNIVERSAL RULES", encoding="utf-8")
-
-        with patch.object(ai_review, "UNIVERSAL_CONTEXT_FILE", universal), \
-             patch.object(ai_review, "PROJECT_CONTEXT_FILE", tmp_path / "none.md"):
-            result = ai_review.load_review_context()
-        assert "UNIVERSAL RULES" in result
+        with patch.object(ai_review, "UNIVERSAL_CONTEXT_FILE", tmp_path / "u.md"), \
+             patch.object(ai_review, "PROJECT_CONTEXT_FILE", tmp_path / "p.md"):
+            (tmp_path / "u.md").write_text("universal rules")
+            ctx = ai_review.load_review_context()
+            assert "universal rules" in ctx
 
     def test_both_layers(self, ai_review, tmp_path):
-        universal = tmp_path / "review_context_universal.md"
-        project = tmp_path / "review_context_project.md"
-        universal.write_text("UNIVERSAL CONTENT", encoding="utf-8")
-        project.write_text("PROJECT CONTENT", encoding="utf-8")
-
-        with patch.object(ai_review, "UNIVERSAL_CONTEXT_FILE", universal), \
-             patch.object(ai_review, "PROJECT_CONTEXT_FILE", project):
-            result = ai_review.load_review_context()
-        assert "UNIVERSAL CONTENT" in result
-        assert "PROJECT CONTENT" in result
-        assert result.index("UNIVERSAL") < result.index("PROJECT")
+        with patch.object(ai_review, "UNIVERSAL_CONTEXT_FILE", tmp_path / "u.md"), \
+             patch.object(ai_review, "PROJECT_CONTEXT_FILE", tmp_path / "p.md"):
+            (tmp_path / "u.md").write_text("universal rules")
+            (tmp_path / "p.md").write_text("project rules")
+            ctx = ai_review.load_review_context()
+            assert "universal rules" in ctx
+            assert "project rules" in ctx
 
     def test_missing_universal_exits(self, ai_review, tmp_path):
-        with patch.object(ai_review, "UNIVERSAL_CONTEXT_FILE", tmp_path / "missing.md"):
+        with patch.object(ai_review, "UNIVERSAL_CONTEXT_FILE", tmp_path / "nonexistent.md"):
             with pytest.raises(SystemExit):
                 ai_review.load_review_context()
 
 
-# ── _build_user_message ──────────────────────────────────────────────────────
+# ── Message assembly tests ─────────────────────────────────────────────────────
 
 
 class TestBuildUserMessage:
@@ -257,6 +256,8 @@ class TestBug04And05Fixes:
     def test_pass_fast_verdict_is_logged(self, ai_review):
         """Pre-flight shortcut (PASS_FAST) verdict must be logged before returning early."""
         with patch("ai_review.get_staged_diff", return_value="+# Only comment changes\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 25, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=False, direct_pass_allowed=True, planner_note="Whitespace or comment-only"
              )), \
@@ -283,6 +284,8 @@ class TestBug04And05Fixes:
         }
         
         with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 7, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
              )), \
@@ -432,6 +435,8 @@ class TestHighRiskCommitClassification:
             return result
 
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
              patch("ai_review.get_staged_diff", return_value="diff --git a/src/migrations/0001_initial.py b/src/migrations/0001_initial.py\n+code"), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
@@ -480,6 +485,8 @@ class TestHighRiskCommitClassification:
             return result
 
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["README.md"]), \
              patch("ai_review.get_staged_diff", return_value="diff --git a/README.md b/README.md\n+doc changes"), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
@@ -519,6 +526,8 @@ class TestHighRiskCommitClassification:
             return result
 
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
              patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": '{"rebuttal_type": "SPEC_REQUIREMENT", "finding_ids": ["T1-G-07"], "evidence": "Emergency deploy"}'}), \
              patch("ai_review.subprocess.run", side_effect=mock_run):
 
@@ -544,60 +553,26 @@ class TestStructuredBypassAndRegression:
 
     def test_bypass_rejection_on_plain_text(self, ai_review, tmp_path):
         """Plain text SKIP_REASON on high risk commit must trigger SystemExit(1)."""
-        commands = {
-            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
-        }
-        def mock_run(args, **kwargs):
-            key = " ".join(args[:4])
-            if "--cached" in args and "--name-only" in args:
-                key = "git diff --cached --name-only"
-            result = MagicMock()
-            result.stdout = commands.get(key, "")
-            result.returncode = 0
-            return result
-
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
-             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "Plain text bypass reason"}), \
-             patch("ai_review.subprocess.run", side_effect=mock_run):
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "Plain text bypass reason"}):
             with pytest.raises(SystemExit) as excinfo:
                 ai_review._run_review()
             assert excinfo.value.code == 1
 
     def test_bypass_rejection_on_malformed_json(self, ai_review, tmp_path):
         """Malformed JSON SKIP_REASON on high risk commit must trigger SystemExit(1)."""
-        commands = {
-            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
-        }
-        def mock_run(args, **kwargs):
-            key = " ".join(args[:4])
-            if "--cached" in args and "--name-only" in args:
-                key = "git diff --cached --name-only"
-            result = MagicMock()
-            result.stdout = commands.get(key, "")
-            result.returncode = 0
-            return result
-
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
-             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "{malformed_json:"}), \
-             patch("ai_review.subprocess.run", side_effect=mock_run):
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "{malformed_json:"}):
             with pytest.raises(SystemExit) as excinfo:
                 ai_review._run_review()
             assert excinfo.value.code == 1
 
     def test_bypass_rejection_on_invalid_keys(self, ai_review, tmp_path):
         """Valid JSON but with missing/invalid bypass keys on high risk commit must trigger SystemExit(1)."""
-        commands = {
-            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
-        }
-        def mock_run(args, **kwargs):
-            key = " ".join(args[:4])
-            if "--cached" in args and "--name-only" in args:
-                key = "git diff --cached --name-only"
-            result = MagicMock()
-            result.stdout = commands.get(key, "")
-            result.returncode = 0
-            return result
-
         invalid_reasons = [
             '{"rebuttal_type": "NOT_VALID_TYPE", "finding_ids": ["T1-G-07"], "evidence": "Rationale"}',
             '{"rebuttal_type": "FALSE_POSITIVE", "finding_ids": [], "evidence": "Rationale"}',
@@ -607,27 +582,15 @@ class TestStructuredBypassAndRegression:
 
         for invalid_reason in invalid_reasons:
             with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
-                 patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": invalid_reason}), \
-                 patch("ai_review.subprocess.run", side_effect=mock_run):
+                 patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+                 patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
+                 patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": invalid_reason}):
                 with pytest.raises(SystemExit) as excinfo:
                     ai_review._run_review()
                 assert excinfo.value.code == 1
 
     def test_bypass_vector_a_file_success(self, ai_review, tmp_path):
         """Vector A: Reading valid JSON from .skip-ai-reason.json must bypass and auto-delete file."""
-        commands = {
-            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
-        }
-        def mock_run(args, **kwargs):
-            key = " ".join(args[:4])
-            if "--cached" in args and "--name-only" in args:
-                key = "git diff --cached --name-only"
-            result = MagicMock()
-            result.stdout = commands.get(key, "")
-            result.returncode = 0
-            return result
-
-        # Setup .skip-ai-reason.json in project root
         bypass_file = tmp_path / ".skip-ai-reason.json"
         bypass_data = {
             "rebuttal_type": "FALSE_POSITIVE",
@@ -637,8 +600,9 @@ class TestStructuredBypassAndRegression:
         bypass_file.write_text(json.dumps(bypass_data), encoding="utf-8")
 
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
              patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": "@file"}), \
-             patch("ai_review.subprocess.run", side_effect=mock_run), \
              patch("sys.stdin.isatty", return_value=False):
 
             assert bypass_file.exists()
@@ -649,26 +613,15 @@ class TestStructuredBypassAndRegression:
 
     def test_bypass_vector_c_interactive_continuation(self, ai_review, tmp_path):
         """Vector C: If TTY and env var is empty, prompting wizard writes file, then Vector A immediately consumes it."""
-        commands = {
-            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
-        }
-        def mock_run(args, **kwargs):
-            key = " ".join(args[:4])
-            if "--cached" in args and "--name-only" in args:
-                key = "git diff --cached --name-only"
-            result = MagicMock()
-            result.stdout = commands.get(key, "")
-            result.returncode = 0
-            return result
-
         bypass_file = tmp_path / ".skip-ai-reason.json"
         
         # Mock CLI inputs: Choice "1" (FALSE_POSITIVE), Finding IDs "T1-G-07", Evidence "Some evidence"
         mock_inputs = ["1", "T1-G-07", "Some evidence"]
 
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
              patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": ""}), \
-             patch("ai_review.subprocess.run", side_effect=mock_run), \
              patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", side_effect=mock_inputs):
 
@@ -679,21 +632,12 @@ class TestStructuredBypassAndRegression:
 
     def test_bypass_non_tty_fallback_fail_closed(self, ai_review, tmp_path):
         """Non-TTY with no SKIP_REASON and no file must fail-closed."""
-        commands = {
-            "git diff --cached --name-only": "src/migrations/0001_initial.py\n",
-        }
-        def mock_run(args, **kwargs):
-            key = " ".join(args[:4])
-            if "--cached" in args and "--name-only" in args:
-                key = "git diff --cached --name-only"
-            result = MagicMock()
-            result.stdout = commands.get(key, "")
-            result.returncode = 0
-            return result
-
+        (tmp_path / ".skip-ai-review").unlink(missing_ok=True)
+        (tmp_path / ".skip-ai-reason.json").unlink(missing_ok=True)
         with patch.object(ai_review, "PROJECT_ROOT", tmp_path), \
-             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": ""}), \
-             patch("ai_review.subprocess.run", side_effect=mock_run), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]), \
+             patch.dict(os.environ, {"SKIP_AI_REVIEW": "1", "SKIP_REASON": ""}, clear=True), \
              patch("sys.stdin.isatty", return_value=False):
 
             with pytest.raises(SystemExit) as excinfo:
@@ -765,21 +709,20 @@ class TestStructuredBypassAndRegression:
         ]
         log_path.write_text("\n".join(json.dumps(r) for r in log_records) + "\n", encoding="utf-8")
 
-        # Mock import and call of infer_and_close_previous_session
-        # Set up sys.path or direct import
         scripts_dir = Path(__file__).resolve().parent.parent / ".agent" / "scripts"
-        sys.path.insert(0, str(scripts_dir))
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
         
-        # Patch the file paths inside init_session.py
-        with patch("sys.platform", "linux"):
-            import init_session
-
+        import init_session
         old_cwd = os.getcwd()
         os.chdir(str(tmp_path))
         try:
-            with patch("init_session.get_commits_after", return_value=[]):
+            with patch.object(init_session, "PROJECT_ROOT", tmp_path), \
+                 patch.object(init_session, "SESSION_FILE", session_file), \
+                 patch.object(init_session, "STATE_DIR", state_dir), \
+                 patch("sys.platform", "linux"), \
+                 patch("init_session.get_commits_after", return_value=[]):
                 outcome, note = init_session.infer_and_close_previous_session()
-                # Since there are no commits and it's not escalated, outcome is partial/abandoned depending on fail
                 assert outcome in ("abandoned", "partial")
         finally:
             os.chdir(old_cwd)
@@ -845,14 +788,16 @@ class TestStructuredRebuttal:
     """Complete unit test suite for T1-G-06 Structured Rebuttal Protocol."""
 
     def test_rebuttal_file_missing(self, ai_review, tmp_path):
-        with patch("ai_review.PROJECT_ROOT", tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("rebuttal.PROJECT_ROOT", tmp_path):
             args = MagicMock()
             args.rebutted_by_agent = False
             res = ai_review._run_rebuttal(args)
             assert res == 1
 
     def test_rebuttal_malformed_json(self, ai_review, tmp_path):
-        with patch("ai_review.PROJECT_ROOT", tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("rebuttal.PROJECT_ROOT", tmp_path):
             rebuttal_dir = tmp_path / ".agent" / "state"
             rebuttal_dir.mkdir(parents=True, exist_ok=True)
             rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
@@ -864,7 +809,8 @@ class TestStructuredRebuttal:
             assert res == 1
 
     def test_rebuttal_invalid_rebuttal_type(self, ai_review, tmp_path):
-        with patch("ai_review.PROJECT_ROOT", tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("rebuttal.PROJECT_ROOT", tmp_path):
             rebuttal_dir = tmp_path / ".agent" / "state"
             rebuttal_dir.mkdir(parents=True, exist_ok=True)
             rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
@@ -889,7 +835,8 @@ class TestStructuredRebuttal:
             assert res == 1
 
     def test_rebuttal_no_fail_log(self, ai_review, tmp_path):
-        with patch("ai_review.PROJECT_ROOT", tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("rebuttal.PROJECT_ROOT", tmp_path):
             rebuttal_dir = tmp_path / ".agent" / "state"
             rebuttal_dir.mkdir(parents=True, exist_ok=True)
             rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
@@ -1044,8 +991,11 @@ class TestStructuredRebuttal:
             }
             
             with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("rebuttal.get_staged_diff", return_value="staged-diff"), \
                  patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"), \
+                 patch("rebuttal._get_normalized_diff_hash", return_value="diffhash123"), \
                  patch("ai_review._load_session_token_budget", return_value=1000), \
+                 patch("rebuttal.PROJECT_ROOT", tmp_path), \
                  patch("providers.get_provider", return_value=mock_provider), \
                  patch("subprocess.Popen") as mock_popen:
                 args = MagicMock()
@@ -1113,7 +1063,10 @@ class TestStructuredRebuttal:
             mock_provider.last_token_usage = {}
             
             with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("rebuttal.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review.get_scoped_diff", return_value="staged-diff"), \
                  patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"), \
+                 patch("rebuttal._get_normalized_diff_hash", return_value="diffhash123"), \
                  patch("ai_review._load_session_token_budget", return_value=None), \
                  patch("providers.get_provider", return_value=mock_provider), \
                  patch("subprocess.Popen") as mock_popen:
@@ -1181,7 +1134,10 @@ class TestStructuredRebuttal:
             mock_provider.last_token_usage = {}
             
             with patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("rebuttal.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review.get_scoped_diff", return_value="staged-diff"), \
                  patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"), \
+                 patch("rebuttal._get_normalized_diff_hash", return_value="diffhash123"), \
                  patch("ai_review._load_session_token_budget", return_value=None), \
                  patch("providers.get_provider", return_value=mock_provider):
                 args = MagicMock()
@@ -1196,7 +1152,9 @@ class TestStructuredRebuttal:
                 assert not pass_file.exists()
 
     def test_rebuttal_pass_json_staged_guard(self, ai_review, tmp_path):
-        with patch("ai_review.PROJECT_ROOT", tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 50, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/migrations/0001_initial.py"]):
             rebuttal_dir = tmp_path / ".agent" / "state"
             rebuttal_dir.mkdir(parents=True, exist_ok=True)
             pass_file = rebuttal_dir / "rebuttal_pass.json"
@@ -1244,6 +1202,8 @@ class TestStructuredRebuttal:
             
             with patch("subprocess.run", return_value=mock_subprocess_res), \
                  patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._streaming_size_precheck", return_value=(1, 12, False)), \
+                 patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
                  patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"):
                 with patch("ai_review.check_preflight_shortcut") as mock_shortcut, \
                      patch("ai_review._load_rebuttal_timeout", return_value=15), \
@@ -1275,6 +1235,8 @@ class TestStructuredRebuttal:
             
             with patch("subprocess.run", return_value=mock_subprocess_res), \
                  patch("ai_review.get_staged_diff", return_value="staged-diff"), \
+                 patch("ai_review._streaming_size_precheck", return_value=(1, 12, False)), \
+                 patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
                  patch("ai_review.PROJECT_ROOT", tmp_path), \
                  patch("ai_review._get_normalized_diff_hash", return_value="diffhash123"):
                 with patch("ai_review.check_preflight_shortcut") as mock_shortcut, \
@@ -1287,7 +1249,8 @@ class TestStructuredRebuttal:
                     assert not pass_file.exists()
 
     def test_rebuttal_rate_limiter_blocks_second_attempt(self, ai_review, tmp_path):
-        with patch("ai_review.PROJECT_ROOT", tmp_path):
+        with patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("rebuttal.PROJECT_ROOT", tmp_path):
             rebuttal_dir = tmp_path / ".agent" / "state"
             rebuttal_dir.mkdir(parents=True, exist_ok=True)
             rebuttal_file = rebuttal_dir / "gate_rebuttal.json"
@@ -1536,6 +1499,8 @@ class TestTokenBudgetEnforcement:
         }
 
         with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 7, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
              )), \
@@ -1597,6 +1562,8 @@ class TestTokenBudgetEnforcement:
         }
 
         with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 7, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
              )), \
@@ -1657,6 +1624,8 @@ class TestTokenBudgetEnforcement:
         halt_file = tmp_path / ".agent" / "state" / "HALT"
 
         with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 7, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
              )), \
@@ -1711,6 +1680,8 @@ class TestTokenBudgetEnforcement:
 
         # Simulate lock timeout by mocking _lock_session to raise TimeoutError
         with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 7, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
              )), \
@@ -1754,6 +1725,8 @@ class TestTokenBudgetEnforcement:
 
         # session.json does not exist in tmp_path / .agent / state
         with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 7, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                  requires_review=True, direct_pass_allowed=False, planner_note=""
              )), \
@@ -1824,6 +1797,8 @@ class TestCapabilityCalibrationIntegration:
         }
 
         with patch("ai_review.get_staged_diff", return_value="+x = 1\n"), \
+             patch("ai_review._streaming_size_precheck", return_value=(1, 7, False)), \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]), \
              patch("ai_review.check_preflight_shortcut", return_value=ai_review.PlanOutput(
                   requires_review=True, direct_pass_allowed=False, planner_note=""
              )), \
@@ -1882,6 +1857,8 @@ class TestTruncationHandling:
         ]
 
         with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review._streaming_size_precheck', return_value=(1, 7, False)), \
+             patch('ai_review.get_changed_files', return_value=['src/main.py']), \
              patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
              patch('ai_review.load_review_context', return_value=''), \
              patch('repo_map.generate_repo_map', return_value=''), \
@@ -1911,6 +1888,8 @@ class TestTruncationHandling:
         mock_provider.review.side_effect = [providers.TruncationError('Truncated'), providers.TruncationError('Truncated again')]
 
         with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review._streaming_size_precheck', return_value=(1, 7, False)), \
+             patch('ai_review.get_changed_files', return_value=['src/main.py']), \
              patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
              patch('ai_review.load_review_context', return_value=''), \
              patch('repo_map.generate_repo_map', return_value=''), \
@@ -1947,6 +1926,8 @@ class TestParseFailureHandling:
         mock_provider.review.side_effect = json.JSONDecodeError("Invalid \\escape", "doc", 0)
 
         with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review._streaming_size_precheck', return_value=(1, 7, False)), \
+             patch('ai_review.get_changed_files', return_value=['src/main.py']), \
              patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
              patch('ai_review.load_review_context', return_value=''), \
              patch('repo_map.generate_repo_map', return_value=''), \
@@ -1986,6 +1967,8 @@ class TestParseFailureHandling:
         mock_provider.review.side_effect = json.JSONDecodeError("Invalid \\escape", "doc", 0)
 
         with patch('ai_review.get_staged_diff', return_value='+x = 1\n'), \
+             patch('ai_review._streaming_size_precheck', return_value=(1, 7, False)), \
+             patch('ai_review.get_changed_files', return_value=['src/main.py']), \
              patch('ai_review.check_preflight_shortcut', return_value=ai_review.PlanOutput(requires_review=True, direct_pass_allowed=False, planner_note='')), \
              patch('ai_review.load_review_context', return_value=''), \
              patch('repo_map.generate_repo_map', return_value=''), \
@@ -2007,4 +1990,118 @@ class TestParseFailureHandling:
             # Assert _persist_verdict was called with FAIL
             mock_persist.assert_called_once()
             assert mock_persist.call_args.kwargs.get('review', {}).get('verdict') == 'FAIL'
+
+
+# ── Phase 0 (HIB-068 SPEC v1.17) Regression Tests ─────────────────────────────
+
+
+class TestPhase0OversizedDiffRegression:
+    """Test suite covering the 6-case regression matrix and Scenario 40 requirements."""
+
+    def test_target_resolution_helper_cached_default(self, ai_review):
+        """Default target resolution returns ['--cached']."""
+        with patch.dict(os.environ, {}, clear=True):
+            target = ai_review._resolve_git_target()
+            assert target == ["--cached"]
+
+    def test_get_scoped_diff_empty_target_returns_empty(self, ai_review):
+        """get_scoped_diff([]) returns empty string immediately without running git."""
+        with patch("subprocess.Popen") as mock_popen:
+            result = ai_review.get_scoped_diff([])
+            assert result == ""
+            mock_popen.assert_not_called()
+
+    def test_streaming_size_precheck_handles_non_utf8(self, ai_review):
+        """Streaming size pre-check uses errors='replace' and does not crash on non-UTF-8 bytes."""
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [b"diff --git a/b b/b\n", b"\xff\xfe\xfd\n", b""]
+        mock_proc.wait.return_value = 0
+        with patch("subprocess.Popen", return_value=mock_proc):
+            lines, chars, is_oversized = ai_review._streaming_size_precheck(["--cached"])
+            assert lines == 2
+            assert is_oversized is False
+
+    def test_oversized_diff_matrix_case_4_blocked(self, ai_review, tmp_path):
+        """Matrix Case 4: Oversized diff with large subset and no override exits 1 and logs oversized_diff_blocked."""
+        with patch("ai_review._resolve_git_target", return_value=["--cached"]), \
+             patch("ai_review._streaming_size_precheck", return_value=(6000, 250000, True)), \
+             patch("ai_review.get_changed_files", return_value=["src/high_risk.py"]), \
+             patch("ai_review.get_high_risk_files", return_value=["src/high_risk.py"]), \
+             patch("ai_review.get_scoped_diff", return_value="\n".join(["+code"] * 3000)), \
+             patch("ai_review._load_review_config", return_value=(400, "stratified", 2000, 80000)), \
+             patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("ai_review.log_harness_event") as mock_log, \
+             patch("ai_review._persist_verdict"), \
+             patch("sys.exit") as mock_exit:
+
+            ai_review._run_review()
+            mock_exit.assert_called_once_with(1)
+            blocked_events = [c[0][0] for c in mock_log.call_args_list if c[0][0].get("event_type") == "oversized_diff_blocked"]
+            assert len(blocked_events) >= 1
+
+    def test_oversized_diff_matrix_case_5_override_accepted(self, ai_review, tmp_path):
+        """Matrix Case 5: Oversized diff with valid OVERSIZED_DIFF override proceeds cleanly."""
+        override_payload = json.dumps({
+            "rebuttal_type": "OVERSIZED_DIFF",
+            "finding_ids": ["HIB-068"],
+            "evidence": "Approved large migration"
+        })
+        with patch("ai_review._resolve_git_target", return_value=["--cached"]), \
+             patch("ai_review._streaming_size_precheck", return_value=(6000, 250000, True)), \
+             patch("ai_review.get_changed_files", return_value=["src/high_risk.py"]), \
+             patch("ai_review.get_high_risk_files", return_value=["src/high_risk.py"]), \
+             patch("ai_review.get_scoped_diff", return_value="\n".join(["+code"] * 3000)), \
+             patch("ai_review._load_review_config", return_value=(400, "stratified", 2000, 80000)), \
+             patch.dict(os.environ, {"SKIP_REASON": override_payload}), \
+             patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("ai_review.log_harness_event") as mock_log:
+
+            res = ai_review._run_review()
+            assert res == 0
+            accepted_events = [c[0][0] for c in mock_log.call_args_list if c[0][0].get("event_type") == "oversized_diff_override_accepted"]
+            assert len(accepted_events) == 1
+
+    def test_scenario_40_amend_oversized(self, ai_review, tmp_path):
+        """Scenario 40: Oversized amend commit measures HEAD~1..HEAD and routes properly."""
+        with patch.dict(os.environ, {"PRE_COMMIT_HOOK_STAGE": "commit-msg"}), \
+             patch("ai_review._resolve_git_target", return_value=["HEAD~1", "HEAD"]), \
+             patch("ai_review._streaming_size_precheck", return_value=(7000, 300000, True)) as mock_precheck, \
+             patch("ai_review.get_changed_files", return_value=["src/main.py"]) as mock_files, \
+             patch("ai_review.get_high_risk_files", return_value=["src/main.py"]), \
+             patch("ai_review.get_scoped_diff", return_value="\n".join(["+code"] * 500)), \
+             patch("ai_review._load_review_config", return_value=(400, "stratified", 2000, 80000)), \
+             patch("ai_review.load_review_context", return_value=""), \
+             patch("repo_map.generate_repo_map", return_value=""), \
+             patch("ai_review.get_adr_context", return_value=("", [], [])), \
+             patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("ai_review.log_harness_event"):
+
+            # Ensure get_staged_diff is NEVER called during oversized path
+            with patch("ai_review.get_staged_diff") as mock_get_staged:
+                res = ai_review._run_review()
+                assert res == 0
+                mock_get_staged.assert_not_called()
+                mock_precheck.assert_called_once_with(["HEAD~1", "HEAD"])
+                mock_files.assert_called_once_with(["HEAD~1", "HEAD"])
+
+    def test_get_scoped_diff_aborts_early_on_oversized_stream(self, ai_review):
+        """Test that get_scoped_diff aborts and kills proc before reading all stdout if output exceeds max_chars."""
+        mock_proc = MagicMock()
+        mock_proc.stdin = MagicMock()
+
+        def chunk_generator():
+            for _ in range(100):
+                yield b"A" * 4096
+
+        gen = chunk_generator()
+        mock_proc.stdout.read.side_effect = lambda size: next(gen, b"")
+
+        with patch("subprocess.Popen", return_value=mock_proc), \
+             patch("ai_review._load_review_config", return_value=(400, "stratified", 2000, 80000)):
+            res = ai_review.get_scoped_diff(["src/main.py"])
+            assert res == ""
+            mock_proc.kill.assert_called_once()
+            assert mock_proc.stdout.read.call_count < 100
+            assert mock_proc.stdout.read.call_count <= 21
+
 

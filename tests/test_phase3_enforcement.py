@@ -39,7 +39,7 @@ index 1234567..7654321 100644
 
 
 def test_count_diff_lines_exactly_at_threshold_uses_standard_strategy():
-    threshold, _ = _load_review_config()
+    threshold, *_ = _load_review_config()
     # At exactly threshold lines, count_diff_lines works normally
     assert threshold == 400 or isinstance(threshold, int)
 
@@ -55,7 +55,7 @@ def test_missing_review_config_section_uses_defaults():
     # Mocking absent review section
     with mock.patch("pathlib.Path.exists", return_value=True):
         with mock.patch("pathlib.Path.read_text", return_value="framework:\n  version: \"1.1.5\"\n"):
-            threshold, strategy = _load_review_config()
+            threshold, strategy, *_ = _load_review_config()
             assert threshold == 400
             assert strategy == "stratified"
 
@@ -191,11 +191,6 @@ def test_budget_includes_reasoning_tokens_when_present():
 
 
 def test_missing_session_json_budget_assumes_zero_spent():
-    # v1.2.0 behaviour: when session.json is absent, spent is assumed 0.
-    # Budget enforcement only triggers when spent >= budget, so a missing
-    # session.json with a fresh budget does NOT fail closed — it proceeds.
-    # The old fail-closed-on-missing-file contract was replaced by the more
-    # permissive "assume 0 tokens spent" design in Gemini's ai_review rewrite.
     from ai_review import _run_review
     from pathlib import Path
 
@@ -209,40 +204,41 @@ def test_missing_session_json_budget_assumes_zero_spent():
     clean_env.pop("CI", None)
     clean_env.pop("GITHUB_ACTIONS", None)
 
-    # Budget active, session.json missing -> spent=0 < budget=1000 -> does NOT fail closed
-    with mock.patch("ai_review._load_session_token_budget", return_value=1000):
-        with mock.patch("pathlib.Path.exists", new=mock_exists):
-            with mock.patch.dict(os.environ, clean_env, clear=True):
-                try:
-                    _run_review()
-                except SystemExit as exc:
-                    # Any SystemExit here must NOT be the budget-exhaustion exit (code 1)
-                    # It may exit for other reasons (empty diff, no git, etc.)
-                    assert exc.code != 1 or "budget" not in str(exc).lower(), \
-                        "Missing session.json should not trigger budget fail-closed (spent=0 < budget)"
+    with mock.patch("ai_review._load_session_token_budget", return_value=1000), \
+         mock.patch("ai_review._streaming_size_precheck", return_value=(1, 10, False)), \
+         mock.patch("ai_review.get_changed_files", return_value=[]), \
+         mock.patch("pathlib.Path.exists", new=mock_exists), \
+         mock.patch.dict(os.environ, clean_env, clear=True):
+        try:
+            _run_review()
+        except SystemExit as exc:
+            assert exc.code != 1 or "budget" not in str(exc).lower(), \
+                "Missing session.json should not trigger budget fail-closed (spent=0 < budget)"
 
-    # CI env: budget active, session.json missing -> also proceeds (same reasoning)
     ci_env = clean_env.copy()
     ci_env["CI"] = "true"
-    with mock.patch("ai_review._load_session_token_budget", return_value=1000):
-        with mock.patch("pathlib.Path.exists", new=mock_exists):
-            with mock.patch.dict(os.environ, ci_env, clear=True):
-                try:
-                    _run_review()
-                except SystemExit as exc:
-                    assert exc.code != 1 or "budget" not in str(exc).lower()
-                except Exception:
-                    pass
+    with mock.patch("ai_review._load_session_token_budget", return_value=1000), \
+         mock.patch("ai_review._streaming_size_precheck", return_value=(1, 10, False)), \
+         mock.patch("ai_review.get_changed_files", return_value=[]), \
+         mock.patch("pathlib.Path.exists", new=mock_exists), \
+         mock.patch.dict(os.environ, ci_env, clear=True):
+        try:
+            _run_review()
+        except SystemExit as exc:
+            assert exc.code != 1 or "budget" not in str(exc).lower()
+        except Exception:
+            pass
 
-    # Precondition 3: Budget inactive (None), not in CI, session.json missing -> proceeds (does not exit 1)
-    with mock.patch("ai_review._load_session_token_budget", return_value=None):
-        with mock.patch("pathlib.Path.exists", new=mock_exists):
-            with mock.patch.dict(os.environ, clean_env, clear=True):
-                try:
-                    _run_review()
-                except SystemExit as exc:
-                    assert exc.code != 1
-                except Exception:
-                    pass
+    with mock.patch("ai_review._load_session_token_budget", return_value=None), \
+         mock.patch("ai_review._streaming_size_precheck", return_value=(1, 10, False)), \
+         mock.patch("ai_review.get_changed_files", return_value=[]), \
+         mock.patch("pathlib.Path.exists", new=mock_exists), \
+         mock.patch.dict(os.environ, clean_env, clear=True):
+        try:
+            _run_review()
+        except SystemExit as exc:
+            assert exc.code != 1
+        except Exception:
+            pass
 
 

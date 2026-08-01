@@ -115,6 +115,11 @@ def _find_project_root() -> Path:
             return Path(result.stdout.strip())
     except Exception:
         pass
+    # Walk up from script location to find repo root (fallback when git rev-parse unavailable)
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
+            return parent
     # Fallback: assume src/scripts/../../ = repo root
     return SCRIPT_DIR.parent.parent
 
@@ -202,7 +207,7 @@ try:
     VALID_REBUTTAL_TYPES = rebuttal.VALID_REBUTTAL_TYPES
 except ImportError:
     rebuttal = None
-    VALID_REBUTTAL_TYPES = ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED")
+    VALID_REBUTTAL_TYPES = ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED", "OVERSIZED_DIFF")
     class RebuttedFinding(BaseModel):
         finding_id: str
         rebuttal_type: str
@@ -532,12 +537,38 @@ class PlanOutput(BaseModel):
 # _find_project_root and PROJECT_ROOT defined at top of file
 
 
-def _get_normalized_diff_hash(diff: str) -> str:
-    """Compute the SHA-256 hash of a normalized diff.
-    Normalizes line endings to \n, strips git diff metadata headers, and strips trailing whitespace.
+def _get_normalized_diff_hash(diff: str, target_args: Optional[List[str]] = None) -> str:
+    """Compute normalized full-commit integrity hash using git write-tree or target tree if available,
+    falling back to diff text hash.
     """
+    try:
+        if target_args is None:
+            target_args = _resolve_git_target()
+        if target_args == ["--cached"]:
+            res = subprocess.run(
+                ["git", "write-tree"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                cwd=str(PROJECT_ROOT),
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
+        elif target_args and len(target_args) == 2 and target_args[0] != "4b825dc642cb6eb9a060e54bf899d15f":
+            res = subprocess.run(
+                ["git", "rev-parse", target_args[1]],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                cwd=str(PROJECT_ROOT),
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
+    except Exception:
+        pass
+
     lines = []
-    for line in diff.splitlines():
+    for line in (diff or "").splitlines():
         if line.startswith(("diff --git", "index ", "--- ", "+++ ")):
             continue
         lines.append(line.rstrip())
@@ -724,17 +755,19 @@ def _load_session_token_budget() -> Optional[int]:
     return None
 
 
-def _load_review_config() -> Tuple[int, str]:
-    """Load large_diff_threshold and large_diff_strategy from .agent/config.yaml.
+def _load_review_config() -> Tuple[int, str, int, int]:
+    """Load large_diff_threshold, large_diff_strategy, max_stratified_review_lines, and max_stratified_review_chars.
 
     Gracefully handles absence of review: block or keys.
-    Defaults: threshold = 400, strategy = "stratified"
+    Defaults: threshold = 400, strategy = "stratified", max_lines = 2000, max_chars = 80000
     """
     threshold = 400
     strategy = "stratified"
+    max_lines = 2000
+    max_chars = 80000
     config_path = PROJECT_ROOT / ".agent" / "config.yaml"
     if not config_path.exists():
-        return threshold, strategy
+        return threshold, strategy, max_lines, max_chars
 
     try:
         content = config_path.read_text(encoding="utf-8")
@@ -767,9 +800,21 @@ def _load_review_config() -> Tuple[int, str]:
                     elif key == "large_diff_strategy":
                         if val:
                             strategy = val
+                    elif key == "max_stratified_review_lines":
+                        if val.lower() not in ("null", "~", "none", ""):
+                            try:
+                                max_lines = int(val)
+                            except ValueError:
+                                pass
+                    elif key == "max_stratified_review_chars":
+                        if val.lower() not in ("null", "~", "none", ""):
+                            try:
+                                max_chars = int(val)
+                            except ValueError:
+                                pass
     except Exception:
         pass
-    return threshold, strategy
+    return threshold, strategy, max_lines, max_chars
 
 
 def count_diff_lines(diff_text: str) -> int:
@@ -940,93 +985,179 @@ def load_config() -> Dict[str, Any]:
 
 
 
-def get_staged_diff() -> str:
-    """Get the staged diff, with amend-aware fallback for commit-msg stage.
-
-    BUG-03: At commit-msg stage during ``git commit --amend``, ``--staged`` is
-    empty because nothing new was staged.  We detect the amend via ORIG_HEAD
-    and fall back to the commit's actual diff (HEAD~1..HEAD).
-
-    Safety guards (SE-01, SE-02 from critical assessment):
-      - ORIG_HEAD must exist (confirms amend, not a normal empty commit)
-      - rev-list count must be >= 2 (HEAD~1 doesn't exist on first commit)
-      - Single-commit amend falls back to diff against the empty tree
-      - Entire fallback wrapped in try/except (diff retrieval must never crash)
-    """
-    result = subprocess.run(
-        ["git", "diff", "--staged", "--unified=3"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        cwd=str(PROJECT_ROOT),
-    )
-    diff = result.stdout or ""
-
-    # BUG-03: At commit-msg stage during amend, --staged is empty because
-    # nothing new was staged.  Fall back to the commit's actual diff.
-    if not diff.strip():
-        hook_stage = os.environ.get("PRE_COMMIT_HOOK_STAGE", "")
-        if hook_stage == "commit-msg":
-            try:
-                # SE-02: Only trigger on actual amend — ORIG_HEAD exists during
-                # amend/rebase but not during normal commits.
+def _resolve_git_target() -> List[str]:
+    """Extract git target parameters for diff, name-only listing, or pre-check, handling amend logic."""
+    hook_stage = os.environ.get("PRE_COMMIT_HOOK_STAGE", "")
+    if hook_stage == "commit-msg":
+        try:
+            staged_check = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=str(PROJECT_ROOT),
+            )
+            if staged_check.returncode == 0 and not (staged_check.stdout and staged_check.stdout.strip()):
                 orig_head_check = subprocess.run(
                     ["git", "rev-parse", "--verify", "ORIG_HEAD"],
                     capture_output=True,
                     text=True,
                     cwd=str(PROJECT_ROOT),
                 )
-                if orig_head_check.returncode != 0:
-                    # Not an amend — genuinely empty staged diff.  Skip review.
-                    return diff
-
-                # SE-01: Guard against single-commit repos where HEAD~1
-                # doesn't exist (would cause a fatal git error).
-                count_result = subprocess.run(
-                    ["git", "rev-list", "--count", "HEAD"],
-                    capture_output=True,
-                    text=True,
-                    cwd=str(PROJECT_ROOT),
-                )
-                commit_count = int(count_result.stdout.strip() or "0")
-
-                if commit_count < 2:
-                    # First commit being amended — diff against the empty tree.
-                    # 4b825dc... is git's well-known empty tree hash.
-                    amend_result = subprocess.run(
-                        [
-                            "git", "diff",
-                            "4b825dc642cb6eb9a060e54bf899d15f",
-                            "HEAD", "--unified=3",
-                        ],
+                if orig_head_check.returncode == 0 and orig_head_check.stdout.strip():
+                    count_result = subprocess.run(
+                        ["git", "rev-list", "--count", "HEAD"],
                         capture_output=True,
                         text=True,
-                        encoding="utf-8",
-                        errors="replace",
                         cwd=str(PROJECT_ROOT),
                     )
-                else:
-                    amend_result = subprocess.run(
-                        ["git", "diff", "HEAD~1", "HEAD", "--unified=3"],
-                        capture_output=True,
-                        text=True,
-                        encoding="utf-8",
-                        errors="replace",
-                        cwd=str(PROJECT_ROOT),
-                    )
+                    commit_count = int((count_result.stdout or "0").strip() or "0")
+                    if commit_count < 2:
+                        print("[REVIEW] Amend detected (initial commit): routing to empty tree diff")
+                        return ["4b825dc642cb6eb9a060e54bf899d15f", "HEAD"]
+                    print("[REVIEW] Amend detected: routing to HEAD~1..HEAD")
+                    return ["HEAD~1", "HEAD"]
+        except Exception:
+            pass
+    return ["--cached"]
 
-                if amend_result.stdout.strip():
-                    diff = amend_result.stdout
-                    print("[REVIEW] Amend detected: reviewing commit diff")
-            except Exception as e:
-                # Diff retrieval must never crash the gate.
-                print(
-                    f"[REVIEW] Amend fallback failed ({e}); "
-                    "proceeding with staged diff"
-                )
 
-    return diff
+def get_changed_files(target_args: Optional[List[str]] = None) -> List[str]:
+    """Get list of changed files using null-terminated (-z) git diff --name-only."""
+    if target_args is None:
+        target_args = _resolve_git_target()
+    try:
+        res = subprocess.run(
+            ["git", "diff"] + target_args + ["--name-only", "-z"],
+            capture_output=True,
+            text=False,
+            cwd=str(PROJECT_ROOT),
+        )
+        if res.returncode == 0 and res.stdout:
+            raw_files = res.stdout.split(b"\x00")
+            return [f.decode("utf-8", errors="replace").strip() for f in raw_files if f.strip()]
+    except Exception:
+        pass
+    return []
+
+
+def get_scoped_diff(target_files: List[str], target_args: Optional[List[str]] = None) -> str:
+    """Fetch diff content bounded to target_files via git pathspec-from-file=- with streaming chunk limits."""
+    if not target_files:
+        return ""
+    if target_args is None:
+        target_args = _resolve_git_target()
+
+    _, _, _, max_chars = _load_review_config()
+
+    cmd = ["git", "diff"] + target_args + ["--unified=3", "--pathspec-from-file=-"]
+    try:
+        input_data = "\n".join(target_files).encode("utf-8")
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=str(PROJECT_ROOT),
+        )
+        if proc.stdin:
+            proc.stdin.write(input_data)
+            proc.stdin.close()
+
+        chunks = []
+        chars_count = 0
+        is_oversized = False
+        if proc.stdout:
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                chars_count += len(text)
+                if chars_count > max_chars:
+                    is_oversized = True
+                    try:
+                        proc.kill()
+                        proc.wait()
+                    except Exception:
+                        pass
+                    break
+                chunks.append(text)
+        if not is_oversized:
+            proc.wait()
+
+        if is_oversized:
+            return ""
+        return "".join(chunks)
+    except Exception:
+        return ""
+
+
+def _streaming_size_precheck(target_args: List[str]) -> Tuple[int, int, bool]:
+    """Reads diff incrementally in fixed byte chunks, returning (lines, chars, is_oversized)."""
+    max_lines = MAX_DIFF_LINES
+    max_chars = MAX_DIFF_CHARS
+    _, _, cfg_lines, cfg_chars = _load_review_config()
+    if cfg_lines:
+        max_lines = cfg_lines
+    if cfg_chars:
+        max_chars = cfg_chars
+    config = load_config()
+    if "max_diff_lines" in config:
+        max_lines = config["max_diff_lines"]
+    if "max_diff_chars" in config:
+        max_chars = config["max_diff_chars"]
+
+    lines_count = 0
+    chars_count = 0
+    is_oversized = False
+    try:
+        proc = subprocess.Popen(
+            ["git", "diff"] + target_args + ["--unified=3"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=str(PROJECT_ROOT),
+        )
+        if proc.stdout:
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                chars_count += len(text)
+                lines_count += text.count("\n")
+                if lines_count > max_lines or chars_count > max_chars:
+                    is_oversized = True
+                    try:
+                        proc.kill()
+                        proc.wait()
+                    except Exception:
+                        pass
+                    break
+        if not is_oversized:
+            proc.wait()
+    except Exception:
+        pass
+    return lines_count, chars_count, is_oversized
+
+
+def get_staged_diff(target_args: Optional[List[str]] = None) -> str:
+    """Get the staged diff, using target_args if provided or resolving via _resolve_git_target()."""
+    if target_args is None:
+        target_args = _resolve_git_target()
+    try:
+        result = subprocess.run(
+            ["git", "diff"] + target_args + ["--unified=3"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(PROJECT_ROOT),
+        )
+        return result.stdout or ""
+    except Exception:
+        return ""
 
 
 def get_commit_message() -> str:
@@ -1242,6 +1373,7 @@ def render_review(review: Dict[str, Any], churn_info: str) -> None:
                     "diff_hash": diff_hash,
                     "verdict": "FAIL",
                     "findings": issues,
+                    "reviewed_files": review.get("reviewed_files", []),
                 }
                 freeze_path = state_dir / f"gate_findings_{session_id}.json"
                 freeze_path.write_text(json.dumps(findings_freeze_data, indent=2), encoding="utf-8")
@@ -1470,100 +1602,144 @@ def main() -> int:
 
 def _run_review(commit_msg_file: str | None = None) -> int:
     """Internal review logic. Exceptions propagate to main() for fail-open."""
-    # Resolve changed files and active ADR domains early for risk assessment & session traceability
-    try:
-        res = subprocess.run(
-            ["git", "diff", "--cached", "--name-only"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=str(PROJECT_ROOT),
-        )
-        changed_files = [f.strip() for f in res.stdout.splitlines() if f.strip()]
-        active_domains = []
-        for f in changed_files:
-            if Path(f).exists():
-                for domain in extract_adr_annotations(f):
-                    active_domains.append(domain.lower())
-    except Exception:
-        changed_files = []
-        active_domains = []
+    sliced_lines = 0
+    sliced_chars = 0
+    diff = ""
+    session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
+    session_start_time = None
+    if session_file.exists():
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                session_start_time = json.load(f).get("start_time")
+        except Exception:
+            pass
+
+    target_args = _resolve_git_target()
+    original_lines, original_chars, is_oversized = _streaming_size_precheck(target_args)
+
+    changed_files = get_changed_files(target_args)
+    if not changed_files:
+        _log_gate_skipped("EMPTY_DIFF", "")
+        return 0
+
+    active_domains = []
+    for f in changed_files:
+        if (PROJECT_ROOT / f).exists():
+            for domain in extract_adr_annotations(str(PROJECT_ROOT / f)):
+                active_domains.append(domain.lower())
 
     is_hr, matches = classify_commit_risk(changed_files, active_domains)
     session_id = _get_active_session_id() or "pre-session-init"
 
-    # Allow explicit bypass via env var or local file
-    if os.environ.get("SKIP_AI_REVIEW") == "1":
-        if is_hr:
-            # Enforce structured bypass validation
-            skip_reason_str = os.environ.get("SKIP_REASON", "").strip()
+    config = load_config()
+    skip_paths = config.get("skip_paths", [])
+    eligible_files = [f for f in changed_files if not any(sp in f for sp in skip_paths)]
+    reviewed_files = eligible_files
+
+    if is_oversized:
+        print(f"⚠️  [GATE] Oversized diff detected ({original_lines} lines, {original_chars} chars). Routing to bounded oversized path.")
+
+        if not eligible_files:
+            print("⚡ AI review skipped: all changed files are in skip_paths.")
+            _log_gate_skipped("EMPTY_DIFF", "")
+            return 0
+
+        _setup_sys_path()
+        try:
+            pagerank_scores = get_pagerank_scores(eligible_files)
+        except Exception:
+            pagerank_scores = {}
+
+        high_risk_files = get_high_risk_files(eligible_files)
+        if high_risk_files:
+            target_files = high_risk_files
+            review_strategy = "stratified"
+        else:
+            sorted_files = sorted(pagerank_scores.keys(), key=lambda f: pagerank_scores.get(f, 0), reverse=True)
+            target_files = sorted_files[:3] if sorted_files else eligible_files[:3]
+            review_strategy = "thin-standard"
+
+        if not target_files:
+            msg = "OVERSIZED_DIFF_BLOCKED: Empty file selection produced zero target files."
+            _persist_verdict(fail_open_reason=msg)
+            log_harness_event({
+                "event_type": "oversized_diff_blocked",
+                "severity": "HIGH",
+                "payload": {
+                    "original_lines": original_lines,
+                    "original_chars": original_chars,
+                    "sliced_lines": 0,
+                    "sliced_chars": 0,
+                    "strategy": review_strategy,
+                }
+            })
+            print(f"❌ [GATE BLOCKED] {msg}")
+            sys.exit(1)
+
+        scoped_diff = get_scoped_diff(target_files, target_args)
+        threshold, strategy_name, max_strat_lines, max_strat_chars = _load_review_config()
+        sliced_lines = scoped_diff.count("\n") if scoped_diff else 0
+        sliced_chars = len(scoped_diff) if scoped_diff else 0
+
+        if scoped_diff.strip() and sliced_lines <= max_strat_lines and sliced_chars <= max_strat_chars:
+            diff = scoped_diff
+            reviewed_files = target_files
+            os.environ["AI_REVIEW_PASSES"] = "1"
+            log_harness_event({
+                "event_type": "oversized_diff_stratified_reviewed",
+                "severity": "INFO",
+                "payload": {
+                    "original_lines": original_lines,
+                    "original_chars": original_chars,
+                    "sliced_lines": sliced_lines,
+                    "sliced_chars": sliced_chars,
+                    "strategy": review_strategy,
+                }
+            })
+        else:
             bypass_data = None
             used_vector = None
-            
-            # Vector B (Direct): First parse from SKIP_REASON env var if it's JSON
+            skip_reason_str = os.environ.get("SKIP_REASON", "").strip()
+
             if skip_reason_str and skip_reason_str != "@file":
                 try:
                     bypass_data = json.loads(skip_reason_str)
-                    used_vector = "Vector B (Direct Env)"
-                except Exception:
-                    pass
-
-            session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
-            session_start_time = None
-            if session_file.exists():
-                try:
-                    with open(session_file, "r", encoding="utf-8") as f:
-                        session_start_time = json.load(f).get("start_time")
+                    used_vector = "env"
                 except Exception:
                     pass
 
             bypass_file = PROJECT_ROOT / ".skip-ai-reason.json"
-
-            # Vector C (Interactive TTY Wizard): Prompt developer and write to file
-            # *Note on labels*: labels reflect naming (A=file, B=direct, C=wizard) not execution order (B -> C -> A)
             if not bypass_data and sys.stdin.isatty():
-                print("[BYPASS] High-risk commit bypass interactive wizard active (Vector C)...")
-                rebuttal_type = ""
-                while rebuttal_type not in ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED"):
-                    print("Select rebuttal type:")
-                    print("  1. FALSE_POSITIVE")
-                    print("  2. SPEC_REQUIREMENT")
-                    print("  3. ARCHITECTURAL_INVARIANT")
-                    print("  4. OUT_OF_SCOPE")
-                    print("  5. REMEDIATED")
-                    choice = input("Choice (1-5): ").strip()
-                    if choice == "1":
-                        rebuttal_type = "FALSE_POSITIVE"
-                    elif choice == "2":
-                        rebuttal_type = "SPEC_REQUIREMENT"
-                    elif choice == "3":
-                        rebuttal_type = "ARCHITECTURAL_INVARIANT"
-                    elif choice == "4":
-                        rebuttal_type = "OUT_OF_SCOPE"
-                    elif choice == "5":
-                        rebuttal_type = "REMEDIATED"
+                print("[BYPASS] Oversized diff bypass interactive wizard active...")
+                print("Select rebuttal type:")
+                print("  1. FALSE_POSITIVE")
+                print("  2. SPEC_REQUIREMENT")
+                print("  3. ARCHITECTURAL_INVARIANT")
+                print("  4. OUT_OF_SCOPE")
+                print("  5. REMEDIATED")
+                print("  6. OVERSIZED_DIFF")
+                choice = input("Choice (1-6): ").strip()
+                r_type = ""
+                if choice == "1": r_type = "FALSE_POSITIVE"
+                elif choice == "2": r_type = "SPEC_REQUIREMENT"
+                elif choice == "3": r_type = "ARCHITECTURAL_INVARIANT"
+                elif choice == "4": r_type = "OUT_OF_SCOPE"
+                elif choice == "5": r_type = "REMEDIATED"
+                elif choice == "6": r_type = "OVERSIZED_DIFF"
 
-                finding_ids_str = input("Finding IDs (comma-separated, e.g. T1-G-07,T1-L-10): ").strip()
-                finding_ids = [fid.strip() for fid in finding_ids_str.split(",") if fid.strip()]
-                evidence = input("Evidence/Rationale: ").strip()
+                if r_type == "OVERSIZED_DIFF":
+                    f_ids = ["HIB-068"]
+                    ev = input("Evidence/Rationale for bypassing oversized diff review: ").strip()
+                    wizard_data = {"rebuttal_type": "OVERSIZED_DIFF", "finding_ids": f_ids, "evidence": ev}
+                    try:
+                        with open(bypass_file, "w", encoding="utf-8") as f:
+                            json.dump(wizard_data, f, indent=4)
+                    except Exception:
+                        pass
 
-                wizard_data = {
-                    "rebuttal_type": rebuttal_type,
-                    "finding_ids": finding_ids,
-                    "evidence": evidence,
-                }
-
-                try:
-                    with open(bypass_file, "w", encoding="utf-8") as f:
-                        json.dump(wizard_data, f, indent=4)
-                    print(f"[BYPASS] Wizard successfully wrote {bypass_file.name}")
-                except Exception as e:
-                    print(f"❌ [BYPASS] Failed to write wizard file: {e}")
-
-            # Vector A (File): Read from .skip-ai-reason.json
             if not bypass_data and (skip_reason_str == "@file" or bypass_file.exists()):
                 if bypass_file.exists():
+                    claim_file = bypass_file.parent / f".claim_{os.getpid()}_{bypass_file.name}"
                     try:
                         mtime = bypass_file.stat().st_mtime
                         if session_start_time:
@@ -1571,92 +1747,203 @@ def _run_review(commit_msg_file: str | None = None) -> int:
                             file_dt = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc)
                             if file_dt < session_dt:
                                 print("⚠️  [BYPASS] STALE_BYPASS_FILE_DETECTED: Rationale file predates current session startup!")
-                    except Exception:
-                        pass
-
-                    try:
-                        bypass_data = json.loads(bypass_file.read_text(encoding="utf-8"))
-                        used_vector = "Vector A (File)"
-
-                        # Immediately consume-and-delete on successful read
-                        try:
-                            bypass_file.unlink()
-                            print(f"[BYPASS] Successfully consumed and deleted {bypass_file.name}")
-                        except Exception as e:
-                            print(f"⚠️  [BYPASS] Failed to auto-delete {bypass_file.name}: {e}")
+                        os.replace(bypass_file, claim_file)
+                        bypass_data = json.loads(claim_file.read_text(encoding="utf-8"))
+                        used_vector = "file"
+                        claim_file.unlink(missing_ok=True)
+                    except SystemExit:
+                        raise
                     except Exception as e:
                         print(f"❌ [BYPASS] Error reading bypass file: {e}")
 
-            if not bypass_data:
-                print("❌ [BYPASS] High-risk commit bypass rejected!")
-                print("   A structured SKIP_REASON (JSON) is required for high-risk commits.")
-                print("   Please provide it via environment variable SKIP_REASON='{...}'")
-                print("   or write it to `.skip-ai-reason.json` and set SKIP_REASON='@file'")
-                print("\n   Required keys: rebuttal_type, finding_ids (list), evidence")
-                print("   Rebuttal types: FALSE_POSITIVE, SPEC_REQUIREMENT, ARCHITECTURAL_INVARIANT, OUT_OF_SCOPE")
+            if bypass_data and bypass_data.get("rebuttal_type") == "OVERSIZED_DIFF":
+                f_ids = bypass_data.get("finding_ids")
+                ev = bypass_data.get("evidence")
+                if isinstance(f_ids, list) and f_ids and isinstance(ev, str) and ev.strip():
+                    log_harness_event({
+                        "event_type": "oversized_diff_override_accepted",
+                        "severity": "WARNING",
+                        "payload": {
+                            "original_lines": original_lines,
+                            "original_chars": original_chars,
+                            "sliced_lines": sliced_lines,
+                            "sliced_chars": sliced_chars,
+                            "strategy": review_strategy,
+                            "vector": used_vector or "tty",
+                            "rebuttal_type": "OVERSIZED_DIFF",
+                        }
+                    })
+                    print("⚡ AI review bypassed for oversized commit via OVERSIZED_DIFF override.")
+                    return 0
+                else:
+                    print(f"❌ [BYPASS] INVALID_REBUTTAL_TYPE: Bypass type '{bypass_data.get('rebuttal_type')}' is not accepted for oversized diffs. Only OVERSIZED_DIFF is valid here.")
+                    print("💡 Hint: For oversized diffs, specify 'rebuttal_type': 'OVERSIZED_DIFF' and 'finding_ids': ['HIB-068']. Cleared invalid bypass file.")
+                    (PROJECT_ROOT / ".skip-ai-reason.json").unlink(missing_ok=True)
+                    sys.exit(1)
+            elif bypass_data:
+                print(f"❌ [BYPASS] INVALID_REBUTTAL_TYPE: Bypass type '{bypass_data.get('rebuttal_type')}' is not accepted for oversized diffs. Only OVERSIZED_DIFF is valid here.")
+                print("💡 Hint: For oversized diffs, specify 'rebuttal_type': 'OVERSIZED_DIFF' and 'finding_ids': ['HIB-068']. Cleared invalid bypass file.")
+                (PROJECT_ROOT / ".skip-ai-reason.json").unlink(missing_ok=True)
                 sys.exit(1)
 
-            rebuttal_type = bypass_data.get("rebuttal_type")
-            finding_ids = bypass_data.get("finding_ids")
-            evidence = bypass_data.get("evidence")
-
-            if (rebuttal_type not in VALID_REBUTTAL_TYPES or 
-                not isinstance(finding_ids, list) or not finding_ids or 
-                not isinstance(evidence, str) or not evidence.strip()):
-                print("❌ [BYPASS] Validation failed for structured bypass reason!")
-                print(f"   Received: {bypass_data}")
-                print("   Ensure all keys (rebuttal_type, finding_ids, evidence) are present and valid.")
-                sys.exit(1)
-
-            print(f"⚡ AI review bypassed via {used_vector} ({rebuttal_type})")
-
+            msg = f"OVERSIZED_DIFF_BLOCKED: Reviewed subset ({sliced_lines} lines, {sliced_chars} chars) exceeds sanity ceiling ({max_strat_lines} lines, {max_strat_chars} chars)."
+            _persist_verdict(fail_open_reason=msg)
             log_harness_event({
-                "event_type": "high_risk_gate_override",
-                "severity": "WARNING",
+                "event_type": "oversized_diff_blocked",
+                "severity": "HIGH",
                 "payload": {
-                    "reason": "Developer bypassed high-risk gate",
-                    "skip_reason": bypass_data,
-                    "high_risk_matches": matches
+                    "original_lines": original_lines,
+                    "original_chars": original_chars,
+                    "sliced_lines": sliced_lines,
+                    "sliced_chars": sliced_chars,
+                    "strategy": review_strategy,
                 }
             })
+            print(f"❌ [GATE BLOCKED] {msg}")
+            print("\n  To proceed with this oversized commit, run with an override:")
+            print("  SKIP_AI_REVIEW=1 SKIP_REASON='{\"rebuttal_type\":\"OVERSIZED_DIFF\",\"finding_ids\":[\"HIB-068\"],\"evidence\":\"<reason>\"}' git commit")
+            sys.exit(1)
+    else:
+        # Standard path (within hard ceiling)
+        if os.environ.get("SKIP_AI_REVIEW") == "1":
+            if is_hr:
+                skip_reason_str = os.environ.get("SKIP_REASON", "").strip()
+                bypass_data = None
+                used_vector = None
 
-            if rebuttal_type == "FALSE_POSITIVE":
-                try:
-                    eval_script = PROJECT_ROOT / ".agent" / "scripts" / "false_positive_to_eval.py"
-                    if eval_script.exists():
-                        fids_arg = ",".join(finding_ids)
-                        subprocess.Popen([
-                            sys.executable,
-                            str(eval_script),
-                            "--finding-id", fids_arg,
-                            "--rebuttal-type", rebuttal_type,
-                            "--evidence", evidence
-                        ])
-                        print("[BYPASS] Triggered false positive logging asynchronously.")
-                except Exception as e:
-                    print(f"⚠️  [BYPASS] Failed to spawn false_positive_to_eval.py: {e}")
+                if skip_reason_str and skip_reason_str != "@file":
+                    try:
+                        bypass_data = json.loads(skip_reason_str)
+                        used_vector = "Vector B (Direct Env)"
+                    except Exception:
+                        pass
 
+                session_file = PROJECT_ROOT / ".agent" / "state" / "session.json"
+                session_start_time = None
+                if session_file.exists():
+                    try:
+                        with open(session_file, "r", encoding="utf-8") as f:
+                            session_start_time = json.load(f).get("start_time")
+                    except Exception:
+                        pass
+
+                bypass_file = PROJECT_ROOT / ".skip-ai-reason.json"
+
+                if not bypass_data and sys.stdin.isatty():
+                    print("[BYPASS] High-risk commit bypass interactive wizard active (Vector C)...")
+                    rebuttal_type = ""
+                    while rebuttal_type not in ("FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED", "OVERSIZED_DIFF"):
+                        print("Select rebuttal type:")
+                        print("  1. FALSE_POSITIVE")
+                        print("  2. SPEC_REQUIREMENT")
+                        print("  3. ARCHITECTURAL_INVARIANT")
+                        print("  4. OUT_OF_SCOPE")
+                        print("  5. REMEDIATED")
+                        print("  6. OVERSIZED_DIFF")
+                        choice = input("Choice (1-6): ").strip()
+                        if choice == "1": rebuttal_type = "FALSE_POSITIVE"
+                        elif choice == "2": rebuttal_type = "SPEC_REQUIREMENT"
+                        elif choice == "3": rebuttal_type = "ARCHITECTURAL_INVARIANT"
+                        elif choice == "4": rebuttal_type = "OUT_OF_SCOPE"
+                        elif choice == "5": rebuttal_type = "REMEDIATED"
+                        elif choice == "6": rebuttal_type = "OVERSIZED_DIFF"
+
+                    finding_ids_str = input("Finding IDs (comma-separated, e.g. T1-G-07,T1-L-10): ").strip()
+                    finding_ids = [fid.strip() for fid in finding_ids_str.split(",") if fid.strip()]
+                    evidence = input("Evidence/Rationale: ").strip()
+
+                    wizard_data = {
+                        "rebuttal_type": rebuttal_type,
+                        "finding_ids": finding_ids,
+                        "evidence": evidence,
+                    }
+
+                    try:
+                        with open(bypass_file, "w", encoding="utf-8") as f:
+                            json.dump(wizard_data, f, indent=4)
+                        print(f"[BYPASS] Wizard successfully wrote {bypass_file.name}")
+                    except Exception as e:
+                        print(f"❌ [BYPASS] Failed to write wizard file: {e}")
+
+                if not bypass_data and (skip_reason_str == "@file" or bypass_file.exists()):
+                    if bypass_file.exists():
+                        claim_file = bypass_file.parent / f".claim_{os.getpid()}_{bypass_file.name}"
+                        try:
+                            mtime = bypass_file.stat().st_mtime
+                            if session_start_time:
+                                session_dt = datetime.datetime.fromisoformat(session_start_time.replace("Z", "+00:00"))
+                                file_dt = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc)
+                                if file_dt < session_dt:
+                                    print("⚠️  [BYPASS] STALE_BYPASS_FILE_DETECTED: Rationale file predates current session startup!")
+                            os.replace(bypass_file, claim_file)
+                            bypass_data = json.loads(claim_file.read_text(encoding="utf-8"))
+                            used_vector = "Vector A (File)"
+                            claim_file.unlink(missing_ok=True)
+                        except Exception as e:
+                            print(f"❌ [BYPASS] Error reading bypass file: {e}")
+
+                if not bypass_data:
+                    print("❌ [BYPASS] High-risk commit bypass rejected!")
+                    print("   A structured SKIP_REASON (JSON) is required for high-risk commits.")
+                    print("   Please provide it via environment variable SKIP_REASON='{...}'")
+                    print("   or write it to `.skip-ai-reason.json` and set SKIP_REASON='@file'")
+                    print("\n   Required keys: rebuttal_type, finding_ids (list), evidence")
+                    print("   Rebuttal types: FALSE_POSITIVE, SPEC_REQUIREMENT, ARCHITECTURAL_INVARIANT, OUT_OF_SCOPE, REMEDIATED, OVERSIZED_DIFF")
+                    sys.exit(1)
+
+                rebuttal_type = bypass_data.get("rebuttal_type")
+                finding_ids = bypass_data.get("finding_ids")
+                evidence = bypass_data.get("evidence")
+
+                if (rebuttal_type not in VALID_REBUTTAL_TYPES or 
+                    not isinstance(finding_ids, list) or not finding_ids or 
+                    not isinstance(evidence, str) or not evidence.strip()):
+                    print("❌ [BYPASS] Validation failed for structured bypass reason!")
+                    print(f"   Received: {bypass_data}")
+                    print("   Ensure all keys (rebuttal_type, finding_ids, evidence) are present and valid.")
+                    sys.exit(1)
+
+                print(f"⚡ AI review bypassed via {used_vector} ({rebuttal_type})")
+
+                log_harness_event({
+                    "event_type": "high_risk_gate_override",
+                    "severity": "WARNING",
+                    "payload": {
+                        "reason": "Developer bypassed high-risk gate",
+                        "skip_reason": bypass_data,
+                        "high_risk_matches": matches
+                    }
+                })
+
+                if rebuttal_type == "FALSE_POSITIVE":
+                    try:
+                        eval_script = PROJECT_ROOT / ".agent" / "scripts" / "false_positive_to_eval.py"
+                        if eval_script.exists():
+                            fids_arg = ",".join(finding_ids)
+                            subprocess.Popen([
+                                sys.executable,
+                                str(eval_script),
+                                "--finding-id", fids_arg,
+                                "--rebuttal-type", rebuttal_type,
+                                "--evidence", evidence
+                            ])
+                            print("[BYPASS] Triggered false positive logging asynchronously.")
+                    except Exception as e:
+                        print(f"⚠️  [BYPASS] Failed to spawn false_positive_to_eval.py: {e}")
+
+                return 0
+            else:
+                print("⚠️  [DEPRECATION WARNING] SKIP_AI_REVIEW bypass is deprecated. Use 'enforcement.posture: observe' in .agent/config.yaml instead.")
+                print("⚡ AI review skipped (SKIP_AI_REVIEW=1)")
+                _log_gate_skipped("SKIP_AI_REVIEW", "none", deprecated_bypass=True)
+                return 0
+
+        diff = get_staged_diff(target_args)
+        if not diff.strip():
+            _log_gate_skipped("EMPTY_DIFF", diff)
             return 0
-        else:
-            print("⚠️  [DEPRECATION WARNING] SKIP_AI_REVIEW bypass is deprecated. Use 'enforcement.posture: observe' in .agent/config.yaml instead.")
-            print("⚡ AI review skipped (SKIP_AI_REVIEW=1)")
-            _log_gate_skipped("SKIP_AI_REVIEW", "none", deprecated_bypass=True)
-            return 0
 
-    # Allow bypass via sentinel file (for pre-commit env var propagation issues)
-    if (PROJECT_ROOT / ".skip-ai-review").exists():
-        print("⚠️  [DEPRECATION WARNING] .skip-ai-review bypass file is deprecated. Use 'enforcement.posture: observe' in .agent/config.yaml instead.")
-        print("⚡ AI review skipped (.skip-ai-review file found)")
-        _log_gate_skipped(".skip-ai-review", "none", deprecated_bypass=True)
-        return 0
-
-    # Get the staged diff
-    diff = get_staged_diff()
-    if not diff.strip():
-        _log_gate_skipped("EMPTY_DIFF", diff)
-        return 0
-
-    current_diff_hash = _get_normalized_diff_hash(diff)
+    current_diff_hash = _get_normalized_diff_hash(diff, target_args)
 
     # Load GateContext (T1-G-13)
     from gate_context import load_gate_context, get_context_path, GateContext, CoChangeWarning
@@ -1852,45 +2139,14 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         _log_gate_skipped("EMPTY_DIFF", diff)
         return 0
 
-    # Diff size guards — skip rather than truncate (partial diffs cause hallucination)
-    diff_lines = diff.count("\n")
-    max_lines = config.get("max_diff_lines", MAX_DIFF_LINES)
-    if diff_lines > max_lines:
-        msg = f"diff too large ({diff_lines} lines > {max_lines} max)"
-        print(f"⚠️  AI review skipped: {msg}.")
-        print("   Review this commit manually.")
-        _log_gate_skipped("DIFF_TOO_LARGE_FAILOPEN", diff)
-        _persist_verdict(fail_open_reason=msg)
-        log_harness_event({
-            "event_type": "large_diff_fail_open",
-            "severity": "WARNING",
-            "payload": {"diff_lines": diff_lines, "max_lines": max_lines}
-        })
-        return 0
-
-    diff_chars = len(diff)
-    max_chars = config.get("max_diff_chars", MAX_DIFF_CHARS)
-    if diff_chars > max_chars:
-        msg = f"diff too large ({diff_chars:,} chars > {max_chars:,} max)"
-        print(f"⚠️  AI review skipped: {msg}.")
-        print("   Review this commit manually.")
-        _log_gate_skipped("DIFF_TOO_LARGE_FAILOPEN", diff)
-        _persist_verdict(fail_open_reason=msg)
-        log_harness_event({
-            "event_type": "large_diff_fail_open",
-            "severity": "WARNING",
-            "payload": {"diff_chars": diff_chars, "max_chars": max_chars}
-        })
-        return 0
-
+    # Diff size guards — legacy hard-ceiling early exits removed per SPEC-v1.4.14
     # Get commit message, PageRank repo map, and ADR context
     commit_msg = get_commit_message()
     context = load_review_context(diff)
 
     # ── Component 3: Large Diff Stratified Review ──────────────────────────────────
-    # Load config
     diff_lines = count_diff_lines(diff)
-    large_diff_threshold, large_diff_strategy = _load_review_config()
+    large_diff_threshold, large_diff_strategy, _, _ = _load_review_config()
     
     review_strategy = "standard"
     high_risk_files = []
@@ -1898,20 +2154,21 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     # Generate PageRank scores for routing first
     _setup_sys_path()
     try:
-        pagerank_scores = get_pagerank_scores(changed_files)
+        pagerank_scores = get_pagerank_scores(eligible_files)
     except Exception:
         pagerank_scores = {}
         
     if diff_lines > large_diff_threshold and large_diff_strategy == "stratified":
-        high_risk_files = get_high_risk_files(changed_files)
+        high_risk_files = get_high_risk_files(eligible_files)
         if not high_risk_files:
             # Thin-standard fallback
             print("💡 [STRATEGY] Large diff detected with no high-risk files -> Thin-Standard fallback active.")
             review_strategy = "thin-standard"
             sorted_files = sorted(
-                pagerank_scores.keys(), key=lambda f: pagerank_scores[f], reverse=True
+                pagerank_scores.keys(), key=lambda f: pagerank_scores.get(f, 0), reverse=True
             )
-            top_3_files = sorted_files[:3]
+            top_3_files = sorted_files[:3] if sorted_files else eligible_files[:3]
+            reviewed_files = top_3_files
             try:
                 repo_map = generate_repo_map(top_3_files)
             except Exception:
@@ -1922,6 +2179,7 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         else:
             print(f"🛡️ [STRATEGY] Large diff detected with {len(high_risk_files)} high-risk files -> Stratified review active.")
             review_strategy = "stratified"
+            reviewed_files = high_risk_files
             try:
                 repo_map = generate_repo_map(high_risk_files)
             except Exception:
@@ -1930,11 +2188,12 @@ def _run_review(commit_msg_file: str | None = None) -> int:
     else:
         # Standard strategy
         review_strategy = "standard"
+        reviewed_files = eligible_files
         try:
-            repo_map = generate_repo_map(changed_files)
+            repo_map = generate_repo_map(eligible_files)
         except Exception:
             repo_map = ""
-        adr_context, active_domains, adr_policy_notes = get_adr_context(changed_files)
+        adr_context, active_domains, adr_policy_notes = get_adr_context(eligible_files)
         
     # Enforce Constraint-01 absolute caps (character length / 4 estimation)
     if len(repo_map) // 4 > 600:
@@ -2414,6 +2673,7 @@ def _run_review(commit_msg_file: str | None = None) -> int:
         provider_name=provider.name,
         effective_max_tokens=effective_max_tokens_used
     )
+    raw_review["reviewed_files"] = reviewed_files
     render_review(raw_review, churn_info)
     print(f"  \u23f1\ufe0f  Review completed in {elapsed:.1f}s\n")
 

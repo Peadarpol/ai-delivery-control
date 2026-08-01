@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.4.14 — 2026-08-02
+
+### Punchcard Preparation & Code Hardening (SPEC-v1.4.14)
+
+- **Oversized Diff Hard-Block (Phase 0)**: Replaced fail-open behavior in `ai_review.py` for oversized diffs (exceeding `max_diff_lines` or `max_diff_chars`). Introduced a streaming `subprocess.Popen` diff precheck (`_streaming_size_precheck`) that raises `SystemExit(1)` and logs `OVERSIZED_DIFF_BLOCKED` to explicitly block large, unreviewed code dumps, matching SPEC-v1.4.14 Punchcard enforcement.
+- **Diff Hashing Integrity**: Integrated a canonical 40-character git write-tree hash computation (`_get_normalized_diff_hash`) into `ai_review.py` and `rebuttal.py` to ensure cryptographically secure checksums of the staged state during evaluations, resolving hash alignment across testing scopes.
+- **Module Lookup Resolution**: Refactored module pathing in `rebuttal.py` by removing fragile stack inspection (`inspect.stack()`) and safely delegating to `sys.modules.get("ai_review") or sys.modules.get("src.scripts.ai_review")`. Implemented `_get_project_root()` centralized fallback to respect pytest mocking invariants across suites.
+- **Bookkeeping & Release Closure**:
+  - Archived `SPEC-v1.4.14-punchcard-preparation.md` to `docs/planning/specs/archive/` with `Status: DELIVERED`.
+  - Added HIB-086 tracking for `session_ledger.jsonl` uncommitted-state loss vulnerability and committed fix.
+  - Bumped `harness_version.txt` to `1.4.14`.
+  - Regenerated `bootstrap/checksums.py`.
 ## v1.4.13 — 2026-07-26
 
 ### Stabilization Release (SPEC-v1.4.13-stabilization) — 6 Phases

@@ -30,6 +30,13 @@ rebuttal_pass.json
 .agent/state/agent_session_close.json
 .agent/state/dream_proposals/
 .agent/state/config.yaml.migration_backup
+.agent/state/co_change_map.json
+.agent/state/gate_context_current.json
+.agent/state/gate_findings_*.json
+.agent/state/repo_graph_cache.json
+.agent/state/spec_grade_*.md
+.agent/state/wiki_lint_findings.md
+.agent/state/wiki_lint_state.json
 # Deliberately committable: decisions_log.md
 
 
