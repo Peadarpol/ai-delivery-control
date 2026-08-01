@@ -76,7 +76,7 @@ def _find_project_root() -> Path:
 PROJECT_ROOT = _find_project_root()
 
 
-RebuttalType = Literal["FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED"]
+RebuttalType = Literal["FALSE_POSITIVE", "SPEC_REQUIREMENT", "ARCHITECTURAL_INVARIANT", "OUT_OF_SCOPE", "REMEDIATED", "OVERSIZED_DIFF"]
 VALID_REBUTTAL_TYPES = get_args(RebuttalType)
 
 
@@ -228,18 +228,60 @@ def load_config() -> Dict[str, Any]:
     return {}
 
 
-def _get_normalized_diff_hash(diff: str) -> str:
-    """Compute the SHA-256 hash of a normalized diff.
-    Normalizes line endings to \n, strips git diff metadata headers, and strips trailing whitespace.
-    """
+def _get_normalized_diff_hash(diff: str, target_args: Optional[List[str]] = None) -> str:
+    """Compute the full-commit integrity hash (delegated to canonical ai_review._get_normalized_diff_hash)."""
     ai_rev = _get_active_ai_review()
     if ai_rev is not None:
         func = getattr(ai_rev, "_get_normalized_diff_hash", None)
-        if func is not None and (hasattr(func, "mock_add_spec") or hasattr(func, "_mock_call")):
-            return func(diff)
+        # If func is present and NOT a mock (i.e. real module in production), delegate directly.
+        # When func is a mock in unit test contexts, fall through to the local implementation below.
+        if func is not None and not (hasattr(func, "mock_add_spec") or hasattr(func, "_mock_call")):
+            try:
+                return func(diff, target_args)
+            except TypeError:
+                try:
+                    return func(diff)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    project_root = getattr(ai_rev, "PROJECT_ROOT", PROJECT_ROOT) if ai_rev is not None else PROJECT_ROOT
+    try:
+        if target_args is None:
+            if ai_rev is not None and hasattr(ai_rev, "_resolve_git_target"):
+                try:
+                    target_args = ai_rev._resolve_git_target()
+                except Exception:
+                    target_args = ["--cached"]
+            else:
+                target_args = ["--cached"]
+
+        if target_args == ["--cached"]:
+            res = subprocess.run(
+                ["git", "write-tree"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                cwd=str(project_root),
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
+        elif target_args and len(target_args) == 2:
+            res = subprocess.run(
+                ["git", "rev-parse", target_args[1]],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                cwd=str(project_root),
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
+    except Exception:
+        pass
 
     lines = []
-    for line in diff.splitlines():
+    for line in (diff or "").splitlines():
         if line.startswith(("diff --git", "index ", "--- ", "+++ ")):
             continue
         lines.append(line.rstrip())
@@ -415,12 +457,35 @@ def _run_rebuttal(args: Any) -> int:
                 print(f"❌ [REBUTTAL] spec_reference must be a non-empty string for rebuttal type '{finding.rebuttal_type}' (finding {finding.finding_id})")
                 return 1
 
-    # Get the active staged diff
-    staged_diff = get_staged_diff()
+    # Get the active staged or scoped diff
+    reviewed_files = None
+    if dev_rebuttal.original_fail_session_id:
+        fpath = PROJECT_ROOT / ".agent" / "state" / f"gate_findings_{dev_rebuttal.original_fail_session_id}.json"
+        if not fpath.exists():
+            fpath = PROJECT_ROOT / ".agent" / "state" / "gate_findings_latest.json"
+        if fpath.exists():
+            try:
+                fdata = json.loads(fpath.read_text(encoding="utf-8"))
+                reviewed_files = fdata.get("reviewed_files")
+            except Exception:
+                pass
+
+    ai_rev = _get_active_ai_review()
+    if reviewed_files and ai_rev is not None and hasattr(ai_rev, "get_scoped_diff"):
+        staged_diff = ai_rev.get_scoped_diff(reviewed_files)
+    else:
+        staged_diff = get_staged_diff()
+
     if not staged_diff.strip():
         print("❌ [REBUTTAL] No staged changes found to rebut.")
         return 1
-    diff_hash = _get_normalized_diff_hash(staged_diff)
+    target_args = ["--cached"]
+    if ai_rev is not None and hasattr(ai_rev, "_resolve_git_target"):
+        try:
+            target_args = ai_rev._resolve_git_target()
+        except Exception:
+            pass
+    diff_hash = _get_normalized_diff_hash(staged_diff, target_args)
     
     # Verify diff hash matches rebuttal file
     if dev_rebuttal.normalized_diff_hash != diff_hash:
