@@ -197,3 +197,20 @@ No single canonical implementation exists for any script to import; each was han
 **Why this wasn't fixed inline**: changing the stale-file handling for the five existing types is a behavior change outside HIB-068's actual scope (large diffs failing open), and doing so as a side effect of an unrelated fix risks exactly the kind of undisclosed scope creep this project has repeatedly caught and corrected elsewhere this cycle (HIB-073/082/083/084 were all instances of fixing one thing while silently leaving a related inconsistency unaddressed). This entry exists specifically so the inconsistency is tracked, not silently absorbed as permanent architecture.
 
 **Fix Direction**: As standalone work, decide whether all six rebuttal types should reject a stale override file consistently, or whether the current lenient (warn-and-proceed) behavior for the five pre-existing types is intentional and should simply be documented as such in `ai_review.py`'s bypass-handling code comments. Either resolution is acceptable; what isn't acceptable is the asymmetry persisting without anyone having made a deliberate choice about it.
+
+---
+
+## HIB-086 — `session_ledger.jsonl` has no git history and is fully vulnerable to uncommitted-state loss
+
+**Date**: 2026-08-02
+**Source**: Peter + Claude — discovered while verifying SPEC-v1.4.14's Phase 1 (RISK-001) outcome-override round-trip; confirmed via `git log --all --oneline -- .agent/state/session_ledger.jsonl` returning zero results
+**Pillar**: State Persistence / Durable Audit Trail
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: `.agent/state/session_ledger.jsonl` — the append-only ledger `init_session.py`'s `infer_and_close_previous_session()` writes to on every session close, intended as durable, ongoing session-outcome history — has never been committed to git at any point in this repository's history. Unlike `session.json` and `agent_session_close.json` (explicitly gitignored as disposable scratch state under the "Harness operational state — never commit" section of `.gitignore`), the ledger is conspicuously *absent* from `.gitignore`, indicating it was intended to be durable/tracked — but no commit ever actually added it. The file was found completely missing from disk (not merely reverted to a stale version) after the same `git reset --hard` event documented earlier the same day against `SPEC-v1.4.14-punchcard-preparation.md` and `harness_improvement_backlog.md` — but unlike those two files, whose pre-reset content was recoverable from conversation history, the ledger's entire accumulated history (months of session outcomes) is unrecoverable, since it never existed in any commit to restore from.
+
+**Why this went undetected during the same-day incident review**: the initial scan for other files affected by that reset checked modification timestamps of files that still existed on disk. A file *entirely deleted* by a hard reset (because it was never committed at all) produces no listing to check a timestamp against — it simply isn't there. This is a blind spot in mtime-based incident scans generally, not specific to this file.
+
+**Fix Direction**: Treat `session_ledger.jsonl` the same way `decisions_log.md` is already treated — commit it periodically (e.g., alongside routine housekeeping/doc commits) so it accumulates real git history and survives an uncommitted-state reset. The file self-regenerates on the next session close (opened in append mode), so no data-recovery action is needed beyond adopting the commit habit going forward. Consider whether `check_state_freshness.py` or an equivalent existing staleness check should also flag when the ledger has diverged significantly from its last committed state, as a low-cost early warning.
+
+---
