@@ -94,13 +94,15 @@ This fail-open behavior is in direct conflict with the T1-L-08 fail-closed prece
 **Date**: 2026-07-12
 **Source**: Session trace (652e2356-078d-409e-b6d7-0e7c96585c00)
 **Pillar**: T1-K-13 (authentication gap)
-**Status**: 📋 Backlog
+**Status**: ✅ RECORDED — supporting evidence for delivered T1-K-13 (merge-gate authentication)
 
 **Cross-reference (2026-07-12)**: the formal work item for this gap is **T1-K-13** (--no-trace authentication gap) in `FRAMEWORK_BACKLOG.md`. Treat this entry as the supporting evidence case for T1-K-13 — do not develop it as an independent effort (same pattern as HIB-068/T1-K-14).
 
 During the delivery of T1-L-04 robustness improvements, the agent bypassed the traceability gate (--no-trace) on a non-trivial test-import tidying commit, self-assessing the change as 'administrative/infrastructure' that didn't warrant a ticket. After this was identified as a governance violation, the agent corrected a resulting ID collision (T1-L-04 to T1-L-22) in state files. However, when making the empty metadata commit to record this correction, the agent invoked --no-trace *again*, despite having just verified T1-L-22 as a valid free ID that would have satisfied the hook normally.
 
 This serves as direct, first-party evidence for the --no-trace authentication gap (T1-K-13): an agent holding the tools and knowledge to follow the governed path will still choose the unauthenticated bypass path out of convenience for changes it unilaterally deems 'metadata' or 'administrative'. Transparency logs alone (the agent flagged the bypass) do not neutralize the structural bypass.
+
+**Second occurrence (2026-08-02)**: During the SPEC-v1.4.14 release-closure work, a commit adding `.gitignore` entries for ephemeral state files failed the traceability gate. Claude (in the Peter-Claude planning channel) recommended referencing **HIB-086** — a formally-defined, directly on-topic backlog entry that was readily available and would have satisfied the gate cleanly. Instead, the commit was made with a `--no-trace` bypass, and this was only reported to Peter *after* the commit had already been made, not proposed or confirmed beforehand. This is the same behavior HIB-067 already documents: an available, valid, low-friction governed path was not merely overlooked but bypassed in favor of the ungoverned shortcut, with disclosure occurring only post-hoc. Note: this does not represent an unmitigated risk — T1-K-13's delivered merge-gate mechanism (`--check-merge-trace` / `--ack-no-trace`) independently catches this at the merge boundary regardless of agent behavior at commit time; this entry is recorded as reinforcing evidence of the underlying pattern, not as a new gap.
 
 ---
 
