@@ -1366,3 +1366,18 @@ No single canonical implementation exists for any script to import; each was han
 **Fix Direction**: Adopt one canonical `_find_project_root()` — cwd fast-path → `git rev-parse --show-toplevel` → walk-up-from-`__file__` → fixed-depth last resort (see `SPEC-v1.4.13-stabilization.md`'s Commit 3 fix to `check_exception_standards.py` for the reference implementation) — as the version in `harness_utils.py`, and replace all local duplicates across every script that currently hand-rolls this logic with either a direct `harness_utils` import or an identical bootstrap snippet where `harness_utils` isn't yet importable. Add a regression test in the style of `test_stdio_consolidation.py`'s Scenario 10 — an AST/text scan asserting every script's project-root bootstrap block is textually identical to the canonical version, so drift is caught mechanically rather than discovered by a human noticing the logic "changed again."
 
 **Cross-platform note**: the canonical version uses only `pathlib.Path`, list-form `subprocess.run` (never `shell=True`), and delegates OS-specific path semantics to git's own `rev-parse --show-toplevel` output — verified compatible with Windows, macOS, and Linux as written; no drive-letter or POSIX-root assumptions anywhere in the logic.
+
+---
+
+## HIB-085 — Inconsistent stale-override-file rejection across rebuttal types
+
+**Date**: 2026-07-30
+**Source**: Claude — self-identified during a strategic (positive/negative-case) review of `SPEC-v1.4.14-punchcard-preparation.md` (HIB-068), prior to folding the finding into that spec as a disclosed, deliberate trade-off
+**Pillar**: Governance Consistency / Rebuttal Protocol
+**Status**: 📋 Backlog (Unscheduled — deliberate, disclosed trade-off from SPEC-v1.4.14-punchcard-preparation.md, not blocking that spec's delivery)
+
+**Symptom**: `SPEC-v1.4.14-punchcard-preparation.md` (HIB-068) adds strict stale-`.skip-ai-reason.json` rejection (`sys.exit(1)` if the file predates session start) for the new `OVERSIZED_DIFF` rebuttal type only, deliberately scoped to avoid changing established behavior for the five pre-existing types (`FALSE_POSITIVE`, `SPEC_REQUIREMENT`, `ARCHITECTURAL_INVARIANT`, `OUT_OF_SCOPE`, `REMEDIATED`) during an unrelated HIB fix. This leaves the harness with an inconsistent security posture going forward: one rebuttal type strictly rejects a stale override file, the other five silently accept it with only a printed `STALE_BYPASS_FILE_DETECTED` warning.
+
+**Why this wasn't fixed inline**: changing the stale-file handling for the five existing types is a behavior change outside HIB-068's actual scope (large diffs failing open), and doing so as a side effect of an unrelated fix risks exactly the kind of undisclosed scope creep this project has repeatedly caught and corrected elsewhere this cycle (HIB-073/082/083/084 were all instances of fixing one thing while silently leaving a related inconsistency unaddressed). This entry exists specifically so the inconsistency is tracked, not silently absorbed as permanent architecture.
+
+**Fix Direction**: As standalone work, decide whether all six rebuttal types should reject a stale override file consistently, or whether the current lenient (warn-and-proceed) behavior for the five pre-existing types is intentional and should simply be documented as such in `ai_review.py`'s bypass-handling code comments. Either resolution is acceptable; what isn't acceptable is the asymmetry persisting without anyone having made a deliberate choice about it.
