@@ -380,21 +380,53 @@ standalone fix: complete the missing assertion, since the underlying behavior it
 supposed to verify (a warning printed on lock timeout) may or may not actually exist
 in `ai_review.py` and hasn't been confirmed either way yet.
 
-**Priority action, not yet covered above**: `tests/test_phase3_enforcement.py`'s
+**Priority action, decided by Peter (2026-08-02)**: Fix, don't just flag — tighten the
+test rather than leave it loosely-worded. `tests/test_phase3_enforcement.py`'s
 Finding B (`test_missing_session_json_budget_assumes_zero_spent`) is the most
-serious finding of this entire audit and currently has no corresponding action item.
-Unlike every other finding here, this one is a **test-authored escape hatch**, not a
-producer/consumer gap or a masked application-code exception — the test itself
-swallows any exception other than `SystemExit` via a bare `except: pass`, meaning a
-genuine regression in the exact behavior it claims to protect (session-budget
-fallback when `session.json` is absent) would pass silently. This needs a decision
-from Peter directly, not a default triage path: (1) whether this reflects an
-intentional, if loosely-worded, design choice that should just be commented
-explicitly, or (2) whether it should be tightened to fail on any unexpected
-exception — and either way, this is close enough to true H-03 territory that it
-probably shouldn't be batched anonymously into a general backlog cleanup. The
-tautological test in the same file (Finding A) can follow the same low-priority path
-as the `test_validate.py` tautology above.
+serious finding of this entire audit. Unlike every other finding here, this one is a
+**test-authored escape hatch**, not a producer/consumer gap or a masked
+application-code exception — the test itself swallows any exception other than
+`SystemExit` via a bare `except: pass`, meaning a genuine regression in the exact
+behavior it claims to protect (session-budget fallback when `session.json` is
+absent) would pass silently.
 
-*Last updated: 2026-08-02, mid-session. If resuming from a new session, read this
-file first, then continue from the "Not Yet Checked" list above.*
+**Ready-to-dispatch fix brief for Gemini (not yet sent):**
+
+> Read `_run_review()`'s handling of `session_file.exists()` being `False` in
+> `src/scripts/ai_review.py` before touching the test. Note specifically: what
+> happens when `budget` is `None` (no budget configured) vs. when a budget *is*
+> configured but `session.json` is absent — these may be genuinely different code
+> paths with different correct outcomes (one may legitimately `sys.exit(1)`
+> requiring session initialization; the other may proceed with `spent` defaulting
+> to 0). Determine which path this specific test's setup is actually meant to
+> exercise, **do not guess the fix from the test alone**.
+>
+> Once the actual intended behavior is confirmed, rewrite the test to assert it
+> precisely: a specific exception type (or no exception, if that's correct), a
+> specific exit code, and if `SystemExit` is expected, a message check specific
+> enough that an unrelated failure sharing the same exit code would not satisfy it.
+>
+> **Remove the bare `except Exception: pass` entirely.** Any exception the test
+> doesn't specifically expect must propagate and fail the test loudly. If a narrow
+> set of exception types genuinely needs tolerating, name them explicitly with a
+> comment explaining why — no bare catch-all.
+>
+> Scope: this one test only. Do not touch Finding A (the tautological
+> `test_count_diff_lines_exactly_at_threshold_uses_standard_strategy` in the same
+> file) — that stays a separate, lower-priority item.
+>
+> On completion, report: (a) what the actual correct behavior turned out to be for
+> this scenario, (b) the before/after of the test, (c) confirmation the test now
+> fails if a broken version of the relevant code path is temporarily reintroduced
+> as a manual sanity check (not a permanent change).
+
+**When this comes back**: verify Gemini's trace of `_run_review()`'s actual behavior
+independently before accepting the new assertion — same discipline applied to every
+other claim this session. Finding A (the tautological test in the same file) stays
+queued for later batch cleanup alongside the `test_validate.py` tautology — not part
+of this task.
+
+*Last updated: 2026-08-02, end of session. If resuming from a new session, read this
+file first. Next actions in order: (1) dispatch the Finding B fix brief above to
+Gemini and verify the result, (2) continue file-by-file from the "Not Yet Checked"
+list above.*
