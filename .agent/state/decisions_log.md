@@ -1,9 +1,4 @@
 # Decisions Log
-## 2026-06-03: 3-Tier Memory Tiering (T1-I-01)
-- **Decision**: Implemented `memory_manager.py` to parse memory into Hot (always loaded), Warm (keyword-matched), and Cold (historical files older than 90 days), with automatic archiving.
-- **Context**: Storing large historic logs in primary agent context causes token blowups, while missing historical context blocks long-term capability retrieval.
-- **Consequence**: Dynamic context indexing keeps agent sessions lightweight while retaining retrieveability.
-
 ## 2026-06-03: AST Code Pattern Staleness Verification (T1-I-04)
 - **Decision**: Implemented static AST parser at session start checking for existence of classes/functions/paths referenced in review context.
 - **Context**: Unsynchronized development easily breaks review rules referencing changed or deleted definitions.
@@ -146,3 +141,8 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: Commit to inspecting harness_events.jsonl for oversized_diff_override_accepted events, focusing on agent-vs-human actor attribution, during PunchCard post-run analysis.
 - **Context**: Scenario 3 of SPEC-v1.4.14 requires that oversized diff bypasses are audit-distinguishable between human operators and AI agents.
 - **Consequence**: Oversized diff overrides will be explicitly audited and attributed to their actor during post-run evaluation.
+
+## 2026-08-04: Sign-off and delivery of SPEC-loop-closure-verification.md v1.10 Tier 1
+- **Decision**: Approved and delivered Tier 1 of SPEC-loop-closure-verification.md, resolving diagnosed bug fixes in distill_dream.py, regression_runner.py, and wiki_lint.py; added §5.5 Delivery Tiers and HIB-087..090.
+- **Context**: Spec v1.10 partitioned T1-K-19 into 4 delivery tiers to allow independent delivery of high-confidence bug fixes.
+- **Consequence**: Tier 1 bug fixes delivered and verified by test suite (574 passed). Tiers 2-4 deferred to future sessions.

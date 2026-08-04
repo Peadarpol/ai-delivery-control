@@ -219,3 +219,8 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: Duplicating identity and rules across three separate files caused configuration mismatches and high maintenance overhead.
 - **Consequence**: Single source of truth for agent system context, leaving shim files clean and minimal.
 
+## 2026-06-03: 3-Tier Memory Tiering (T1-I-01)
+- **Decision**: Implemented `memory_manager.py` to parse memory into Hot (always loaded), Warm (keyword-matched), and Cold (historical files older than 90 days), with automatic archiving.
+- **Context**: Storing large historic logs in primary agent context causes token blowups, while missing historical context blocks long-term capability retrieval.
+- **Consequence**: Dynamic context indexing keeps agent sessions lightweight while retaining retrieveability.
+

@@ -86,9 +86,11 @@ def main():
 
     if not entries:
         print(
-            "⚠️  Golden dataset is empty or missing. Add entries after incident post-mortems."
+            "❌ [HOLLOW GATE] Golden dataset is empty or missing.\n"
+            "An empty golden dataset contradicts the documented escalation trigger in eval-pipeline.md\n"
+            "and requires human escalation."
         )
-        sys.exit(0)
+        sys.exit(1)
 
     print(f"\n{'─' * 60}")
     print(f"  GOLDEN DATASET REGRESSION CHECK ({len(entries)} scenarios)")

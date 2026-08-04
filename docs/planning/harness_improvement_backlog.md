@@ -216,3 +216,69 @@ No single canonical implementation exists for any script to import; each was han
 **Fix Direction**: Treat `session_ledger.jsonl` the same way `decisions_log.md` is already treated — commit it periodically (e.g., alongside routine housekeeping/doc commits) so it accumulates real git history and survives an uncommitted-state reset. The file self-regenerates on the next session close (opened in append mode), so no data-recovery action is needed beyond adopting the commit habit going forward. Consider whether `check_state_freshness.py` or an equivalent existing staleness check should also flag when the ledger has diverged significantly from its last committed state, as a low-cost early warning.
 
 ---
+
+## HIB-087 — Session handoff files (`active_context.md`/`last_session_summary.md`) have no mechanical staleness verification
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-008)
+**Pillar**: Session Lifecycle / Verification
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: `AGENTS.md §1` instructs agents to read `active_context.md` at session start and "verify against git log," but this is an agent judgment call, not a code-enforced comparison. If an agent writes a stale or incorrect `active_context.md` at session close, the next session inherits bad assumptions with no mechanical detection. `init_session.py` was not fully audited for an existing mechanism during the LOOP-008 investigation; one may exist but was not confirmed.
+
+**Why not in T1-K-19**: This is a temporal-consistency problem (session-to-session state freshness), not a producer/consumer wiring or spec-to-test traceability problem. Forcing it into T1-K-19's existing phases would dilute that spec's focused scope. Needs its own mechanism design — potentially a lightweight `init_session.py` check comparing `active_context.md`'s claimed branch/task against actual `git branch`/`git log` state.
+
+**Cross-reference**: LOOP-008 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10).
+
+---
+
+## HIB-088 — Gate feedback rules H-06/H-07 have no mechanical compliance verification
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-009)
+**Pillar**: Governance / Gate Integrity
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: H-06 requires a correction summary after any gate FAIL before the next commit attempt. H-07 requires escalation after two identical-class failures. No artifact cross-check was found confirming either rule is actually verified against — both rely entirely on agent self-discipline. The loop's failure mode is an agent committing without the required correction summary, or retrying the same failing approach indefinitely without escalating.
+
+**Why not in T1-K-19**: Mechanically verifying H-06/H-07 requires instrumenting the commit-attempt → gate-result → correction-summary → next-commit chain. This is a non-trivial new mechanism with no existing tooling shape in T1-K-19's phases to attach to. The Loop Inventory itself notes (line 658): "no existing tooling shape fits cleanly; likely need dedicated audit scripts, design not yet started."
+
+**Fix Direction**: A `post-commit` or pre-commit check that reads `gate_context_current.json` (or `.ai-review-log.jsonl`) for the previous commit's verdict, and if it was FAIL, checks whether a correction summary exists in the session notes before allowing the next commit. For H-07, track failure-class counts per session and block at two identical-class failures. Design complexity: distinguishing "same class" failures from unrelated ones.
+
+**Cross-reference**: LOOP-009 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10).
+
+---
+
+## HIB-089 — Wiki compilation pipeline dormant since GymBase extraction — needs retire-or-configure decision
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-014)
+**Pillar**: Tooling Hygiene / Dead Code
+**Status**: 📋 Backlog (Unscheduled — product decision, not a code fix)
+
+**Symptom**: The entire wiki compilation pipeline (`wiki_compile.py`, `wiki_lint.py`'s factual-drift check, the `DOMAIN_REGISTRY` import chain through `context_loader.py` → `architecture_checks.py`) has been dormant since this repo was extracted from GymBase. Four compounding issues confirmed in LOOP-014: (1) no `wiki_domains:` config exists, so the domain registry is empty and nothing compiles; (2) `.agent/wiki/index.md` reads "Last compiled: never / Pages: 0 / 0 ready"; (3) `wiki_lint.py`'s hardcoded `DOMAIN_REGISTRY` still lists 12 GymBase-specific domains referencing ADR files that don't exist in this repo; (4) the `DOMAIN_REGISTRY` import chain from `context_loader.py` → `architecture_checks.py` always falls back to an empty set, structurally preventing wiki content from ever reaching a review prompt.
+
+**Why not in T1-K-19**: LOOP-013 (stale paths in `wiki_lint.py`) is fixed by Tier 1 — that's a broken tool with a clear code fix. LOOP-014 is an unconfigured subsystem requiring a product decision: either populate `wiki_domains:` with domains that actually apply to this repo (the harness's own architecture), or explicitly retire the factual-drift-check subsystem and clean up the dead code. Neither option is a bug fix.
+
+**Fix Direction**: Decision required. Option A: define 3–5 domains relevant to this repo's own architecture (e.g. `governance_gates`, `session_lifecycle`, `bootstrap_install`, `calibration_loop`, `dream_phase`) in `.agent/config.yaml`'s `wiki_domains:`, write corresponding ADR-equivalent docs, and let `wiki_compile.py` produce useful wiki pages. Option B: remove `wiki_domains` references, mark the factual-drift-check as inapplicable to this repo, and document why in a brief ADR-style note. S0-24 (delivered 2026-06-02) partially addressed this by moving `DOMAIN_REGISTRY` to config, but the config was never populated for this repo.
+
+**Cross-reference**: LOOP-014 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10). Related: S0-24 (✅, partial — moved to config but config never populated), T1-H-06 (✅, delivered the compilation mechanism itself).
+
+---
+
+## HIB-090 — Schema-hardening trend consumer exists but no producer was ever built (phantom loop)
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-015)
+**Pillar**: Tooling Hygiene / Dead Code
+**Status**: 📋 Backlog (Unscheduled — lowest priority of all loop-inventory findings)
+
+**Symptom**: `harness_health.py`'s `report_schema_hardening()` reads `.agent/state/schema_hardening_trend.csv` and computes a coverage percentage and trend direction. That file does not exist, and no script anywhere in the repo writes to it. `enforce_hardened_schemas.py` (the closest-named script) is a pass/fail pre-commit gate — it prints a verdict and exits but never writes a trend CSV. The consumer degrades gracefully with `Status: DATA SOURCE MISSING`, so nobody is being actively misled.
+
+**Why not in T1-K-19**: D4's orphaned-producer scan targets producers with no consumer. This is the inverse — an orphaned *consumer* with no producer. D4 as scoped would not catch it. Additionally, the graceful degradation means this is not actively misleading anyone, making it lower priority than any gap where false confidence is being reported.
+
+**Fix Direction**: Decision required. Option A: build the missing producer — extend `enforce_hardened_schemas.py` (or a new companion script) to append coverage stats to `schema_hardening_trend.csv` on each run, giving `report_schema_hardening()` data to work with. Option B: remove the dead consumer code from `harness_health.py` and the references to this metric elsewhere, acknowledging the trend-tracking concept was designed but never built.
+
+**Cross-reference**: LOOP-015 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10).
+
+---
