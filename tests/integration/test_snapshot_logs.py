@@ -20,6 +20,7 @@ import init_session
 
 def test_snapshot_live_logs_copies_files(tmp_path):
     """Verify _snapshot_live_logs creates snapshots in STATE_DIR/snapshots on clean session close."""
+    mod = sys.modules["init_session"]
     state_dir = tmp_path / ".agent" / "state"
     state_dir.mkdir(parents=True)
     
@@ -29,11 +30,11 @@ def test_snapshot_live_logs_copies_files(tmp_path):
     review_file = tmp_path / ".ai-review-log.jsonl"
     review_file.write_text('{"verdict": "PASS"}\n', encoding="utf-8")
 
-    with unittest.mock.patch("init_session.STATE_DIR", state_dir), \
-         unittest.mock.patch("init_session.PROJECT_ROOT", tmp_path):
+    with unittest.mock.patch.object(mod, "STATE_DIR", state_dir), \
+         unittest.mock.patch.object(mod, "PROJECT_ROOT", tmp_path):
 
         session_id = "test-session-123"
-        init_session._snapshot_live_logs(session_id)
+        mod._snapshot_live_logs(session_id)
 
         snapshot_dir = state_dir / "snapshots"
         assert snapshot_dir.exists()
@@ -44,6 +45,7 @@ def test_snapshot_live_logs_copies_files(tmp_path):
 
 def test_snapshot_live_logs_skips_empty_files(tmp_path):
     """Verify _snapshot_live_logs skips zero-byte files."""
+    mod = sys.modules["init_session"]
     state_dir = tmp_path / ".agent" / "state"
     state_dir.mkdir(parents=True)
     
@@ -53,11 +55,11 @@ def test_snapshot_live_logs_skips_empty_files(tmp_path):
     review_file = tmp_path / ".ai-review-log.jsonl"
     review_file.write_text('', encoding="utf-8")  # 0 bytes
 
-    with unittest.mock.patch("init_session.STATE_DIR", state_dir), \
-         unittest.mock.patch("init_session.PROJECT_ROOT", tmp_path):
+    with unittest.mock.patch.object(mod, "STATE_DIR", state_dir), \
+         unittest.mock.patch.object(mod, "PROJECT_ROOT", tmp_path):
 
         session_id = "test-empty-session"
-        init_session._snapshot_live_logs(session_id)
+        mod._snapshot_live_logs(session_id)
 
         target_events = state_dir / "snapshots" / f"harness_events_{session_id}.jsonl"
         target_review = state_dir / "snapshots" / f"ai_review_log_{session_id}.jsonl"

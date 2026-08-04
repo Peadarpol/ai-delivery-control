@@ -1,8 +1,10 @@
 # Test-Suite Integrity Audit — Working Findings
 
-**Status**: IN PROGRESS — not a SPEC, no APPROVED/DRAFT lifecycle applies. This is a
-working findings log so investigation can resume without reconstruction if this
-session is interrupted.
+**Status**: COMPLETE — not a SPEC, no APPROVED/DRAFT lifecycle applies. All 59 test
+files in scope (`tests/` top-level, `tests/unit/`, `tests/e2e/`) have been checked.
+This remains a working findings log rather than a formal document, so future
+sessions can extend it if Peter opens a new audit scope (e.g. `tests/data/`, or a
+re-check after `SPEC-loop-closure-verification.md` ships).
 **Started**: 2026-08-02
 **Origin**: Item (5) of Peter's original loop-effectiveness plan — "assess whether the
 test suite tests the loops correctly, or has it been jury-rigged to pass by an agent
@@ -70,31 +72,28 @@ resolved as well.
 
 ## Progress Summary (update this each session)
 
-**Milestone: all 31 top-level files in `tests/` are now fully checked.** A second
-tier was discovered while closing this out: `tests/unit/` contains **27 more test
-files**, not yet touched, including some directly relevant to prior work this
-session (`test_decisions_log.py`, `test_log_decision_cli.py`). `tests/e2e/`
-contains one main script (`run_e2e_verification.py`) plus a fixture project
-directory, not yet opened. `tests/data/` is fixture data only (a CSV and a
-fixture-cases directory) — not tests to audit for gaming, though `false_positive_cases.csv`
-might be worth a glance later for its own data-quality reasons, unrelated to this
-audit's purpose.
+**Milestone: all 58 files across `tests/` top-level (31) and `tests/unit/` (27) are
+now fully checked.** Only `tests/e2e/` (one main script plus a fixture project
+directory) remains within this audit's scope. `tests/data/` is fixture data only
+(a CSV and a fixture-cases directory) — not tests to audit for gaming, though
+`false_positive_cases.csv` might be worth a glance later for its own data-quality
+reasons, unrelated to this audit's purpose.
 
-**Overall verdict, top-level tier complete**: this is a fundamentally honest test
-suite. No true H-03 gaming signature (deliberately weakened assertion) found in any
-of the 31 files. Multiple genuinely exemplary files: `test_check_spec.py`'s
+**Overall verdict, 58 files complete**: this is a fundamentally honest test suite.
+No true H-03 gaming signature (deliberately weakened assertion) found in any file
+checked. Multiple genuinely exemplary files across both tiers: `test_check_spec.py`'s
 fail-open/fail-closed partitioning, `test_co_change_core.py`'s exact-probability
 characterization testing, `test_install.py`'s F-COLD-1 halt verification,
 `test_framework_consistency.py`'s working documentation-consistency gate,
 `test_rebuttal.py`'s real-git cross-module hash verification and live tamper
 injection, `test_downgrade.py`'s deliberate mid-flight corruption-and-rollback test,
-and `test_prompt.py`'s prompt-regression guard (verifying calibration phrasing
-survives in the actual live system prompt, including a named BUG-06 regression
-guard). This is a well-built suite overall.
+`test_prompt.py`'s prompt-regression guard, `test_posture.py`'s direct HIB-080
+mechanism testing, and `test_state_persistence.py`'s real-SQLite multi-tenant
+safety test. This is a well-built suite overall — the handful of genuine findings
+are exceptions against a strong baseline, not a pattern.
 
-**Eight numbered findings, four resolved, four open entries representing three
-distinct underlying issues (since #5 completes #1, not a separate defect; #8 is new,
-found while checking `tests/unit/`)**:
+**Nine numbered findings, seven resolved, two open representing two distinct
+underlying issues (since #5 completes #1)**:
 1. `test_distill_dream.py` — coverage gap (never checks for the `Generated:` field). Open — fix is bundled in `SPEC-loop-closure-verification.md` v1.4, not yet implemented.
 2. `test_wiki_compile.py` / `test_co_change_reconciler.py` — masking-resistant blind
    spot (subprocess bug structurally invisible to black-box testing). Open — fix bundled in v1.6/v1.7 Scenario 4p, not yet implemented.
@@ -108,19 +107,16 @@ found while checking `tests/unit/`)**:
 7. `test_phase3_enforcement.py` — Finding A (tautological) **RESOLVED 2026-08-04**;
    Finding B (the most serious finding of the audit) **RESOLVED 2026-08-04**, both
    independently verified. See Recommendation section for full detail on both.
-8. `tests/unit/test_context_loader.py` — **new finding, found while checking
-   `tests/unit/`**: the one test for `get_adr_context()` monkeypatches around the
-   exact `DOMAIN_REGISTRY` dependency that's confirmed broken in production
-   (connects directly to LOOP-014's fourth finding). Not gaming — legitimate
-   isolation practice — but means this test provides zero signal that the real
-   wiring is broken. Open, no fix dispatched; naturally resolved once LOOP-014's
-   `architecture_checks.DOMAIN_REGISTRY` gap is addressed.
-
-No new findings in the final six files checked this session
-(`test_session_health.py`, `test_rebuttal.py`, `test_migration_v1_3_0_to_v1_3_3.py`,
-`test_downgrade.py`, `test_pm_scaffold.py`, `test_check_state_freshness.py`,
-`test_prompt.py`, `test_common.py`, `test_migration_v1_2_0_1_to_v1_3_0.py` — nine
-files, all clean).
+8. `tests/unit/test_context_loader.py` — the one test for `get_adr_context()`
+   monkeypatches around the exact `DOMAIN_REGISTRY` dependency that's confirmed
+   broken in production (connects directly to LOOP-014's fourth finding). Not
+   gaming — legitimate isolation practice — but means this test provides zero
+   signal that the real wiring is broken. Open by design; naturally resolved once
+   LOOP-014's `architecture_checks.DOMAIN_REGISTRY` gap is addressed, not via a
+   test change.
+9. `tests/unit/test_upgrade_units.py` — `test_yaml_rename_skips_comment_line` and
+   two sibling tests had incomplete assertions or parallel regex copies instead of
+   exercising the real migrator. **RESOLVED 2026-08-04**, independently verified.
 
 ---
 
@@ -461,7 +457,7 @@ spec-drafting work. This test correctly covers only what currently exists; it wi
 need updating once v1.3's Implementation Map item (adding the `--impact` flag) is
 actually built.
 
-### `tests/unit/test_acceptance_check.py` — Clean, genuinely distinct from the top-level file of the same stem
+### `tests/integration/test_acceptance_check_pydantic_fallback.py` — Clean, genuinely distinct from the top-level file of the same stem
 Tests the pydantic-fallback-stub mechanism specifically (different concern from the
 top-level `test_acceptance_check.py`, which tests `HIGH_RISK_SCHEMA_CHANGE`
 flags/fail-open-closed modes). Genuinely removes `pydantic` from `sys.modules` and
@@ -470,7 +466,7 @@ then verifies the stub class works, CI fail-closed enforcement (`exit 1`), local
 audit-log + visual-warning behavior both with and without the silence flag, and
 correctly restores original module state in a `finally` block. No gaming.
 
-### `tests/unit/test_acceptance_hook.py` — Clean
+### `tests/integration/test_acceptance_hook.py` — Clean
 Thorough parametrized branch classification (`_is_feature_branch`), spec-status
 parsing across five scenarios including a real edge case (a non-spec file like
 `README.md` containing a `status:` line is correctly excluded, not accidentally
@@ -478,7 +474,7 @@ matched), branch spec-ref extraction with dedup and empty/failure handling, and
 seven distinct `main()` integration scenarios correctly distinguishing exit codes
 0 (nothing to check)/1 (spec not accepted)/2 (non-feature branch skip). No gaming.
 
-### `tests/unit/test_ai_review_failopen.py` — Clean, and directly relevant to this session's own findings
+### `tests/integration/test_ai_review_failopen.py` — Clean, and directly relevant to this session's own findings
 `test_ai_review_route_decision_integration_namespace_safety` is a direct regression
 guard against exactly the bug class this whole session has been hunting — it
 verifies `route_decision` genuinely has access to `get_harness_config` at runtime
@@ -487,7 +483,7 @@ Also covers `_handle_api_unavailable`'s fail-open persistence directly, and
 oversized-diff fail-open logging for the line-ceiling and char-ceiling paths
 separately (not conflated into one test). No gaming.
 
-### `tests/unit/test_ai_review.py` — Clean, third genuinely distinct file sharing this stem
+### `tests/integration/test_ai_review_context_selection.py` — Clean, third genuinely distinct file sharing this stem
 (Initially skipped by mistake — see correction note above; now checked.) Covers
 `load_review_context()`'s section-selection logic: verifies secrets/TDD rule
 sections are always included, while vocabulary and ADR-decision-block sections are
@@ -502,7 +498,7 @@ over it. A `skip_paths` merge/dedup test across two config sources (JSON +
 honest-limitation-documentation pattern is worth citing as a positive example
 alongside `TestAiReviewImportCount`'s ratchet-ceiling approach in the top-level file.
 
-### `tests/unit/test_baseline.py` — Clean
+### `tests/integration/test_baseline.py` — Clean
 Real tamper-detection test: `test_load_baseline_tamper_detection` actually modifies
 baseline entries without updating the manifest hash, and confirms `load_baseline()`
 correctly returns `None` — a genuine security-invariant check, not an assumption.
@@ -512,7 +508,7 @@ reconfirms `architecture_checks.py`'s current correct location under `universal/
 (`test_scan_current_violations_real_arch_script_path` asserts the real path exists).
 No gaming.
 
-### `tests/unit/test_capability_calibration.py` — Clean, directly confirms LOOP-002
+### `tests/integration/test_capability_calibration.py` — Clean, directly confirms LOOP-002
 The same loop this session's `LOOP_INVENTORY.md` identified as "genuinely closed
 and working" — now confirmed with hand-computed precision: weight `0.9` after one
 accepted rebuttal, `0.945` after a subsequent rejection (`0.9×1.05`, verified via
@@ -521,7 +517,7 @@ rebuttals) and `1.5` ceiling (40 rejected). A HIB-049 regression test verifies
 `REMEDIATED` rebuttals don't pollute the false-positive counter — the same
 anti-confabulation discipline as `test_cdr_ledger.py`'s C3 check. No gaming.
 
-### `tests/unit/test_check_spec.py` — Clean, genuinely distinct from the top-level file of the same stem
+### `tests/integration/test_check_spec_pass1_parsing.py` — Clean, genuinely distinct from the top-level file of the same stem
 Tests Pass 1's structural parsing specifically (different concern from the
 top-level file's fail-open/fail-closed config-availability and bypass-safety
 testing): nested-subheading section-boundary detection, old/new spec-convention
@@ -618,44 +614,119 @@ the config-driven exemptions this migration writes, closing the full
 producer→consumer loop for this migration rather than only testing the write side.
 No gaming in any of the four.
 
+### `tests/unit/test_posture.py` — Clean, exemplary
+Direct unit test for the posture-disposition engine — the exact mechanism HIB-080's
+call-site bug flowed into. Precise coverage: invariant-floor pinning confirmed
+unoverridable even with an explicit override attempt, observe-posture expiry (past
+date → ratchet, future → stays observe), and the three-way baseline-grandfathering
+matrix — matching file/hash/untouched → `GRANDFATHERED`, touched file → `BLOCK`
+even with a matching hash, hash mismatch → `BLOCK`. No gaming.
+
+### `tests/unit/test_route_decision.py` — Clean
+`test_classify_commit_risk_override_defaults_empty_fails_closed` is a genuinely
+valuable fail-safe test: confirms that a misconfiguration (`override_defaults=True`
+with empty pattern lists, which would silently disable *all* high-risk
+classification) correctly fails closed by treating everything as high-risk rather
+than nothing — same defensive-design family as `architecture_checks.py`'s
+zero-files-scanned guard. No gaming.
+
+### `tests/unit/test_snapshot_logs.py` — Clean
+Real file-content preservation verified after snapshotting, and a correct negative
+test confirming zero-byte files are genuinely skipped (snapshot files not created),
+not just "behavior differs." No gaming.
+
+### `tests/unit/test_sqlite_schema_drift.py` — Clean
+Genuine real-database test: creates an actual in-memory SQLite table with a legacy,
+drifted schema (missing columns), runs the real migration function, and verifies
+via `PRAGMA table_info` that columns were actually added while the existing one was
+preserved. Idempotency confirmed by running twice. No gaming.
+
+### `tests/unit/test_state_persistence.py` — Clean, one of the most thorough files this session
+Real SQLite tests throughout, not mocked except deliberately for error-simulation.
+Upsert behavior confirmed by exact row counts, WAL mode confirmed via a real
+`PRAGMA` query, idempotent schema creation confirmed via exact `schema_version` row
+count, a real rebuild-from-JSONL test with `ON CONFLICT DO NOTHING` idempotency
+confirmed by running twice, and — notably — a genuine multi-tenant safety test:
+`test_cleanup_project_rows_only_removes_target_project` confirms deleting one
+project's rows leaves another project's rows in the shared DB completely untouched.
+No gaming.
+
+### `tests/unit/test_stdio_consolidation.py` — Clean
+Genuine AST-based static-analysis test scanning every real file in
+`.agent/scripts/` for forbidden stdio-wrapping patterns (real cross-file
+enforcement, not a synthetic fixture), plus a real subprocess execution test that
+actually simulates a non-UTF-8 Windows console encoding (`cp1252`) and confirms
+`session_health.py` doesn't crash under it. No gaming.
+
+### `tests/unit/test_upgrade_units.py` — Mostly clean, one new finding
+Solid real coverage overall: filename-parsing regex, correct multi-step and
+fork-resolution chain-building logic (real greedy-selection semantics verified), a
+real CRLF-normalization test comparing actual SHA-256 hashes on temp files, and a
+genuine `Protocol`/`runtime_checkable` test correctly distinguishing a malformed
+migration (missing `downgrade`) from a valid one.
+
+**Finding, RESOLVED 2026-08-04**: `test_yaml_rename_skips_comment_line` (and its two sibling tests `test_yaml_rename_preserves_trailing_comment` and `test_yaml_rename_skips_mid_value_occurrence`) originally had incomplete assertions or used parallel regex copies instead of exercising the real migrator. **Fixed and independently verified**: all three tests now pass real v1.1.0 `config.yaml` temp files into `MigrationV1_1_0_to_V1_1_5().migrate()` and perform concrete before/after assertions on the resulting file content. Unused setup code in `test_chain_resolves_single_step` cleaned up.
+
+### `tests/e2e/run_e2e_verification.py` — Clean, the strongest single test artifact in the audit
+29 real end-to-end scenarios, almost nothing mocked except the external LLM
+provider (and even that's done by writing a real Python file consumed by the
+actual subprocess, not `unittest.mock` — the rest is genuine subprocess execution
+against a freshly-scaffolded, real git repository each time). Standouts:
+Scenario 10 writes an actual crashing migration module to disk and confirms real
+atomic rollback; Scenario 19 uses a genuinely closed port (`54321`) to simulate an
+unreachable service rather than mocking the network call; Scenario 22 writes a
+real over-budget `session.json`, runs the real `ai_review.py`, and confirms an
+actual `HALT` file is written and cleared on reset; Scenario 24 correctly
+distinguishes fail-open (low-risk, API down) from fail-closed (high-risk, API down)
+using real git-staged files with real line counts to trigger the real threshold
+logic; Scenario 29 runs a fully independent temp git repo through the real
+spec→scaffold→traceability→acceptance pipeline end to end. `has_v110_tag()`
+correctly fails loud with a clear message if a required git tag is missing, rather
+than skipping silently — the same discipline valued elsewhere in this audit. No
+gaming anywhere in this file.
+
+`tests/e2e/test_project/` was confirmed to be live, run-regenerated
+working-directory state matching `setup_fresh_v110_project()`'s output exactly —
+not a separate static fixture with its own content requiring audit.
+
 ---
 
 ## Not Yet Checked
 
-All 31 top-level files in `tests/` are done (see Progress Summary above).
+**Nothing remains within this audit's scope.** All 31 top-level `tests/` files, all
+27 `tests/unit/` files, and `tests/e2e/run_e2e_verification.py` are checked — 59
+test files total. `tests/e2e/test_project/` is confirmed to be live,
+run-regenerated working-directory state (matches `setup_fresh_v110_project()`'s
+output exactly), not a static fixture with its own content to audit.
 
-**`tests/unit/`**: `test_decisions_log.py` and `test_log_decision_cli.py` checked
-(prioritized per the note above) — both clean, no gaming, and both correctly test
-only the current, pre-v1.3 behavior of `record_decision()`/`archive_old_decisions()`/
-`log_decision.py`. See "Findings by file" below for the forward-looking gap this
-confirms (not a current defect).
-
-**Remaining 7 files in `tests/unit/`, resume here**:
-`test_posture.py`, `test_route_decision.py`, `test_snapshot_logs.py`,
-`test_sqlite_schema_drift.py`, `test_state_persistence.py`,
-`test_stdio_consolidation.py`, `test_upgrade_units.py`.
-
-Note: several of these share a filename stem with an already-checked top-level file
-(`test_ai_review.py`, `test_check_spec.py`) — these are genuinely different files in
-a different directory, not duplicates; check them independently, don't assume
-coverage carries over.
-
-**`tests/e2e/`**: `run_e2e_verification.py` (main script) plus a `test_project/`
-fixture directory — not yet opened.
-
-**`tests/data/`**: fixture data only (`false_positive_cases.csv`, `fp_cases/`) —
-not test files, out of scope for this specific audit's gaming/coverage-gap purpose.
+**`tests/data/`** remains deliberately out of scope: fixture data only
+(`false_positive_cases.csv`, `fp_cases/`), not test files. `false_positive_cases.csv`
+may be worth a glance later for its own data-quality reasons, unrelated to this
+audit's gaming/coverage-gap purpose.
 
 ---
 
 ## Recommendation once this audit is more complete
 
 Each finding above should eventually become either (a) a backlog item (coverage
-gaps — low priority, normal triage), (b) folded into `SPEC-loop-closure-verification.md`
-as additional acceptance scenarios where it's the same producer/consumer pair already
-being fixed there (as with the two masking-resistant blind spots, which directly
-support Scenarios 4p and its `wiki_compile.py`/`co_change_reconciler.py` analogues),
-or (c) — for the `test_token_write_fails_gracefully` case specifically — **RESOLVED 2026-08-04**: traced real stderr warning behavior in `src/scripts/ai_review.py:2615` (`Failed to lock session file for update`) and completed the `mock_stderr_write` assertion.
+gaps — low priority, normal triage), or (b) folded into
+`SPEC-loop-closure-verification.md` as additional acceptance scenarios where it's
+the same producer/consumer pair already being fixed there (as with the two
+masking-resistant blind spots, which directly support Scenarios 4p and its
+`wiki_compile.py`/`co_change_reconciler.py` analogues). The
+`test_token_write_fails_gracefully` case (originally slated for path (c), a
+standalone fix) is **RESOLVED 2026-08-04**: traced real stderr warning behavior in
+`src/scripts/ai_review.py` (`"Failed to lock session file for update: {e}"`) and
+completed the `mock_stderr_write` assertion — see "Findings by file" above.
+
+**One finding from `tests/unit/` follows the same triage model, resolved
+differently from the other**: `test_context_loader.py`'s finding will resolve
+naturally once LOOP-014's `architecture_checks.DOMAIN_REGISTRY` gap is fixed
+(path (b) — no standalone test fix needed, since the test itself is correctly
+designed; only the production dependency is broken). `test_upgrade_units.py`'s
+three affected tests are already **RESOLVED 2026-08-04** — path (c), a standalone
+fix, independently verified against the real migrator (see "Findings by file"
+above).
 
 **Priority action — RESOLVED (2026-08-04)**: Fixed by Gemini per the dispatched brief,
 independently verified against the actual code. `tests/test_phase3_enforcement.py`'s
@@ -695,12 +766,16 @@ in the same file) is also resolved — see "Findings by file" above for detail. 
 tautological findings from this audit (`test_validate.py`'s two, plus this one) are
 now closed out.
 
-*Last updated: 2026-08-04. Finding B, Finding A, the `test_ai_review.py` incomplete
-assertion, both `test_validate.py` tautologies, and `test_framework_consistency.py`'s
-soft `ImportError`-swallowing pattern are all now resolved and independently
-verified — six of seven findings closed. Two coverage-gap findings (#1/#5
-dream-proposal schema, #2 subprocess masking) remain open, with fixes already
-bundled into `SPEC-loop-closure-verification.md` v1.4/v1.6/v1.7, not yet
-implemented pending Peter's sign-off. If resuming from a new session, read this
-file first. Next actions in order: (1) continue into `tests/unit/` — 21 files
-remain (see "Not Yet Checked" above), (2) open `tests/e2e/`.*
+*Last updated: 2026-08-04. Milestone: the entire audit is complete — all 59 test
+files across `tests/` top-level (31), `tests/unit/` (27), and `tests/e2e/` (1) have
+been checked. Eight findings resolved and independently verified (Finding B,
+Finding A, the `test_ai_review.py` incomplete assertion, both `test_validate.py`
+tautologies, `test_framework_consistency.py`'s soft `ImportError`-swallowing
+pattern, and the three `test_upgrade_units.py` tests). Two coverage-gap findings
+(#1/#5 dream-proposal schema, #2 subprocess masking) remain open, with fixes
+already bundled into `SPEC-loop-closure-verification.md` v1.4/v1.6/v1.7 pending
+Peter's sign-off. One finding (`test_context_loader.py`) remains open by design —
+it will resolve naturally once LOOP-014's production fix ships, not via a test
+change. No H-03 gaming signature found in any of the 59 files. If resuming from a
+new session: this audit's scope is complete; any further work is either (a) the
+pending spec sign-off, or (b) a fresh audit scope Peter defines.*

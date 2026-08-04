@@ -105,6 +105,14 @@ This tunes a numeric *weight* per capability, not the review's actual textual ru
 content. It does not touch `review_context_universal.md` / `review_context_project.md`.
 See LOOP-010 below.
 
+### Pressure Test — already exists, not hypothetical
+
+`tests/integration/test_capability_calibration.py` (confirmed during the test-suite
+integrity audit) already is this loop's pressure test: hand-computed weight
+precision (`0.9` after one accepted rebuttal, `0.945` after a subsequent rejection,
+verified via `pytest.approx`) and correct clamping at both the `0.5` floor and `1.5`
+ceiling. No gap here — cite this file rather than design a new test.
+
 ---
 
 ## LOOP-003: Rebuttal-Rate Gaming Signal
@@ -146,10 +154,41 @@ warning and calls `sys.exit(0)` — a **success** exit code, not an escalation. 
 by reading the function directly. Doc and code disagree on exactly the failure mode
 this tool exists to catch.
 
+### Schema match confirmed (cross-checked against an independent audit's claim)
+
+`incident_to_eval.py` writes `{"entries": [{"id", "source", "description", "trigger",
+"expected_outcome", "test_reference", "severity", "date_added", "added_by"}]}`;
+`regression_runner.py` retrieves via `entry.get("test_reference", "")` in both
+`verify_test_exists()` and `run_test()`. Verified directly against both files — the
+schema itself is correctly matched end to end. This is the part of the loop that
+genuinely works.
+
+### New finding, surfaced while verifying the schema-match claim above
+
+`run_test()` (the `--run` execution path, used when actually running referenced
+tests rather than just checking they exist) invokes
+`subprocess.run(["poetry", "run", "pytest", ref, ...])` — hardcoded `poetry run`.
+This directly contradicts this project's own standing rule (verification commands
+must be interpreter-relative, never `poetry run`), and means `--run` mode would fail
+outright for any contributor not using poetry specifically — which `CONTRIBUTING.md`
+treats as optional (*"pip install... or use your virtualenv / poetry env"*).
+`--verify-only` mode (existence-checking only) is unaffected, since it never invokes
+`run_test()`. A real, previously-uncaught fragility in the one execution mode of an
+already-partially-broken loop.
+
 ### Recommendation
 
-File as its own HIB (doc/code mismatch on an escalation trigger) rather than folding
-into a future spec silently — the discrepancy is independently actionable.
+File as its own HIB (doc/code mismatch on an escalation trigger, plus the `poetry
+run` fragility found alongside it) rather than folding into a future spec silently —
+both are independently actionable.
+
+### Pressure Test (how to verify this loop stays closed)
+
+Invoke `incident_to_eval.py` with mocked stdin to create a dummy entry pointing at
+an intentionally failing test function, then run `regression_runner.py --verify-only`
+and separately `--run` (using `sys.executable -m pytest`, not `poetry run`, once the
+fragility above is fixed), asserting each mode's exit code and that the specific
+entry `id` appears in the failure output.
 
 ---
 
@@ -439,6 +478,14 @@ This loop genuinely closes. Originally surfaced by an independent audit pass (se
 "Cross-Referenced Findings" below); confirmed here by direct comparison of both
 schemas rather than taken on that report's word.
 
+### Pressure Test — already exists, not hypothetical
+
+Scenario 25 of `tests/e2e/run_e2e_verification.py` ("Structured Rebuttal Protocol")
+already exercises this loop genuinely end to end: real FAIL verdict → real
+`gate_rebuttal.json` write → real `--rebuttal` invocation → confirms `PASS` token
+written and consumed → confirms a rejected rebuttal's rate limiter blocks a second
+attempt. No gap here — cite this scenario rather than design a new test.
+
 ---
 
 ## LOOP-017: Session Ledger Retention
@@ -457,6 +504,18 @@ exactly that `"%Y-%m-%d %H:%M"` format among its tried patterns. Field name and 
 format both match end to end — genuinely working. Same-shaped retention logic also
 covers `harness_events.jsonl` (`timestamp_utc`) and `.ai-review-log.jsonl`
 (`timestamp`), not independently re-verified this pass.
+
+### Pressure Test — genuine gap, no existing test found
+
+Unlike LOOP-002 and LOOP-016, **no test file for `retention_cleanup.py` exists
+anywhere in the repo** — confirmed absent across all 59 files checked during the
+test-suite integrity audit (`tests/`, `tests/integration/`, `tests/e2e/`). This loop
+is correctly wired *today*, verified by direct code read, but has zero regression
+protection: if either side's date-field name or format ever drifts, nothing would
+catch it automatically. Proposed test (not yet written): create a mock
+`session_ledger.jsonl` with one entry dated today and one dated well past the
+configured retention window, run `retention_cleanup.py`, and assert the resulting
+file contains exactly the recent entry while the old one is moved to archive.
 
 ---
 
