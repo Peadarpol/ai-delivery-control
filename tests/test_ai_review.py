@@ -1701,11 +1701,9 @@ class TestTokenBudgetEnforcement:
             # The gate should still succeed (continue gracefully)
             assert exit_code == 0
             
-            # Stderr should receive a warning warning of the lock failure
-            # Wait, in the code:
-            # except Exception: pass
-            # We want to print a WARNING to stderr on Lock Failure!
-            # Let's verify if our code prints a WARNING to stderr on Exception in the update block.
+            # Verify that stderr received the explicit warning for lock failure during session update
+            err_output = "".join(call.args[0] for call in mock_stderr_write.call_args_list)
+            assert "Failed to lock session file for update: Lock timeout" in err_output
 
     def test_token_usage_graceful_when_session_absent(self, ai_review, tmp_path):
         """If session.json is absent, skip write, gate does not fail."""

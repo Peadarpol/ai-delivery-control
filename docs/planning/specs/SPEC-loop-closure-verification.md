@@ -14,6 +14,7 @@
 - v1.5 (2026-08-02, Gemini): Fixes a second live discrepancy found during the loop-inventory audit — .agent/workflows/eval-pipeline.md documents that an empty golden dataset must escalate to a human ("gate is hollow"), but regression_runner.py's actual code exits 0 (success) on empty. Reconciles code to match the documented escalation trigger. See decisions_log.md.
 - v1.6 (2026-08-02, Gemini): Fixes a third live discrepancy found during the loop-inventory audit — wiki_lint.py's orphaned-rules and staleness checks have been silently no-op since a file/directory refactor left two hardcoded paths (review_context.md, .agent/skills/senior-architect/...) pointing at locations that no longer exist. Also fixes an unimported subprocess reference masked by a bare except. Establishes a post-fix baseline run. See decisions_log.md.
 - v1.7 (2026-08-02, Gemini): Revises v1.6's wiki_lint.py fix after cross-checking against Gym_App (an installed project under the harness). Replaces hardcoded CONTEXT_FILE/ARCH_CHECKS_FILE paths with dynamic resolution mirroring context_loader.py's own logic, so the fix generalizes to any installed project rather than encoding this repo's specific file layout. Adds a new check for legacy review-context files that exist but aren't actually loaded — the exact failure mode found live in Gym_App, where review_context.md still claims canonical status but has been silently superseded since 2026-07-01, hiding two entire rule blocks (BUSINESS-RULES, FINANCIAL-PRECISION) from every prior audit. See decisions_log.md.
+- v1.8 (2026-08-04, Gemini): Adds footnote referencing the six test-suite integrity audit fixes (test_phase3_enforcement.py, test_ai_review.py, test_validate.py, test_framework_consistency.py) as a supporting calibration case for Phase A heuristics.
 
 ---
 
@@ -21,12 +22,14 @@
 
 The framework's test suite is comprehensive by conventional measures (550/550 passing, unit coverage across gates, migrations, and bootstrap). It is not, by design, answering the question that actually matters for a governance harness: *does the outcome a spec promises actually hold when components are exercised together, through their real call sites, with real state?*
 
-Two incidents in a single session demonstrated the gap concretely:
+Two incidents in a single session demonstrated the gap concretely[^1]:
 
 1. **HIB-080**: `SPEC-enforcement-postures.md` claims `ratchet` posture's baseline-grandfathering applies across both `ai_review.py` and `architecture_checks.py`. `ai_review.py`'s call site is correct and tested. `architecture_checks.py`'s call site silently omits the required parameters, defeating grandfathering for that gate entirely — the exact gate the spec's own motivation section names as the reason `ratchet` exists. Full suite green throughout.
 2. **A schema-hardening exemption regression** (caught by manual review before merge, not by the suite): a refactor intended to genericize framework source deleted GymBase's operational exemption data. 550/550 tests passed, because no test asserted the specific data survived — only that the code still ran.
 
 Both are the same failure shape: a cross-component or cross-refactor *claim* is made, and the suite verifies the claim's individual mechanical parts without ever verifying the claim itself. Most of the suite mocks at component boundaries — correct for isolating unit behavior, but it structurally guarantees the suite cannot notice a caller failing to actually reach across a boundary it claims to use.
+
+[^1]: A subsequent test-suite integrity audit (2026-08-04) identified and resolved six test-integrity defects across `test_phase3_enforcement.py`, `test_ai_review.py`, `test_validate.py`, and `test_framework_consistency.py`. Notably, `test_missing_session_json_budget_assumes_zero_spent` demonstrated how an unmocked entry-point call can return early on an upstream `get_changed_files=[]` mock before reaching target logic—a concrete edge case directly informing Phase A's matching heuristic calibration (Scenario 1b). See `TEST-SUITE-INTEGRITY-AUDIT.md` for the full audit record.
 
 ---
 
