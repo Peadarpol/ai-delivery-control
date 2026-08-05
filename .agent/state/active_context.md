@@ -1,16 +1,15 @@
 # Active Context
 
 ## Current Task
-- **SPEC-loop-closure-verification.md (v1.10)**: Tier 1 (Diagnosed Bug Fixes) fully signed off, implemented, and verified.
-- **Next Steps**: Move to Tier 2 (Decisions Log Impact-Weighted Retention) or Tier 3 (Core General Tooling: Phase A/B/C) upon future sign-off.
+- **SPEC-loop-closure-verification.md**: Phase A (Gherkin Parser, Component Reference Matcher & Loop Closure Report Generator) fully built, calibrated, and verified in `.agent/scripts/loop_closure_check.py`.
+- **Next Steps**: Await user prompt for Phase B (Wiring Audit Tooling for claimed consumers) or Phase C.
 
 ## Branch
 - `main`
 
 ## Current Status
-- **Tier 1 Delivered**:
-  - `distill_dream.py` `Generated:` line format fixed (un-bolded plain text `- Generated: YYYY-MM-DD`) and backfilled card updated. `harness_health.py` staleness check verified reporting `WARN` for 52d old card.
-  - `regression_runner.py` updated to exit non-zero (`sys.exit(1)`) with `❌ [HOLLOW GATE]` escalation message on empty golden dataset.
-  - `wiki_lint.py` updated with dynamic context file and `architecture_checks.py` resolution, `subprocess` import fix, and legacy context file detection. Baseline audit run generated 8 real findings in `wiki_lint_findings.md`.
-- **Backlog**: `HIB-087` to `HIB-090` added for 4 unaddressed loop-inventory gaps (LOOP-008, 009, 014, 015).
-- **Test Suite**: 574/574 tests passing cleanly.
+- **Phase A Delivered**:
+  - `loop_closure_check.py` built with Stage 1 (Gherkin scenario parser, component & key-term extraction with span-overlap filtering), Stage 2 (component normalization, AST reference search, two-tier confidence, and mock/real classifier), and Stage 3 (Then-clause key-term overlap check, final classification, and calibration report generator).
+  - Full corpus scan executed across 16 specs (106 scenarios). Generated `.agent/state/loop_closure_report.md` with Scenario 1b calibration audit (0.0% FP / 0.0% FN rate).
+  - Fixed test fixture in `tests/test_ai_review.py` for `test_scenario_40_amend_oversized` to mock `get_provider`.
+- **Test Suite**: 586/586 tests passing cleanly.

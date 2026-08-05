@@ -1,17 +1,21 @@
-# Last Session Summary
+# Session Summary & Handoff Document
 
-## What Was Done
-1. **Critical Analysis & Spec Reorganization (v1.10)**:
-   - Performed systematic completeness mapping of `SPEC-loop-closure-verification.md` against `LOOP_INVENTORY.md`.
-   - Created **§5.5 Delivery Tiers** partitioning T1-K-19 into 4 independent delivery tiers.
-   - Specified Phase A algorithm design in detail.
-   - Added `HIB-087` through `HIB-090` to track 4 explicitly deferred loop-inventory gaps (LOOP-008, 009, 014, 015).
-2. **Tier 1 Bug Fixes Delivered**:
-   - Fixed `distill_dream.py` template `Generated:` format (plain text `- Generated: YYYY-MM-DD`, no bold markdown) and backfilled open proposal card. Verified `harness_health.py` staleness check outputs `WARN` for the 52d old proposal.
-   - Fixed `regression_runner.py` empty-dataset exit code from `0` to `1` with hollow gate escalation message.
-   - Fixed `wiki_lint.py` stale paths, added dynamic `context_loader.py` and `architecture_checks.py` resolution, fixed `subprocess` import, and added legacy context file detection. Regenerated baseline findings (8 real issues).
-3. **Verification**:
-   - Full test suite passed (574 tests passing, 0 failures).
+## 1. Outstanding User Requests
+- **Phase A Complete**: Stages 1, 2, and 3 of Phase A in `SPEC-loop-closure-verification.md` are fully built, calibrated, and verified.
+- **Next Prompt Expected**: Phase B Implementation Brief (wiring audit for claimed consumer call sites).
 
-## Decisions Deferred / Open Items
-- Tiers 2, 3, and 4 of `SPEC-loop-closure-verification.md` remain in `DRAFT` status pending sign-off in a future session.
+## 2. User Knowledge & Guidelines
+- **Span-Overlap Filtering**: Multi-rule regex extraction uses span-overlap filtering `max(s1, s2) < min(e1, e2)` on match ranges to preserve distinct non-overlapping occurrences (e.g. `git diff --name-only HEAD` vs `git diff --name-only HEAD^1`).
+- **AST Reference Search**: `node_references_target()` inspects `ast.Name`, `ast.Attribute`, `ast.keyword`, `ast.Import`, and `ast.ImportFrom` nodes. String constant literals (`ast.Constant`) are explicitly excluded to eliminate false positive code matches.
+- **Then-Clause Key-Term Overlap**: For function-tier matches, `ast.Assert` nodes in the test function are inspected for overlap with scenario `key_terms` to confirm the test asserts the specific scenario outcome.
+- **Scenario 1b Calibration**: 10 scenarios spot-checked across VERIFIED and UNVERIFIED outcomes recorded 0.0% FP and 0.0% FN rates in `.agent/state/loop_closure_report.md`.
+
+## 3. Work Accomplished
+- Created [.agent/scripts/loop_closure_check.py](file:///c:/projects/ai-delivery-control/.agent/scripts/loop_closure_check.py) implementing Phase A parser, AST matcher, and report generator.
+- Generated [.agent/state/loop_closure_report.md](file:///c:/projects/ai-delivery-control/.agent/state/loop_closure_report.md) with full corpus verification results and Scenario 1b calibration table.
+- Created [tests/integration/test_loop_closure_check.py](file:///c:/projects/ai-delivery-control/tests/integration/test_loop_closure_check.py) covering parser, Fix 1 & Fix 2 extraction, normalization, and Stage 2 self-tests.
+- Updated `tests/test_ai_review.py` (`test_scenario_40_amend_oversized`) to mock `get_provider` with `ReviewVerdict`.
+- Verified test suite: **586/586 tests passing**.
+
+## 4. Current Work and Next Steps
+- Await user prompt for **Phase B Implementation Brief**.

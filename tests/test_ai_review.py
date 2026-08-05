@@ -2061,6 +2061,10 @@ class TestPhase0OversizedDiffRegression:
 
     def test_scenario_40_amend_oversized(self, ai_review, tmp_path):
         """Scenario 40: Oversized amend commit measures HEAD~1..HEAD and routes properly."""
+        mock_provider = MagicMock()
+        mock_provider.name = "anthropic"
+        mock_provider.model = "claude-sonnet-4-6"
+        mock_provider.review.return_value = {"verdict": "PASS", "summary": "OK", "issues": []}
         with patch.dict(os.environ, {"PRE_COMMIT_HOOK_STAGE": "commit-msg"}), \
              patch("ai_review._resolve_git_target", return_value=["HEAD~1", "HEAD"]), \
              patch("ai_review._streaming_size_precheck", return_value=(7000, 300000, True)) as mock_precheck, \
@@ -2072,6 +2076,7 @@ class TestPhase0OversizedDiffRegression:
              patch("repo_map.generate_repo_map", return_value=""), \
              patch("ai_review.get_adr_context", return_value=("", [], [])), \
              patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("ai_review.get_provider", return_value=mock_provider), \
              patch("ai_review.log_harness_event"):
 
             # Ensure get_staged_diff is NEVER called during oversized path

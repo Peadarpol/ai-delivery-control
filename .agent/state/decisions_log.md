@@ -1,19 +1,4 @@
 # Decisions Log
-## 2026-06-04: MIT + Commons Clause License Selection
-- **Decision**: Adopted the combined MIT License + Commons Clause License Condition v1.0, updated the root LICENSE file, and removed the outdated README_draft.md.
-- **Context**: Preventing commercial exploitation and consulting wraps of the framework without restricting open developer use.
-- **Consequence**: Users can use, modify, and distribute the framework freely except for commercial resale or hosted services whose value is derived directly from the framework.
-
-## 2026-06-08: Scope-and-Boundaries as Public Honest-Limits Documentation
-- **Decision**: Created `docs/wiki/Scope-and-Boundaries.md` explicitly naming the three structural boundaries of the framework: (1) the gate governs commits, not in-session tool calls; (2) the gate checks individual commits, not accumulated architectural drift; (3) the self-improvement loop can only improve what the gate already notices.
-- **Context**: These gaps were discovered through real use and flagged in rebuttal discussions.
-- **Consequence**: Public documentation sets honest expectations.
-
-## 2026-06-14: Universal review-context RULE sections selection/injection & trigger-gate AT/FM vocabulary (HIB-055, T1-L-13a)
-- **Decision**: In `ai_review.py`, always load and inject the core universal RULE sections into the LLM context to ensure enforcement of TDD law, database bypass, and dependency rules. Gated the heavy AT/FM vocabulary section to only inject when an ADR or decision block is detected in the diff, preventing token budget collisions. Wired the LLM-side ADVISORY rule for ADR decision-block review (T1-L-13a).
-- **Context**: Universal context rules were silently dropped because their IDs were missing from `active_sections` at review time, while always-injecting all rules would violate the 2,000-token limit.
-- **Consequence**: Full rules are now actively reviewed by the gate with budget safety.
-
 ## 2026-06-14: Cap spec-mtime commitless work at partial using git status (HIB-053b)
 - **Decision**: Replaced the unreliable filesystem mtime scanning in `init_session.py` with `git status --porcelain` to check for spec changes, and capped the retrospective outcome for sessions with uncommitted spec changes (and no commits) at `partial` (downgrading from false-successes).
 - **Context**: Session close inference previously marked spec-only sessions as success even when files were uncommitted and mtime was modified by unrelated git checkouts or stash operations.
@@ -148,3 +133,15 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Context**: Spec v1.10 Tier 2 was independently approved and verified (Scenarios 4d-4g).
 - **Consequence**: Decisions log entries are now classified by impact at write time; high-impact entries are permanently pinned against archival eviction while medium/low entries are evicted by age-weighted priority.
 - **Impact**: high
+
+## 2026-08-05: Phase A Loop-Closure Verification Architecture
+- **Decision**: Implemented Gherkin parser, AST component matcher, and calibration report in .agent/scripts/loop_closure_check.py.
+- **Context**: SPEC-loop-closure-verification Phase A
+- **Consequence**: Generates .agent/state/loop_closure_report.md with 0.0% FP/FN calibration rate.
+- **Impact**: medium
+
+## 2026-08-05: Phase B Loop-Closure Verification Architecture
+- **Decision**: Implemented generalized AST-based wiring auditor covering four pattern types in .agent/scripts/wiring_audit_core.py.
+- **Context**: SPEC-loop-closure-verification Phase B
+- **Consequence**: Provides robust verification of baseline.json, GateContext, capability_calibration.json, and session.json artifact wiring.
+- **Impact**: medium

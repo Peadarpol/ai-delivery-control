@@ -1,0 +1,25 @@
+artifacts:
+  baseline.json:
+    pattern_type: keyword_arg
+    function_name: disposition
+    consumers: []
+  GateContext:
+    pattern_type: attribute_access
+    variable_name: gate_context
+    consumers:
+      - file: src/scripts/ai_review.py
+        fields: [co_change_warnings, pytest_collect_status, todo_delta, route_decision, verdict, posture, dispositions]
+  capability_calibration.json:
+    pattern_type: function_call
+    function_name: get_calibrated_weight
+    module_qualifier: capability_calibration
+    consumers:
+      - file: src/scripts/ai_review.py
+        fields: []
+  session.json:
+    pattern_type: dict_key_access
+    variable_name: sdata
+    nested_variable_name: usage
+    consumers:
+      - file: src/scripts/ai_review.py
+        fields: [token_usage]

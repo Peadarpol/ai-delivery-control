@@ -224,3 +224,18 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: Storing large historic logs in primary agent context causes token blowups, while missing historical context blocks long-term capability retrieval.
 - **Consequence**: Dynamic context indexing keeps agent sessions lightweight while retaining retrieveability.
 
+## 2026-06-04: MIT + Commons Clause License Selection
+- **Decision**: Adopted the combined MIT License + Commons Clause License Condition v1.0, updated the root LICENSE file, and removed the outdated README_draft.md.
+- **Context**: Preventing commercial exploitation and consulting wraps of the framework without restricting open developer use.
+- **Consequence**: Users can use, modify, and distribute the framework freely except for commercial resale or hosted services whose value is derived directly from the framework.
+
+## 2026-06-08: Scope-and-Boundaries as Public Honest-Limits Documentation
+- **Decision**: Created `docs/wiki/Scope-and-Boundaries.md` explicitly naming the three structural boundaries of the framework: (1) the gate governs commits, not in-session tool calls; (2) the gate checks individual commits, not accumulated architectural drift; (3) the self-improvement loop can only improve what the gate already notices.
+- **Context**: These gaps were discovered through real use and flagged in rebuttal discussions.
+- **Consequence**: Public documentation sets honest expectations.
+
+## 2026-06-14: Universal review-context RULE sections selection/injection & trigger-gate AT/FM vocabulary (HIB-055, T1-L-13a)
+- **Decision**: In `ai_review.py`, always load and inject the core universal RULE sections into the LLM context to ensure enforcement of TDD law, database bypass, and dependency rules. Gated the heavy AT/FM vocabulary section to only inject when an ADR or decision block is detected in the diff, preventing token budget collisions. Wired the LLM-side ADVISORY rule for ADR decision-block review (T1-L-13a).
+- **Context**: Universal context rules were silently dropped because their IDs were missing from `active_sections` at review time, while always-injecting all rules would violate the 2,000-token limit.
+- **Consequence**: Full rules are now actively reviewed by the gate with budget safety.
+
