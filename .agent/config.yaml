@@ -41,3 +41,8 @@ skip_paths:
   - .agent/state/agent_session_close.json
   - .agent/state/session.json
 
+review:
+  large_diff_threshold: 400
+  large_diff_strategy: stratified
+  max_stratified_review_lines: 2000
+  max_stratified_review_chars: 80000

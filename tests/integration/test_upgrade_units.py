@@ -38,11 +38,6 @@ def test_chain_resolves_single_step():
         ((1, 1, 0), (1, 2, 0), MockMigration)
     ]
     
-    manager = upgrade.UpgradeManager(Path("."), dry_run=True)
-    chain = manager.build_chain = lambda installed: [MockMigration]
-    
-    # Asserting build_chain logic directly using our test helper in UpgradeManager
-    # To test UpgradeManager.build_chain directly:
     real_manager = upgrade.UpgradeManager(Path("."), dry_run=True, target_version="1.2.0")
     # We patch discover_migrations
     real_manager.discover_migrations = lambda: [((1, 1, 0), (1, 2, 0), Path("v1_1_0_to_v1_2_0.py"))]
@@ -146,35 +141,63 @@ def test_checksum_normalises_crlf():
         p1.unlink()
         p2.unlink()
 
-def test_yaml_rename_preserves_trailing_comment():
+def test_yaml_rename_preserves_trailing_comment(tmp_path):
     """Verify regex-based YAML key renames preserve trailing inline comments intact."""
     migrator = MigrationV1_1_0_to_V1_1_5()
-    
-    line = "  local_provider: ollama  # switched from openai"
-    # Re-use rename key pattern
-    pattern = rf'^(\s*)(local_provider)(\s*:)(.*)'
-    match = re.match(pattern, line)
-    assert match is not None
-    renamed = f"{match.group(1)}budget_provider{match.group(3)}{match.group(4)}"
-    assert renamed == "  budget_provider: ollama  # switched from openai"
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        'framework:\n  version: "1.1.0"\n'
+        '  local_provider: ollama  # switched from openai\n'
+        'local_model: llama3\n'
+        'local_tasks:\n  - task1\n'
+        'cloud_provider: anthropic\n'
+        'cloud_model: claude-3-5-sonnet\n',
+        encoding="utf-8",
+    )
+    migrator.migrate(config_file)
+    result = config_file.read_text(encoding="utf-8")
+    assert "  budget_provider: ollama  # switched from openai" in result
 
-import re
-
-def test_yaml_rename_skips_comment_line():
+def test_yaml_rename_skips_comment_line(tmp_path):
     """Verify comment lines are not modified during key renaming."""
     migrator = MigrationV1_1_0_to_V1_1_5()
-    
-    line = "  # this uses local_provider semantics"
-    assert line.strip().startswith("#")
-    # Our migrator skips if line.strip().startswith('#')
-    # Let's confirm it passes untouched in the implementation logic.
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        'framework:\n  version: "1.1.0"\n'
+        '  # this uses local_provider semantics\n'
+        'local_provider: ollama\n'
+        'local_model: llama3\n'
+        'local_tasks:\n  - task1\n'
+        'cloud_provider: anthropic\n'
+        'cloud_model: claude-3-5-sonnet\n',
+        encoding="utf-8",
+    )
+    migrator.migrate(config_file)
+    result = config_file.read_text(encoding="utf-8")
+    # Verify comment line containing 'local_provider' remains completely untouched
+    assert "  # this uses local_provider semantics" in result
+    # Verify the actual key was renamed
+    assert "budget_provider: ollama" in result
+    assert "local_provider: ollama" not in result
 
-def test_yaml_rename_skips_mid_value_occurrence():
+def test_yaml_rename_skips_mid_value_occurrence(tmp_path):
     """Verify the anchored regex does not match mid-line values on a different key."""
-    line = "  some_key: local_provider_adapter"
-    # Ensure our pattern starts with anchored ^\s*local_provider\s*:
-    pattern = r'^(\s*)(local_provider)(\s*:)(.*)'
-    assert re.match(pattern, line) is None
+    migrator = MigrationV1_1_0_to_V1_1_5()
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        'framework:\n  version: "1.1.0"\n'
+        'local_provider: ollama\n'
+        'local_model: llama3\n'
+        'local_tasks:\n  - task1\n'
+        'cloud_provider: anthropic\n'
+        'cloud_model: claude-3-5-sonnet\n'
+        '  some_key: local_provider_adapter\n',
+        encoding="utf-8",
+    )
+    migrator.migrate(config_file)
+    result = config_file.read_text(encoding="utf-8")
+    # Verify mid-value occurrence is not renamed
+    assert "  some_key: local_provider_adapter" in result
 
 def test_migration_protocol_enforced_with_runtime_checkable():
     """Verify standard modules without required methods are rejected by the protocol validation."""

@@ -390,7 +390,7 @@ class Installer:
             linter_format = f"{self.package_manager} run format"
         else:  # Python
             test_run_all = f"{pm_run_prefix}pytest" if pm_run_prefix else "pytest"
-            test_run_unit = f"{pm_run_prefix}pytest tests/unit" if pm_run_prefix else "pytest tests/unit"
+            test_run_unit = f"{pm_run_prefix}pytest tests/integration" if pm_run_prefix else "pytest tests/integration"
             linter_check = f"{pm_run_prefix}ruff check" if pm_run_prefix else "ruff check"
             linter_fix = f"{pm_run_prefix}ruff check --fix" if pm_run_prefix else "ruff check --fix"
             linter_format = f"{pm_run_prefix}ruff format" if pm_run_prefix else "ruff format"

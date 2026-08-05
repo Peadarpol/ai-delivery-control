@@ -10,21 +10,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".agent" / "scripts
 import acceptance_check
 
 def test_acceptance_check_pydantic_fallback(tmp_path, monkeypatch):
-    # Temporarily remove pydantic from sys.modules
+    import acceptance_check
+    ac = sys.modules.get("acceptance_check") or acceptance_check
+    sys.modules["acceptance_check"] = ac
     original_pydantic = sys.modules.get("pydantic")
     monkeypatch.setitem(sys.modules, "pydantic", None)
 
     try:
         # Reload acceptance_check module to trigger fallback
         try:
-            importlib.reload(acceptance_check)
+            importlib.reload(ac)
         except Exception as e:
             pytest.fail(f"Failed to import acceptance_check with Pydantic missing: {e}")
 
-        assert not acceptance_check._pydantic_installed
+        assert not ac._pydantic_installed
 
         # Verify AcceptanceVerdict stub works
-        verdict = acceptance_check.AcceptanceVerdict(
+        verdict = ac.AcceptanceVerdict(
             verdict="SATISFIED",
             satisfied_scenarios=[],
             partial_scenarios=[],
@@ -41,7 +43,7 @@ def test_acceptance_check_pydantic_fallback(tmp_path, monkeypatch):
         with patch("sys.stdout", new_callable=MagicMock), \
              patch("sys.stderr", new_callable=MagicMock):
             with pytest.raises(SystemExit) as excinfo:
-                acceptance_check.main()
+                ac.main()
             assert excinfo.value.code == 1
 
         # Test local run (audit logging + visual warning)
@@ -50,7 +52,7 @@ def test_acceptance_check_pydantic_fallback(tmp_path, monkeypatch):
         logged_actions = []
         def mock_log_action(**kwargs):
             logged_actions.append(kwargs)
-        monkeypatch.setattr(acceptance_check, "log_action", mock_log_action)
+        monkeypatch.setattr(ac, "log_action", mock_log_action)
 
         # Create a config file to test Stage 3 Warning printing (not silenced)
         monkeypatch.chdir(tmp_path)
@@ -68,9 +70,9 @@ def test_acceptance_check_pydantic_fallback(tmp_path, monkeypatch):
         with patch("sys.stdout", new_callable=MagicMock), \
              patch("sys.stderr", new_callable=MagicMock) as mock_stderr, \
              patch("argparse.ArgumentParser.parse_args", return_value=mock_args), \
-             patch("acceptance_check.resolve_spec_id", side_effect=ValueError("stop")):
+             patch.object(ac, "resolve_spec_id", side_effect=ValueError("stop")):
             with pytest.raises(SystemExit) as excinfo:
-                acceptance_check.main()
+                ac.main()
             assert excinfo.value.code == 1
 
             # Assert Stage 2 Audit Log was written
@@ -88,16 +90,17 @@ def test_acceptance_check_pydantic_fallback(tmp_path, monkeypatch):
         with patch("sys.stdout", new_callable=MagicMock), \
              patch("sys.stderr", new_callable=MagicMock) as mock_stderr, \
              patch("argparse.ArgumentParser.parse_args", return_value=mock_args), \
-             patch("acceptance_check.resolve_spec_id", side_effect=ValueError("stop")):
+             patch.object(ac, "resolve_spec_id", side_effect=ValueError("stop")):
             with pytest.raises(SystemExit) as excinfo:
-                acceptance_check.main()
+                ac.main()
             assert excinfo.value.code == 1
             stderr_output = "".join(call[0][0] for call in mock_stderr.write.call_args_list)
             assert "⚠️  [ACCEPTANCE_GATE WARNING] Running without schema validation" not in stderr_output
     finally:
         # Clean up and restore original pydantic status
-        if original_pydantic:
+        if original_pydantic is not None:
             sys.modules["pydantic"] = original_pydantic
         else:
             sys.modules.pop("pydantic", None)
-        importlib.reload(acceptance_check)
+        sys.modules["acceptance_check"] = ac
+        importlib.reload(ac)

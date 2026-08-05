@@ -510,15 +510,31 @@ def main() -> None:
                 merged_lines.sort(reverse=True)
                 evidence_list = "\n".join(merged_lines) + "\n"
 
-            if args.dry_run:
-                print(f"[DRY-RUN] Proposal card proposed: {proposal_card_path.name}")
-                proposals_count += 1
-                continue
+            # Determine earliest evidence date for Generated field
+            earliest_dt = now
+            if evts:
+                earliest_dt = min(e["timestamp"] for e in evts)
+            
+            # If card already exists, preserve its earliest date or existing Generated line
+            if proposal_card_path.exists():
+                try:
+                    old_content = proposal_card_path.read_text(encoding="utf-8")
+                    match = re.search(r"Generated:\s*(\d{4}-\d{2}-\d{2})", old_content)
+                    if match:
+                        parsed_dt = datetime.strptime(match.group(1), "%Y-%m-%d")
+                        if parsed_dt < earliest_dt:
+                            earliest_dt = parsed_dt
+                except Exception:
+                    pass
+
+            generated_date_str = earliest_dt.strftime("%Y-%m-%d")
 
             content = f"""# Skill Optimization Proposal: {skill_name} - {pattern_key}
 
 > [!NOTE]
 > This proposal was automatically synthesized by the Dream Phase Distillation Engine based on recurring engineering patterns.
+
+- Generated: {generated_date_str}
 
 ## Metrics
 - **Pattern**: `{pattern_key}`

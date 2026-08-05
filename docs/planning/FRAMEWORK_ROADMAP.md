@@ -1,9 +1,9 @@
 # AI Delivery Control — Framework Roadmap
 
 **Status**: Active Development
-**Current Version**: 1.4.12
-**Target Release**: v1.4.13 (Stabilization Release — see milestone entry below)
-**Last Updated**: 2026-07-25 (v1.4.12 shipped; v1.4.13 & v1.4.14 milestone specs drafted.)
+**Current Version**: 1.4.13
+**Target Release**: v1.4.14 (PunchCard Preparation Release — see milestone entry below)
+**Last Updated**: 2026-07-26 (v1.4.13 shipped and merged to main; v1.4.14 resequenced to PunchCard Preparation Release at Peter's direction, v1.4.15 now carries Loop Closure Verification.)
 
 ---
 
@@ -428,7 +428,7 @@ practice). Input: `cold-start-field-observations-2026-07-18.md`.
 
 ---
 
-### v1.4.13 — Stabilization Release 📋 PLANNED (2026-07-25)
+### v1.4.13 — Stabilization Release ✅ SHIPPED (2026-07-26, merge commit `ae1e952`)
 
 **Goal**: Address posture enforcement integrity (`HIB-080`), data integrity (`BUG-19`, `HIB-049`), gate findings freeze (`HIB-047`/`HIB-048`), pytest stdout capture wrapping (`BUG-11`), and framework decoupling / config-driven schema hardening exemptions with upgrade auto-migration (Phase 5).
 
@@ -444,7 +444,23 @@ practice). Input: `cold-start-field-observations-2026-07-18.md`.
 
 ---
 
-### v1.4.14 — Loop Closure Verification 📋 PLANNED (2026-07-25)
+### v1.4.14 — PunchCard Preparation Release 📋 PLANNED (2026-07-26)
+
+**Goal**: Verify the harness is genuinely ready to serve as the governed arm of the PunchCard experiment (2×2 governed/ungoverned × model comparison). Fixes one real gate defect that could silently corrupt experimental data (`HIB-068`) and records evidence-backed verification of two standing risks (`RISK-001` Antigravity CLI hook compatibility; state persistence self-containment) rather than treating them as caveats.
+
+**Planned items**:
+- Phase 0: HIB-068 — replace the unconditional fail-open response on oversized diffs (`DIFF_TOO_LARGE_FAILOPEN`) with stratified/chunked review or an explicit fail-closed-with-override default
+- Phase 1: RISK-001 verification — exercise a live Antigravity session against the four-step check in `KNOWN_RISKS.md`, record the outcome
+- Phase 2: State persistence self-containment verification
+- Phase 3: Harness version decision for the PunchCard run, recorded via `log_decision.py`
+
+**Spec**: `SPEC-v1.4.14-punchcard-preparation.md`.
+
+**Sequencing note**: This release was deliberately sequenced ahead of Loop Closure Verification (now v1.4.15) at Peter's direction, to prepare for the imminent PunchCard experiment. The two releases are independent — Loop Closure Verification's own precondition (a settled, shipped `HIB-080` fix) is already satisfied by v1.4.13, regardless of which release ships first.
+
+---
+
+### v1.4.15 — Loop Closure Verification 📋 PLANNED (2026-07-25)
 
 **Goal**: Deliver spec-to-test loop closure verification (`T1-K-19` / `HIB-081`) across three phases: (A) spec-scenario cross-reference parser & matcher; (B) static multi-consumer AST wiring audit (`wiring_audit.py`); (C) E2E scenario classification & hermetic fixture-based outcome-equivalence test pattern.
 
@@ -547,7 +563,7 @@ to pull forward if the release runs light.
 The original roadmap scoped v1.5.0 as the skill-quality release (T1-B-04/05/06/07).
 That scope is deferred to v1.5.2, pending T1-E-01 (Tool ABC formalisation) which
 is confirmed ⬜ undelivered. T1-E-01 is the sole content of v1.5.1.
-Note: T1-K-19 (Loop Closure Verification) is sequenced into standalone release v1.4.14 prior to v1.5.0 to solidify outcome-verification testing across the harness test suite before Quality Signal Maturity work commences.
+Note: T1-K-19 (Loop Closure Verification) is sequenced into standalone release v1.4.15 prior to v1.5.0 to solidify outcome-verification testing across the harness test suite before Quality Signal Maturity work commences. v1.4.14 (PunchCard Preparation) was resequenced ahead of it at Peter's direction; the two releases are independent.
 
 ---
 
@@ -702,10 +718,10 @@ Full item descriptions in backlog section T1-W.
 
 v1.x series = Developer Edition — solo developer to 3-person team, flat-file state, convention-heavy governance, installs in under 10 minutes.
 
-**Active milestone**: v1.4.13 (v1.4.12 shipped 2026-07-25)
+**Active milestone**: v1.4.14 (v1.4.13 shipped 2026-07-26)
 **Sprint tracking**: `.agent/state/active_context.md`
 
-**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅, v1.4.12 ✅, v1.4.13 📋, v1.4.14 📋
+**v1.4.x family**: v1.4.0 ✅, v1.4.1 ✅, v1.4.2 ✅, v1.4.3 ✅, v1.4.4 ✅, v1.4.5 ✅, v1.4.6 ✅, v1.4.7 ✅, v1.4.8 ✅, v1.4.9 ✅, v1.4.9.1 ✅, v1.4.10 ✅, v1.4.11 ✅, v1.4.12 ✅, v1.4.13 ✅, v1.4.14 📋, v1.4.15 📋
 **v1.5.x family**: v1.5.0 📋, v1.5.1 📋, v1.5.2 📋
 
 **v1.2.0 Phase 1 + Hardening Sprint — DELIVERED**:

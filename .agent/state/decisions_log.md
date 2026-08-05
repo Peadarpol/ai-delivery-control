@@ -1,44 +1,4 @@
 # Decisions Log
-## 2026-06-02: Added S0-24 and BUG-11 through BUG-13 to Backlog
-- **Decision**: Added S0-24 (De-GymBase-ify functional code), BUG-11 (distill_dream.py reads wrong field), BUG-12 (wiki compile cold-start failure), and BUG-13 (E2E test project runs stale ai_review.py) to `FRAMEWORK_BACKLOG.md` and synced `FRAMEWORK_ROADMAP.md` milestone planned items.
-- **Context**: Resolving GymBase hardcoding, dream phase pattern domain detection, cold-start wiki failure cooldown issues, and E2E review script drift is essential for broad framework adoption and robustness.
-- **Consequence**: Added tracking and priority for these critical porting and reliability issues in the backlog. All 184 tests pass.
-
-## 2026-06-02: Hardened Session Token Budget Wiring and Graceful Lock Acquisition (T1-I-07)
-- **Decision**: Implemented rolling budget tracking summing regular, reasoning, and cache read tokens, coupled with atomic structured JSON HALT writes, and 80%/100% Warn/Halt warnings. Wrapped all `_lock_session` context managers in `try-except` blocks to print warning messages to stderr and proceed gracefully if concurrency lock acquisition fails.
-- **Context**: Prevent budget undercounting of reasoning/cache tokens, log session_id in the HALT file dictionary, and ensure the review gate does not crash due to temporary locking issues under concurrent execution.
-- **Consequence**: Verified all 28 E2E verification scenarios and 207 unit tests pass successfully.
-
-## 2026-06-03: Two-Layer Context Architecture (UNIVERSAL_CONTEXT.md)
-- **Decision**: Consolidated shared tool context rules into `.agent/UNIVERSAL_CONTEXT.md` and converted editor-specific rules (`CLAUDE.md`, `GEMINI.md`, `.cursorrules`) into thin shims loading it.
-- **Context**: Duplicating identity and rules across three separate files caused configuration mismatches and high maintenance overhead.
-- **Consequence**: Single source of truth for agent system context, leaving shim files clean and minimal.
-
-## 2026-06-03: 3-Tier Memory Tiering (T1-I-01)
-- **Decision**: Implemented `memory_manager.py` to parse memory into Hot (always loaded), Warm (keyword-matched), and Cold (historical files older than 90 days), with automatic archiving.
-- **Context**: Storing large historic logs in primary agent context causes token blowups, while missing historical context blocks long-term capability retrieval.
-- **Consequence**: Dynamic context indexing keeps agent sessions lightweight while retaining retrieveability.
-
-## 2026-06-03: AST Code Pattern Staleness Verification (T1-I-04)
-- **Decision**: Implemented static AST parser at session start checking for existence of classes/functions/paths referenced in review context.
-- **Context**: Unsynchronized development easily breaks review rules referencing changed or deleted definitions.
-- **Consequence**: Provides instant warning warnings if the review context references deleted/refactored codebase definitions.
-
-## 2026-06-04: MIT + Commons Clause License Selection
-- **Decision**: Adopted the combined MIT License + Commons Clause License Condition v1.0, updated the root LICENSE file, and removed the outdated README_draft.md.
-- **Context**: Preventing commercial exploitation and consulting wraps of the framework without restricting open developer use.
-- **Consequence**: Users can use, modify, and distribute the framework freely except for commercial resale or hosted services whose value is derived directly from the framework.
-
-## 2026-06-08: Scope-and-Boundaries as Public Honest-Limits Documentation
-- **Decision**: Created `docs/wiki/Scope-and-Boundaries.md` explicitly naming the three structural boundaries of the framework: (1) the gate governs commits, not in-session tool calls; (2) the gate checks individual commits, not accumulated architectural drift; (3) the self-improvement loop can only improve what the gate already notices.
-- **Context**: These gaps were discovered through real use and flagged in rebuttal discussions.
-- **Consequence**: Public documentation sets honest expectations.
-
-## 2026-06-14: Universal review-context RULE sections selection/injection & trigger-gate AT/FM vocabulary (HIB-055, T1-L-13a)
-- **Decision**: In `ai_review.py`, always load and inject the core universal RULE sections into the LLM context to ensure enforcement of TDD law, database bypass, and dependency rules. Gated the heavy AT/FM vocabulary section to only inject when an ADR or decision block is detected in the diff, preventing token budget collisions. Wired the LLM-side ADVISORY rule for ADR decision-block review (T1-L-13a).
-- **Context**: Universal context rules were silently dropped because their IDs were missing from `active_sections` at review time, while always-injecting all rules would violate the 2,000-token limit.
-- **Consequence**: Full rules are now actively reviewed by the gate with budget safety.
-
 ## 2026-06-14: Cap spec-mtime commitless work at partial using git status (HIB-053b)
 - **Decision**: Replaced the unreliable filesystem mtime scanning in `init_session.py` with `git status --porcelain` to check for spec changes, and capped the retrospective outcome for sessions with uncommitted spec changes (and no commits) at `partial` (downgrading from false-successes).
 - **Context**: Session close inference previously marked spec-only sessions as success even when files were uncommitted and mtime was modified by unrelated git checkouts or stash operations.
@@ -146,3 +106,42 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: Regenerated bootstrap/checksums.py for version 1.4.10 and bumped harness_version.txt.
 - **Context**: These steps were missed during the initial v1.4.10 implementation session and caught during pre-merge review.
 - **Consequence**: bootstrap/upgrade.py's pre-flight checksum validation (HIB-037) can now correctly validate v1.4.10 installations instead of comparing against stale v1.4.9 hashes.
+
+## 2026-07-26: Resequence v1.4.14/v1.4.15
+- **Decision**: PunchCard Preparation moved ahead of Loop Closure Verification
+- **Context**: Both releases are independent — Loop Closure Verification's HIB-080 precondition is satisfied by v1.4.13 regardless of ship order; resequencing reflects near-term priority on the PunchCard experiment
+- **Consequence**: SPEC-loop-closure-verification.md retagged to v1.4.15, FRAMEWORK_ROADMAP.md milestone entries swapped, SPEC-v1.4.14-punchcard-preparation.md is now the active v1.4.14
+
+## 2026-08-01: PunchCard Experiment Target Version Selection (v1.4.14)
+- **Decision**: Run PunchCard experiment against framework version 1.4.14.
+- **Context**: SPEC-v1.4.14-punchcard-preparation establishes the required baseline stability, oversized diff streaming, and audit trail support needed for the experiment.
+- **Consequence**: PunchCard experiment executions will explicitly target version 1.4.14.
+
+## 2026-08-01: Audit Commitment for Oversized Diff Overrides in PunchCard Post-Run Analysis
+- **Decision**: Commit to inspecting harness_events.jsonl for oversized_diff_override_accepted events, focusing on agent-vs-human actor attribution, during PunchCard post-run analysis.
+- **Context**: Scenario 3 of SPEC-v1.4.14 requires that oversized diff bypasses are audit-distinguishable between human operators and AI agents.
+- **Consequence**: Oversized diff overrides will be explicitly audited and attributed to their actor during post-run evaluation.
+
+## 2026-08-04: Sign-off and delivery of SPEC-loop-closure-verification.md v1.10 Tier 1
+- **Decision**: Approved and delivered Tier 1 of SPEC-loop-closure-verification.md, resolving diagnosed bug fixes in distill_dream.py, regression_runner.py, and wiki_lint.py; added §5.5 Delivery Tiers and HIB-087..090.
+- **Context**: Spec v1.10 partitioned T1-K-19 into 4 delivery tiers to allow independent delivery of high-confidence bug fixes.
+- **Consequence**: Tier 1 bug fixes delivered and verified by test suite (574 passed). Tiers 2-4 deferred to future sessions.
+
+
+## 2026-08-05: Sign-off and delivery of SPEC-loop-closure-verification.md v1.10 Tier 2
+- **Decision**: Delivered Tier 2 (Decisions Log Impact-Weighted Retention): required impact parameter in record_decision(), age-weighted priority eviction with high-impact pinning in archive_old_decisions(), and --impact CLI argument in log_decision.py.
+- **Context**: Spec v1.10 Tier 2 was independently approved and verified (Scenarios 4d-4g).
+- **Consequence**: Decisions log entries are now classified by impact at write time; high-impact entries are permanently pinned against archival eviction while medium/low entries are evicted by age-weighted priority.
+- **Impact**: high
+
+## 2026-08-05: Phase A Loop-Closure Verification Architecture
+- **Decision**: Implemented Gherkin parser, AST component matcher, and calibration report in .agent/scripts/loop_closure_check.py.
+- **Context**: SPEC-loop-closure-verification Phase A
+- **Consequence**: Generates .agent/state/loop_closure_report.md with 0.0% FP/FN calibration rate.
+- **Impact**: medium
+
+## 2026-08-05: Phase B Loop-Closure Verification Architecture
+- **Decision**: Implemented generalized AST-based wiring auditor covering four pattern types in .agent/scripts/wiring_audit_core.py.
+- **Context**: SPEC-loop-closure-verification Phase B
+- **Consequence**: Provides robust verification of baseline.json, GateContext, capability_calibration.json, and session.json artifact wiring.
+- **Impact**: medium

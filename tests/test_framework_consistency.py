@@ -181,11 +181,7 @@ def test_no_explicit_default_for_known_config_keys():
     if str(scripts_path) not in sys.path:
         sys.path.insert(0, str(scripts_path))
         
-    try:
-        from harness_utils import DEFAULTS
-    except ImportError:
-        # If harness_utils doesn't exist or load yet, skip
-        return
+    from harness_utils import DEFAULTS
         
     known_keys = set()
     for section_dict in DEFAULTS.values():
@@ -229,11 +225,8 @@ def test_harness_config_distinguishes_none_from_missing():
     if str(scripts_path) not in sys.path:
         sys.path.insert(0, str(scripts_path))
         
-    try:
-        import harness_utils
-        from harness_utils import get_harness_config
-    except ImportError:
-        return
+    import harness_utils
+    from harness_utils import get_harness_config
         
     # Inject a mock DEFAULTS entry with a None value
     original_defaults = harness_utils.DEFAULTS.copy()

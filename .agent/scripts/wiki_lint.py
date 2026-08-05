@@ -12,21 +12,31 @@ Checks for:
 import argparse
 import json
 import re
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
 
 import yaml
 
+
 def _find_project_root() -> Path:
-    cwd = Path.cwd().resolve()
-    if (cwd / ".agent" / "config.yaml").exists() or (cwd / ".git").exists():
-        return cwd
-    current = Path(__file__).resolve()
-    for parent in [current] + list(current.parents):
-        if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip())
+    except Exception:
+        pass
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if (parent / ".git").exists() or (parent / ".agent").exists():
             return parent
-    return cwd
+    return p.parents[2] if len(p.parents) > 2 else p.parent
 
 
 PROJECT_ROOT = _find_project_root()
@@ -47,36 +57,72 @@ SYMBOL_ROBOT = _safe_symbol("🤖", "[LLM]")
 SYMBOL_CHECK = _safe_symbol("✅", "[OK]")
 SYMBOL_WARN = _safe_symbol("⚠️", "[WARN]")
 
-
-def _find_project_root() -> Path:
-    try:
-        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
-        if res.returncode == 0 and res.stdout.strip():
-            return Path(res.stdout.strip())
-    except Exception:
-        pass
-    p = Path(__file__).resolve()
-    for parent in p.parents:
-        if (parent / ".git").exists() or (parent / ".agent").exists():
-            return parent
-    return p.parents[2] if len(p.parents) > 2 else p.parent
-
 # Resolve paths relative to project root
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = _find_project_root()
 CONFIG_PATH = PROJECT_ROOT / ".agent" / "config.yaml"
 WIKI_DIR = PROJECT_ROOT / ".agent" / "wiki"
-CONTEXT_FILE = PROJECT_ROOT / "src" / "scripts" / "review_context.md"
-ARCH_CHECKS_FILE = (
-    PROJECT_ROOT
-    / ".agent"
-    / "skills"
-    / "senior-architect"
-    / "scripts"
-    / "architecture_checks.py"
-)
 FINDINGS_FILE = PROJECT_ROOT / ".agent" / "state" / "wiki_lint_findings.md"
 STATE_FILE = PROJECT_ROOT / ".agent" / "state" / "wiki_lint_state.json"
+
+
+def get_live_context_files() -> list[Path]:
+    """Resolve live review-context files via context_loader if present, else fallback."""
+    try:
+        import context_loader
+
+        universal = getattr(context_loader, "UNIVERSAL_CONTEXT_FILE", None)
+        project = getattr(context_loader, "PROJECT_CONTEXT_FILE", None)
+        files = []
+        if universal and universal.exists():
+            files.append(universal)
+        if project and project.exists():
+            files.append(project)
+        if files:
+            return files
+    except ImportError:
+        pass
+
+    # Dynamic fallback check
+    src_scripts = PROJECT_ROOT / "src" / "scripts"
+    files = []
+    for name in ("review_context_universal.md", "review_context_project.md"):
+        p = src_scripts / name
+        if p.exists():
+            files.append(p)
+    if files:
+        return files
+
+    single = src_scripts / "review_context.md"
+    if single.exists():
+        return [single]
+    return []
+
+
+def get_arch_checks_file() -> Path | None:
+    """Resolve architecture_checks.py using dual-path resolution (nested vs flat)."""
+    nested = (
+        PROJECT_ROOT
+        / ".agent"
+        / "skills"
+        / "universal"
+        / "senior-architect"
+        / "scripts"
+        / "architecture_checks.py"
+    )
+    if nested.exists():
+        return nested
+    flat = (
+        PROJECT_ROOT
+        / ".agent"
+        / "skills"
+        / "senior-architect"
+        / "scripts"
+        / "architecture_checks.py"
+    )
+    if flat.exists():
+        return flat
+    return None
+
 
 # Common keywords and library functions to ignore during staleness checking
 IGNORE_WORDS = {
@@ -270,15 +316,35 @@ def build_src_identifiers() -> set[str]:
 
 
 def run_staleness_check(src_identifiers: set[str]) -> list[dict]:
-    """Scans review_context.md and .agent/wiki/*.md for backticked identifiers missing in src/."""
+    """Scans live context files and .agent/wiki/*.md for backticked identifiers missing in src/."""
     findings = []
     backtick_re = re.compile(r"`([^`]+)`")
     word_re = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\b")
 
+    # Check for legacy context file (Scenario 4r)
+    src_scripts = PROJECT_ROOT / "src" / "scripts"
+    legacy_file = src_scripts / "review_context.md"
+    live_files = get_live_context_files()
+
+    is_split_active = any(
+        f.name in ("review_context_universal.md", "review_context_project.md")
+        for f in live_files
+    )
+    if legacy_file.exists() and is_split_active:
+        rel_legacy = legacy_file.relative_to(PROJECT_ROOT).as_posix()
+        findings.append(
+            {
+                "file": rel_legacy,
+                "line": 1,
+                "identifier": "LEGACY-CONTEXT-FILE",
+                "severity": "HIGH",
+                "finding": "LEGACY-CONTEXT-FILE: 'review_context.md' exists but is not loaded by context_loader.py; content here is not part of the live AI review context.",
+                "remediation": "Archive or remove legacy 'review_context.md' to prevent confusion with live context files.",
+            }
+        )
+
     # Files to scan
-    files_to_scan = []
-    if CONTEXT_FILE.exists():
-        files_to_scan.append(CONTEXT_FILE)
+    files_to_scan = list(live_files)
     if WIKI_DIR.exists():
         for f in WIKI_DIR.glob("*.md"):
             if f.name != "index.md":
@@ -325,48 +391,53 @@ def run_staleness_check(src_identifiers: set[str]) -> list[dict]:
 
 
 def run_orphaned_rules_check() -> list[dict]:
-    """Checks if rules in review_context.md have corresponding checks in architecture_checks.py."""
+    """Checks if rules in live context files have corresponding checks in architecture_checks.py."""
     findings = []
-    if not CONTEXT_FILE.exists() or not ARCH_CHECKS_FILE.exists():
+    live_files = get_live_context_files()
+    arch_checks_file = get_arch_checks_file()
+
+    if not live_files or not arch_checks_file or not arch_checks_file.exists():
         return findings
 
     try:
-        context_content = CONTEXT_FILE.read_text(encoding="utf-8")
-        arch_content = ARCH_CHECKS_FILE.read_text(encoding="utf-8")
-
-        # Find rule IDs like [RULE:UOW-INTEGRITY] or [PATTERN:CLEAN-ARCH]
+        arch_content = arch_checks_file.read_text(encoding="utf-8")
         rule_re = re.compile(r"\[(RULE|PATTERN):([A-Z0-9_-]+)\]")
 
-        relative_context = CONTEXT_FILE.relative_to(PROJECT_ROOT).as_posix()
+        for context_file in live_files:
+            if not context_file.exists():
+                continue
+            context_content = context_file.read_text(encoding="utf-8")
+            relative_context = context_file.relative_to(PROJECT_ROOT).as_posix()
 
-        for line_no, line in enumerate(context_content.splitlines(), 1):
-            for match in rule_re.finditer(line):
-                rule_type, rule_id = match.group(1), match.group(2)
+            for line_no, line in enumerate(context_content.splitlines(), 1):
+                for match in rule_re.finditer(line):
+                    rule_type, rule_id = match.group(1), match.group(2)
 
-                # Check for various casings and normalizations in architecture_checks.py
-                normalized_id = rule_id.lower().replace("-", "_")
-                alternative_id = rule_id.lower()
+                    # Check for various casings and normalizations in architecture_checks.py
+                    normalized_id = rule_id.lower().replace("-", "_")
+                    alternative_id = rule_id.lower()
 
-                has_check = (
-                    normalized_id in arch_content.lower()
-                    or alternative_id in arch_content.lower()
-                )
-
-                if not has_check:
-                    findings.append(
-                        {
-                            "file": relative_context,
-                            "line": line_no,
-                            "identifier": f"[{rule_type}:{rule_id}]",
-                            "severity": "HIGH" if rule_type == "RULE" else "MEDIUM",
-                            "finding": f"Orphaned rule check: '{rule_type}:{rule_id}' is documented but has no executable implementation in '{ARCH_CHECKS_FILE.name}'.",
-                            "remediation": f"Add an AST parsing check or structural check inside '{ARCH_CHECKS_FILE.relative_to(PROJECT_ROOT).as_posix()}' to enforce this rule.",
-                        }
+                    has_check = (
+                        normalized_id in arch_content.lower()
+                        or alternative_id in arch_content.lower()
                     )
+
+                    if not has_check:
+                        findings.append(
+                            {
+                                "file": relative_context,
+                                "line": line_no,
+                                "identifier": f"[{rule_type}:{rule_id}]",
+                                "severity": "HIGH" if rule_type == "RULE" else "MEDIUM",
+                                "finding": f"Orphaned rule check: '{rule_type}:{rule_id}' is documented but has no executable implementation in '{arch_checks_file.name}'.",
+                                "remediation": f"Add an AST parsing check or structural check inside '{arch_checks_file.relative_to(PROJECT_ROOT).as_posix()}' to enforce this rule.",
+                            }
+                        )
     except Exception:
         pass
 
     return findings
+
 
 
 def run_factual_drift_check(routing: dict) -> list[dict]:
