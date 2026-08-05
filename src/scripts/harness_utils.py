@@ -402,16 +402,25 @@ def record_decision(
     date: str | None = None,
     extra_fields: dict[str, str] | None = None,
     log_path: Path | str | None = None,
+    impact: str | None = None,
 ) -> None:
     """
     Append a structured decision entry to .agent/state/decisions_log.md.
     This is the ONLY sanctioned way to write to this file — never edit it directly with file-write tools.
     Always appends to the true end of the file; never prepends or inserts mid-file.
+
+    Parameters:
+    - impact: Required decision classification ('high' | 'medium' | 'low'). Raises ValueError if missing or invalid.
     """
     title = _sanitize_decision_field(title)
     decision = _sanitize_decision_field(decision)
     context = _sanitize_decision_field(context)
     consequence = _sanitize_decision_field(consequence)
+
+    if impact not in ("high", "medium", "low"):
+        raise ValueError(
+            f"record_decision() requires impact to be one of 'high', 'medium', 'low' — got: {impact!r}"
+        )
 
     if not title or not decision or not context or not consequence:
         raise ValueError("record_decision() requires non-empty title, decision, context, and consequence.")
@@ -445,6 +454,7 @@ def record_decision(
         f"- **Decision**: {decision}",
         f"- **Context**: {context}",
         f"- **Consequence**: {consequence}",
+        f"- **Impact**: {impact}",
     ]
 
     if extra_fields:
@@ -466,16 +476,18 @@ def archive_old_decisions(
     archive_path: Path | str | None = None,
 ) -> int:
     """
-    Move the oldest entries from decisions_log.md to decisions_log_archive.md
-    once the main log exceeds threshold_lines. Only the ONE sanctioned way to
-    perform archival — never move entries between these files with a file-write
-    tool directly.
+    Move eligible entries from decisions_log.md to decisions_log_archive.md
+    once the main log exceeds threshold_lines. Uses age-weighted priority
+    (age_in_days / impact_weight) for eviction, while high-impact entries are pinned.
 
     Preconditions:
     - decisions_log.md must be in ascending chronological order (guaranteed by
       record_decision()'s backdating guard, assuming no direct edits occurred).
 
-    Returns the number of entries archived (0 if under threshold).
+    Notes:
+    - O(N*E) eviction loop evaluation across N entries and E eligible candidates.
+
+    Returns the number of entries archived (0 if under threshold or no eligible entries).
     """
     target_path = Path(log_path) if log_path else (_find_project_root() / ".agent" / "state" / "decisions_log.md")
     dest_path = Path(archive_path) if archive_path else (_find_project_root() / ".agent" / "state" / "decisions_log_archive.md")
@@ -500,7 +512,7 @@ def archive_old_decisions(
     if not entries:
         return 0
 
-    # Verify ascending order before trusting "oldest = first N entries".
+    # Verify ascending order before proceeding.
     dates = []
     for e in entries:
         m = re.match(r"^## (\d{4}-\d{2}-\d{2}):", e)
@@ -514,22 +526,57 @@ def archive_old_decisions(
             "Archiving an unsorted file would move the wrong entries and call them 'oldest'."
         )
 
-    # Archive entries one at a time from the front until back under threshold,
-    # always leaving at least 1 entry in the main log.
+    now_date = datetime.datetime.now(datetime.timezone.utc).date()
+
     archived_count = 0
     while len(entries) > 1:
         remaining_content = header + "".join(entries)
         if len(remaining_content.splitlines()) <= threshold_lines:
             break
-        oldest = entries.pop(0)
+
+        # Find eligible candidate with highest eviction priority (highest age_in_days / impact_weight)
+        best_idx = None
+        best_priority = -1.0
+
+        for idx, entry_str in enumerate(entries):
+            # Pre-existing entries lacking an Impact field (or malformed) default to 'medium' per §3 specification assumption.
+            imp_match = re.search(r"^\s*-\s*\*\*Impact\*\*:\s*(high|medium|low)", entry_str, re.MULTILINE)
+            impact_val = imp_match.group(1).lower() if imp_match else "medium"
+
+            if impact_val == "high":
+                # High-impact entries are pinned; never evict.
+                continue
+
+            # Compute priority = age_in_days / impact_weight
+            impact_weight = 2.0 if impact_val == "medium" else 1.0
+            header_date_match = re.match(r"^## (\d{4}-\d{2}-\d{2}):", entry_str)
+            if not header_date_match:
+                continue
+            header_date_str = header_date_match.group(1)
+            entry_dt = datetime.datetime.strptime(header_date_str, "%Y-%m-%d").date()
+            age_in_days = max(0, (now_date - entry_dt).days)
+            priority = age_in_days / impact_weight
+
+            # Select candidate with highest priority (if priority is equal, pick earlier index)
+            if priority > best_priority:
+                best_priority = priority
+                best_idx = idx
+
+        if best_idx is None:
+            # Threshold is exceeded but no eligible non-high entries exist to evict (Scenario 4g)
+            print("⚠️ decisions_log.md exceeds threshold but no eligible non-high entries exist to evict.", file=sys.stderr)
+            break
+
+        evicted = entries.pop(best_idx)
         if not dest_path.exists():
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             dest_path.write_text("# Decisions Log Archive\n", encoding="utf-8")
         with open(dest_path, "a", encoding="utf-8") as f:
-            f.write(oldest)
+            f.write(evicted)
         archived_count += 1
 
     if archived_count > 0:
         target_path.write_text(header + "".join(entries), encoding="utf-8")
 
     return archived_count
+

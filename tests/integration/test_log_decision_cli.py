@@ -30,6 +30,7 @@ def test_log_decision_cli_standalone_invocation(tmp_path: Path):
         "Test Decision Content",
         "Test Context Motivation",
         "Test Consequence Impact",
+        "--impact", "medium",
         "--date", "2026-07-26",
     ]
 

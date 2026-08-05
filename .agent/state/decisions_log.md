@@ -1,9 +1,4 @@
 # Decisions Log
-## 2026-06-03: AST Code Pattern Staleness Verification (T1-I-04)
-- **Decision**: Implemented static AST parser at session start checking for existence of classes/functions/paths referenced in review context.
-- **Context**: Unsynchronized development easily breaks review rules referencing changed or deleted definitions.
-- **Consequence**: Provides instant warning warnings if the review context references deleted/refactored codebase definitions.
-
 ## 2026-06-04: MIT + Commons Clause License Selection
 - **Decision**: Adopted the combined MIT License + Commons Clause License Condition v1.0, updated the root LICENSE file, and removed the outdated README_draft.md.
 - **Context**: Preventing commercial exploitation and consulting wraps of the framework without restricting open developer use.
@@ -146,3 +141,10 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: Approved and delivered Tier 1 of SPEC-loop-closure-verification.md, resolving diagnosed bug fixes in distill_dream.py, regression_runner.py, and wiki_lint.py; added §5.5 Delivery Tiers and HIB-087..090.
 - **Context**: Spec v1.10 partitioned T1-K-19 into 4 delivery tiers to allow independent delivery of high-confidence bug fixes.
 - **Consequence**: Tier 1 bug fixes delivered and verified by test suite (574 passed). Tiers 2-4 deferred to future sessions.
+
+
+## 2026-08-05: Sign-off and delivery of SPEC-loop-closure-verification.md v1.10 Tier 2
+- **Decision**: Delivered Tier 2 (Decisions Log Impact-Weighted Retention): required impact parameter in record_decision(), age-weighted priority eviction with high-impact pinning in archive_old_decisions(), and --impact CLI argument in log_decision.py.
+- **Context**: Spec v1.10 Tier 2 was independently approved and verified (Scenarios 4d-4g).
+- **Consequence**: Decisions log entries are now classified by impact at write time; high-impact entries are permanently pinned against archival eviction while medium/low entries are evicted by age-weighted priority.
+- **Impact**: high

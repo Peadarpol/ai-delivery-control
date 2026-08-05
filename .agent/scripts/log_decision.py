@@ -47,6 +47,12 @@ def main() -> int:
     parser.add_argument("decision", help="What was decided")
     parser.add_argument("context", help="Context / motivation")
     parser.add_argument("consequence", help="Consequence / trade-offs")
+    parser.add_argument(
+        "--impact",
+        required=True,
+        choices=["high", "medium", "low"],
+        help="Decision impact classification (required)",
+    )
     parser.add_argument("--date", help="Optional date in YYYY-MM-DD format", default=None)
     parser.add_argument("--note", help="Optional Note field for extra_fields", default=None)
 
@@ -62,6 +68,7 @@ def main() -> int:
             consequence=args.consequence,
             date=args.date,
             extra_fields=extra,
+            impact=args.impact,
         )
         archive_old_decisions()
         print(f"[OK] Decision logged successfully: '{args.title}'")
