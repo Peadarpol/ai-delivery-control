@@ -239,3 +239,8 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: Universal context rules were silently dropped because their IDs were missing from `active_sections` at review time, while always-injecting all rules would violate the 2,000-token limit.
 - **Consequence**: Full rules are now actively reviewed by the gate with budget safety.
 
+## 2026-06-14: Cap spec-mtime commitless work at partial using git status (HIB-053b)
+- **Decision**: Replaced the unreliable filesystem mtime scanning in `init_session.py` with `git status --porcelain` to check for spec changes, and capped the retrospective outcome for sessions with uncommitted spec changes (and no commits) at `partial` (downgrading from false-successes).
+- **Context**: Session close inference previously marked spec-only sessions as success even when files were uncommitted and mtime was modified by unrelated git checkouts or stash operations.
+- **Consequence**: Session outcomes are now determined reliably from git status, enforcing that work is committed to count as a success.
+
