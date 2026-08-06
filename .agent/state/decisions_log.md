@@ -1,14 +1,4 @@
 # Decisions Log
-## 2026-06-22: CodeQL Scoping and Checksums Registry Upgrades
-- **Decision**: Added CodeQL configuration `.github/codeql/codeql-config.yml` to restrict scanning to Python, and generated/regenerated checksums registry for version 1.4.3 and 1.4.4 in `bootstrap/checksums.py` to ensure migration verification runs cleanly.
-- **Context**: The user requested explicit scoping of CodeQL scans. Additionally, migration testing required that version 1.4.3 registry exist in the checksums database to support contiguous traversal checks.
-- **Consequence**: All checksum checks and 372 unit/E2E tests pass successfully, CodeQL analysis is cleanly scoped, and the rollup branch is pushed remotely.
-
-## 2026-06-22: Rollup Version 1.4.4 and Stale Branch Check
-- **Decision**: Rolled up all 5 unmerged branches (`feat/v1.4.1-security`, `fix/bug-04-05-gate-logging-and-routing`, `feat/v1.4.1-bugfixes`, `feat/v1.4.2-session-close`, `feat/v1.4.1-outer-loop`) into `feat/v1.4.4` (bumped harness version to 1.4.4) and implemented a new stale unmerged branch check in `harness_health.py` (`T1-K-11`).
-- **Context**: A rollup branch `feat/v1.4.4` was needed to cleanly integrate all outstanding branch features and bug fixes. A stale branch detection mechanism was requested to prevent accumulation of orphaned branch work.
-- **Consequence**: All unmerged features are integrated, 372 unit/E2E tests are passing, checksums registry regenerated, and stale branch checks dynamically detect unmerged branches older than a configurable threshold (default 14 days).
-
 ## 2026-06-22: Fixed Bootstrap Installer Module Copies
 - **Decision**: Updated `bootstrap/install.py` to copy all framework-owned scripts listed under `manifest.FRAMEWORK_OWNED` in the `src/scripts/` directory to the target project scripts directory on installation and upgrade.
 - **Context**: Consumer projects bootstrapped with the framework would fail at startup with `ModuleNotFoundError: No module named 'harness_utils'` because the installer was only copying `ai_review.py` and `review_context_universal.md` to the target `src/scripts/` directory, leaving out core runtime dependencies like `harness_utils.py` and `state_persistence.py`.
@@ -145,4 +135,16 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: Tier 3 is delivered: Phase A (spec-scenario cross-reference), Phase B (static wiring audit), and Phase C (E2E gate-scope classification + outcome-equivalence tests) all independently verified against their acceptance scenarios.
 - **Context**: Phase A: parser handles three distinct Gherkin formatting conventions found across the spec corpus (plain, bulleted-bold, bold-only), calibrated per the outcome recorded 2026-08-05 (persistent false-positive rate on VERIFIED results accepted as a structural property of word-overlap matching, not fixed further). Phase B: AST-based wiring audit covers all four named artifacts (baseline.json, GateContext, capability_calibration.json, session.json); HIB-080 confirmed resolved in the live codebase via independent trace, not just tool output. Phase C: all 29 E2E scenarios classified single-gate/cross-gate (12/17 split) with 2 genuine reclassifications caught during calibration; the 5 weakest cross-gate assertions strengthened with real outcome-equivalence checks (hash comparison, byte-for-byte content match, structured JSON schema validation, and a genuine before/after control comparison for the idempotency scenario). One process finding during Phase C: two undisclosed scenario changes (version-string hardcoding fixed in Scenarios 4 and 28) and one undisclosed module-level PYTHONPATH change surfaced only on request, not in the original completion report -- the changes themselves were correct, but the omission repeats a pattern flagged earlier in this same effort (unauthorized commit to main, unauthorized out-of-scope code change) and should inform how completion reports are reviewed going forward, not just this instance.
 - **Consequence**: Tier 3 delivery unblocks this spec's path to APPROVED (pending Peter's sign-off) and eventually DELIVERED once Tier 4's disposition (ship as follow-on per the spec's own default, or promote now) is decided. Separately: hardcoded version-string assertions (e.g. '1.4.9') were found to be a latent fragility class across tests/e2e/run_e2e_verification.py, confirmed live when the harness's actual version advanced to 1.4.14 -- worth a dedicated pass to replace remaining hardcoded version literals with dynamic reads from harness_version.txt, tracked as a new backlog item rather than fixed reactively scenario-by-scenario.
+- **Impact**: high
+
+## 2026-08-06: Spec v1.14 Phase D Critical Review Corrections
+- **Decision**: Updated SPEC-loop-closure-verification.md to v1.14 applying all Phase D critical review corrections.
+- **Context**: Adversarial critical review identified 4 gaps in Phase D design.
+- **Consequence**: Spec updated to v1.14 with Scenarios 11 & 12, narrowed D2 scope, consolidated registry risk, and labeled S9 deferred.
+- **Impact**: medium
+
+## 2026-08-06: SPEC-loop-closure-verification.md APPROVED -- Tiers 1-3 Delivered, Tier 4 Designed & Deferred
+- **Decision**: Formal sign-off granted for SPEC-loop-closure-verification.md (APPROVED). Tiers 1, 2, and 3 are delivered and verified, cleared for merge to main. Tier 4 is fully designed but remains deferred by default per section 5.5.
+- **Context**: Human approval of spec and tier delivery status.
+- **Consequence**: Tiers 1-3 cleared for main merge; Tier 4 implementation deferred to future authorization.
 - **Impact**: high

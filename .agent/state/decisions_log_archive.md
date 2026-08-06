@@ -244,3 +244,13 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: Session close inference previously marked spec-only sessions as success even when files were uncommitted and mtime was modified by unrelated git checkouts or stash operations.
 - **Consequence**: Session outcomes are now determined reliably from git status, enforcing that work is committed to count as a success.
 
+## 2026-06-22: CodeQL Scoping and Checksums Registry Upgrades
+- **Decision**: Added CodeQL configuration `.github/codeql/codeql-config.yml` to restrict scanning to Python, and generated/regenerated checksums registry for version 1.4.3 and 1.4.4 in `bootstrap/checksums.py` to ensure migration verification runs cleanly.
+- **Context**: The user requested explicit scoping of CodeQL scans. Additionally, migration testing required that version 1.4.3 registry exist in the checksums database to support contiguous traversal checks.
+- **Consequence**: All checksum checks and 372 unit/E2E tests pass successfully, CodeQL analysis is cleanly scoped, and the rollup branch is pushed remotely.
+
+## 2026-06-22: Rollup Version 1.4.4 and Stale Branch Check
+- **Decision**: Rolled up all 5 unmerged branches (`feat/v1.4.1-security`, `fix/bug-04-05-gate-logging-and-routing`, `feat/v1.4.1-bugfixes`, `feat/v1.4.2-session-close`, `feat/v1.4.1-outer-loop`) into `feat/v1.4.4` (bumped harness version to 1.4.4) and implemented a new stale unmerged branch check in `harness_health.py` (`T1-K-11`).
+- **Context**: A rollup branch `feat/v1.4.4` was needed to cleanly integrate all outstanding branch features and bug fixes. A stale branch detection mechanism was requested to prevent accumulation of orphaned branch work.
+- **Consequence**: All unmerged features are integrated, 372 unit/E2E tests are passing, checksums registry regenerated, and stale branch checks dynamically detect unmerged branches older than a configurable threshold (default 14 days).
+
