@@ -24,6 +24,7 @@
 - v1.15 (2026-08-07, Gemini): Adds §9 (End-of-Release Tasks) detailing the 8-step release closure workflow (merge to main, version bump, checksum verification, backlog status update, CHANGELOG.md entry, spec archival, PR description generation, GitHub Release notes generation) triggered when approved scope ships per §5.5. See decisions_log.md.
 - v1.16 (2026-08-07, Gemini): Tier 4 D1 (producer/consumer contract runner) and D2 (tooling-path staleness scanner) delivered; D3-scoping audit completed and published to D3-SCOPING-AUDIT.md. Confirms D3 is documentation-standardisation work (only 1 of 18 workflow files matches the reference specimen), establishing an evidence-based rationale to defer D3 implementation indefinitely. See decisions_log.md.
 - v1.17 (2026-08-07, Gemini): D4a (orphaned-producer scan) is retired as an automated mechanism after empirical testing against LOOP_INVENTORY.md found it structurally incapable of detecting the coupling mechanism this codebase actually uses. Every confirmed real bug this spec's audits ever found (HIB-080, LOOP-001, LOOP-004, LOOP-013) was file-based or schema-based drift, not a broken Python import — and D4a's AST reference search can only detect the latter. Run against the full inventory, it flagged 9 of 9 real producer/consumer pairs as orphaned, including LOOP-001, which is independently confirmed correctly wired via Path().glob() file coupling with zero Python-level reference between the two scripts. D4a is replaced with a documented, repeatable manual audit process (see .agent/workflows/loop-audit.md) — formalizing the methodology LOOP_INVENTORY.md itself was already built with, run by an agent per loop rather than approximated in code. D4b is unaffected: its "does any test reference both producer and consumer" check is agnostic to coupling mechanism (a test still has to import both scripts regardless of how they're coupled in production) and passed all three self-test cases cleanly, including a genuine true negative. D4b stands alone as Tier 4's remaining coverage-completeness deliverable. See decisions_log.md.
+- v1.18 (2026-08-07, Gemini): Restructures §9 (End-of-Release Tasks) after review found the original ordering both mis-sequenced (a PR description referencing "confirm merge" before the merge existed) and structurally wrong (splitting bookkeeping tasks across a pre/post-merge boundary would require either a second commit landing on main outside PR review, or a pointless second PR). All bookkeeping steps now happen together in one PR, atomically consistent with the merged code, with only the release-notes generation genuinely happening after merge. See decisions_log.md.
 
 ---
 
@@ -461,15 +462,21 @@ This spec reaches DELIVERED once every tier covered by this approval has actuall
 
 ## 9. End-of-Release Tasks
 
-This section is triggered once this spec's approved scope actually ships (per §5.5's DELIVERED convention) — not on APPROVED alone. Grounded in this project's actual release mechanics, not generic boilerplate:
+This section is triggered once this spec's approved scope is ready to ship (per §5.5's DELIVERED convention). All steps happen together, on the feature branch, as one atomic unit reviewed and merged in a single PR — not split across a pre-merge/post-merge boundary. This is deliberate, not just convenient: if the version bump, checksum regeneration, and changelog entry landed after merge, there would be a real window where main has new code but `harness_version.txt`, checksums, and the changelog still describe the old state — exactly the kind of claim-vs-actual-state gap this spec exists to catch. It would also mean either a second commit landing on main outside of PR review, or a second PR for no real reason — both worth avoiding. Checksums generated against the feature branch's final content are the same content that lands on main the moment it merges, barring a merge conflict requiring real changes (see the residual risk noted below for that edge case).
 
-1. **Confirm merge to main** — the approved tier(s) are merged, not just committed to a feature branch.
-2. **Bump `harness_version.txt`** to the target release version (`1.4.15`).
-3. **Regenerate and verify checksums**: `python bootstrap/generate_checksums.py --version 1.4.15`, then `python bootstrap/generate_checksums.py --verify` — confirm zero mismatches before proceeding.
-4. **Update `harness_improvement_backlog.md`** — mark any HIB items this release closes as delivered (per this spec: none of HIB-087–090, since all four remain explicitly deferred per §8, not delivered by this release).
-5. **Add a `CHANGELOG.md` entry**, following the established format (see v1.4.13/v1.4.14 entries for the real precedent) — feature summary plus a "Bookkeeping & Release Closure" subsection covering steps 2–4 and archival.
-6. **Archive this spec to `docs/planning/specs/archive/`** with `Status: DELIVERED`, once — and only once — every tier covered by this approval has shipped (Tier 4's deferral does not block this, per §5.5).
-7. **Generate a PR description for the `feat/v1.4.15-loop-closure-verification` → `main` pull request** — scope summary, verification evidence, and known residual risks — for manual review and initiation, not automatic submission. Draft this at merge time, reflecting what's actually shipped, not now.
-8. **Generate a release description for the GitHub Release notes** — a shorter, stakeholder-facing summary distinct from the full `CHANGELOG.md` entry, suitable for pasting directly into a GitHub Release body. Same timing as step 7.
+On the feature branch, before merge (all in the same PR):
 
-Steps 7 and 8 are new to this project's release convention as of this spec — prior releases (v1.4.9 through v1.4.14) did not produce these as distinct artifacts. If adopted, this section should become the template other specs copy going forward, not a one-off.
+1. **Bump `harness_version.txt`** to the target release version (`1.4.15`).
+2. **Regenerate and verify checksums**: `python bootstrap/generate_checksums.py --version 1.4.15`, then `python bootstrap/generate_checksums.py --verify` — confirm zero mismatches before proceeding.
+3. **Update `harness_improvement_backlog.md`** — mark any HIB items this release closes as delivered (per this spec: none of HIB-087–090, since all four remain explicitly deferred per §8).
+4. **Add a `CHANGELOG.md` entry**, following the established format (see v1.4.13/v1.4.14 entries for the real precedent) — feature summary plus a "Bookkeeping & Release Closure" subsection covering steps 1–3.
+5. **Archive this spec to `docs/planning/specs/archive/`** with `Status: DELIVERED`, once every tier covered by this approval is included in the same PR (Tier 4's partial deferral does not block this, per §5.5). This is a statement of intent captured at PR time — correct because it merges atomically with everything else, not as a separate later step.
+6. **Generate a PR description for the `feat/v1.4.15-loop-closure-verification` → `main` pull request** — covering the complete picture: code changes, version bump, checksum status, changelog entry, and archival, together. For manual review and initiation, not automatic submission.
+
+*[Peter reviews and merges — one PR, everything above included, not a numbered task]*
+
+After merge:
+
+7. **Generate a release description for the GitHub Release notes** — a shorter, stakeholder-facing summary of what actually shipped, distinct from the full `CHANGELOG.md` entry, suitable for pasting directly into a GitHub Release body.
+
+Residual risk, worth stating explicitly: if merge requires real conflict resolution (not a clean fast-forward or trivial auto-merge), the checksums generated in step 2 may no longer match the actually-merged content. In that case, steps 1–2 need to be re-run against the post-merge state before archival is treated as accurate — don't assume a conflicted merge is automatically covered by pre-merge checksums.

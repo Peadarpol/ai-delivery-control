@@ -1,15 +1,18 @@
 # Active Context
 
 ## Current Task
-- **SPEC-loop-closure-verification.md**: Phase A (Gherkin Parser, Component Reference Matcher & Loop Closure Report Generator) fully built, calibrated, and verified in `.agent/scripts/loop_closure_check.py`.
-- **Next Steps**: Await user prompt for Phase B (Wiring Audit Tooling for claimed consumers) or Phase C.
+- **SPEC-loop-closure-verification.md**: Tier 4 complete. D1 (contract test runner), D2 (tooling-path staleness scanner), D3-scoping audit ([D3-SCOPING-AUDIT.md](file:///c:/projects/ai-delivery-control/docs/planning/specs/D3-SCOPING-AUDIT.md)), and D4b (coverage-completeness check) delivered, verified, and committed (`085f650` & `89b38b7`). D4a retired as automated tooling and replaced with [.agent/workflows/loop-audit.md](file:///c:/projects/ai-delivery-control/.agent/workflows/loop-audit.md). Spec updated to v1.18.
+- **Next Steps**: Await user prompt for End-of-Release Tasks (§9) for release `v1.4.15` or new feature branch work.
 
 ## Branch
-- `main`
+- `feat/v1.4.15-loop-closure-verification`
 
 ## Current Status
-- **Phase A Delivered**:
-  - `loop_closure_check.py` built with Stage 1 (Gherkin scenario parser, component & key-term extraction with span-overlap filtering), Stage 2 (component normalization, AST reference search, two-tier confidence, and mock/real classifier), and Stage 3 (Then-clause key-term overlap check, final classification, and calibration report generator).
-  - Full corpus scan executed across 16 specs (106 scenarios). Generated `.agent/state/loop_closure_report.md` with Scenario 1b calibration audit (0.0% FP / 0.0% FN rate).
-  - Fixed test fixture in `tests/test_ai_review.py` for `test_scenario_40_amend_oversized` to mock `get_provider`.
-- **Test Suite**: 586/586 tests passing cleanly.
+- **Tier 4 Complete**:
+  - D1 (`contract_test_runner.py`): Producer/consumer contract test runner built and verified.
+  - D2 (`tooling_staleness_check.py`): Path-staleness scanner built and verified; clean-markers verified.
+  - D3-scoping: Audit published; D3 implementation deferred indefinitely with documented rationale.
+  - D4b (`coverage_completeness_check.py`): Coverage-completeness check delivered and verified against `LOOP_INVENTORY.md` (Scenario 10 passing with true negative on `LOOP-017`).
+  - D4a: Attempted, tested, and retired after AST reference search was shown to be structurally blind to file-based `Path().glob()` coupling. Replaced by `.agent/workflows/loop-audit.md`.
+  - Spec updated to v1.18 and high-impact decision logged.
+- **Test Suite**: 594/594 tests passing cleanly (100%).
