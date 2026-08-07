@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-.agent/scripts/coverage_completeness_check.py — Coverage-Completeness & Orphaned-Producer Validator (Tier 4, D4)
+.agent/scripts/coverage_completeness_check.py — Coverage-Completeness Validator (Tier 4, D4b)
 
 Parses docs/planning/LOOP_INVENTORY.md tolerantly to perform:
-- D4a: Orphaned-producer scan (producers whose output/consumer has no references outside the producer)
 - D4b: Coverage-completeness cross-check (VERIFIED-WORKING loops with no co-located test)
+- D4a: Retired orphaned-producer scan (retained for historical context; output is retired and replaced by .agent/workflows/loop-audit.md)
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+from datetime import date
 import os
 import re
 import sys
@@ -336,10 +337,10 @@ def build_phase_d_report_section(
     lines = [
         "\n---",
         "\n## Phase D: Producer/Consumer Contracts, Tooling Staleness, and Coverage Completeness",
-        f"**Run Date**: 2026-08-07",
+        f"**Run Date**: {date.today().isoformat()}",
         f"**Summary**: Parsed {len(loops)} loops from LOOP_INVENTORY.md.",
         f"- **PARSE-AMBIGUOUS**: {len(ambiguous_loops)}",
-        f"- **D4a Orphaned-Producer Findings**: {len(d4a_findings)}",
+        f"- **D4a Orphaned-Producer Findings (RETIRED)**: {len(d4a_findings)}",
         f"- **D4b Coverage-Completeness Findings**: {len(d4b_findings)}",
         "",
     ]
@@ -420,7 +421,7 @@ def main() -> int:
         for a in ambiguous_loops:
             safe_print(f"  - {a.loop_id} (Status: {a.status})")
 
-    safe_print(f"\n❌ D4a Orphaned-Producer Findings ({len(d4a_findings)}):")
+    safe_print(f"\n⚠️ D4a Orphaned-Producer Findings [RETIRED - DO NOT TREAT AS SIGNAL] ({len(d4a_findings)}):")
     for f in d4a_findings:
         safe_print(f"  - {f.loop_id} [Producer: {f.producer_ident}] -> {f.reason}")
 

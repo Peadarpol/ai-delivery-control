@@ -469,11 +469,13 @@ Total skipped scenarios: 51 (all components are spec/backlog tags or non-code te
 
 ---
 
+---
+
 ## Phase D: Producer/Consumer Contracts, Tooling Staleness, and Coverage Completeness
 **Run Date**: 2026-08-07
 **Summary**: Parsed 16 loops from LOOP_INVENTORY.md.
 - **PARSE-AMBIGUOUS**: 4
-- **D4a Orphaned-Producer Findings**: 9
+- **D4a Orphaned-Producer Findings (RETIRED)**: 9
 - **D4b Coverage-Completeness Findings**: 3
 
 ### ⚠️ PARSE-AMBIGUOUS Inventory Entries
