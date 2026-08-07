@@ -462,11 +462,11 @@ practice). Input: `cold-start-field-observations-2026-07-18.md`.
 
 ### v1.4.15 — Loop Closure Verification 📋 PLANNED (2026-07-25)
 
-**Goal**: Deliver spec-to-test loop closure verification (`T1-K-19` / `HIB-081`) across three phases: (A) spec-scenario cross-reference parser & matcher; (B) static multi-consumer AST wiring audit (`wiring_audit.py`); (C) E2E scenario classification & hermetic fixture-based outcome-equivalence test pattern.
+**Goal**: Deliver spec-to-test loop closure verification (`T1-K-19` / `HIB-081`) across three phases: (A) spec-scenario cross-reference parser & matcher; (B) static multi-consumer AST wiring audit (`wiring_audit_core.py`); (C) E2E scenario classification & hermetic fixture-based outcome-equivalence test pattern.
 
 **Planned items**:
 - Phase A: `.agent/scripts/loop_closure_check.py` (spec-scenario cross-reference reporter)
-- Phase B: `.agent/scripts/wiring_audit.py` + `.agent/config/wiring_consumers.yaml` (static wiring audit)
+- Phase B: `.agent/scripts/wiring_audit_core.py` + `.agent/scripts/wiring_consumers.yaml` (static wiring audit)
 - Phase C: E2E classification + `tests/helpers/outcome_equivalence.py` fixture pattern
 
 **Spec**: `SPEC-loop-closure-verification.md`.

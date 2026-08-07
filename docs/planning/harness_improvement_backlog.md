@@ -282,3 +282,27 @@ No single canonical implementation exists for any script to import; each was han
 **Cross-reference**: LOOP-015 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10).
 
 ---
+
+## HIB-091 — `wiki_lint.py`'s post-fix findings were never routed to this backlog for triage
+
+**Date**: 2026-08-07
+**Source**: Pre-merge verification pass on `SPEC-loop-closure-verification.md` (T1-K-19, Tier 1 / Scenario 4q)
+**Pillar**: Tooling Hygiene / Loop Closure
+**Status**: 📋 Backlog (Unscheduled — triage required, 8 confirmed findings)
+
+**Symptom**: `SPEC-loop-closure-verification.md` §6's Implementation Map carries an explicit operational step: "Run `wiki_lint.py` once post-fix and route resulting findings, if any, to the harness improvement backlog for triage," matching Scenario 4q's requirement that surfaced findings "are logged as new backlog items rather than silently absorbed into this spec's delivery." The run happened — `.agent/state/wiki_lint_findings.md` was regenerated and committed in `b6bc5d4` — but the routing half never did. No entry in this file referenced those findings until this one.
+
+The report ([`.agent/state/wiki_lint_findings.md`](file:///c:/projects/ai-delivery-control/.agent/state/wiki_lint_findings.md), run 2026-08-04) contains **8 issues, 5 High / 3 Medium**, all against `src/scripts/review_context_universal.md`:
+
+- **High — orphaned rules** (documented but with no executable implementation in `architecture_checks.py`): `RULE:SECRETS`, `RULE:TDD-LAW`, `RULE:DATABASE-BYPASS`, `RULE:CLEAN-CODE`, `RULE:DEPENDENCIES`.
+- **Medium — stale identifiers** (referenced in review context but absent from `src/`): `requests`, `httpx`, `exc_info=True`.
+
+This is precisely the backlog the spec predicted ("This fix will very likely surface a backlog of real orphaned-rule and stale-identifier findings that have been invisible for an unknown period... Do not treat a non-zero post-fix findings count as a regression" — §7). The findings are the fix working as designed; the gap is that they were left sitting in a state file nobody triages, which is the same silent-non-closure shape T1-K-19 exists to detect. Worth noting the report is self-evidently under-read: its `**Run Date**` field is a raw float epoch (`1785849028.3115053`) rather than a formatted date.
+
+**Why not in T1-K-19**: T1-K-19 delivered the detection mechanism; §2's Out-of-Scope explicitly defers closing the instances it surfaces ("Retroactively writing missing tests for every gap Phase A/B surfaces... triaged and closed as separate, normal work"). Filing them here is the routing step the spec required, not a reopening of its scope. Triaging each finding — deciding whether a rule genuinely warrants an `architecture_checks.py` implementation or should be documented as advisory-only, and whether the three stale identifiers should be removed from the review context or are legitimately forward-looking — is the separate work this entry tracks.
+
+**Fix Direction**: Triage the 8 findings as two independent batches. (1) The five orphaned rules: for each, decide implement-in-`architecture_checks.py` vs. mark-advisory; several (`RULE:SECRETS`, `RULE:DATABASE-BYPASS`) look structurally checkable, while `RULE:CLEAN-CODE` likely does not and may warrant an explicit "prose-guidance, not mechanically enforceable" annotation so it stops being re-flagged every run. (2) The three stale identifiers: `requests`/`httpx`/`exc_info=True` appear in review-context guidance for a codebase that does not use them — either the guidance is inherited boilerplate to remove, or it is deliberately forward-looking and needs an exemption mechanism. Note that whichever way (1) resolves, a permanently-nonzero findings report re-creates the "gate cries wolf" dynamic §7 already names as a known failure mode.
+
+**Cross-reference**: `SPEC-loop-closure-verification.md` §6 (routing step), Scenario 4q (post-fix baseline run), §7 (expected-backlog residual risk). Related: HIB-089 (`wiki_lint.py`'s other subsystem — the dormant wiki compilation pipeline — is a separate, unconfigured-subsystem problem, not these findings).
+
+---

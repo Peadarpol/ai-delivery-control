@@ -1,0 +1,23 @@
+# Hermetic fixture project config — schema-hardening outcome-equivalence fixture.
+#
+# NOT real project data. Every value below is fixture-only (see README.md).
+# Consumed by tests/helpers/outcome_equivalence.py via the locators declared in
+# tests/integration/test_outcome_equivalence.py.
+
+project:
+  name: "schema-hardening-fixture"
+  type: "Fixture Project"
+
+framework:
+  version: "1.4.15"
+
+# The operational values under test. Shape mirrors what enforce_hardened_schemas.py's
+# load_whitelist() and analyze_schema.py's load_exempt_tables() read from a live project.
+schema_hardening:
+  whitelist:
+    - "src/domain/schemas/fixture_alpha.py"
+    - "src/domain/schemas/fixture_beta.py"
+  exempt_tables:
+    - "fixture_table_alpha"
+    - "fixture_table_beta"
+    - "fixture_table_gamma"

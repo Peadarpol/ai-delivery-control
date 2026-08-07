@@ -1,6 +1,6 @@
 # D3-Scoping Audit Report: Workflow Escalation-Trigger Format
 
-**Spec Reference**: [SPEC-loop-closure-verification.md](file:///c:/projects/ai-delivery-control/docs/planning/specs/SPEC-loop-closure-verification.md) (§5, Tier 4 D3-Scoping)  
+**Spec Reference**: [SPEC-loop-closure-verification.md](file:///c:/projects/ai-delivery-control/docs/planning/specs/archive/SPEC-loop-closure-verification.md) (§5, Tier 4 D3-Scoping)  
 **Date**: 2026-08-07  
 **Scope**: All 18 workflow markdown files under `.agent/workflows/`
 

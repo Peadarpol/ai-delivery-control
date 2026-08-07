@@ -19,7 +19,7 @@ defect."
 a mechanical sweep for the specific `subprocess`-not-imported bug pattern (confirmed
 three times already: `co_change_reconciler.py`, `wiki_lint.py`, `wiki_compile.py`)
 across `.agent/scripts/`, `src/scripts/`, `bootstrap/`, and `.agent/skills/**/scripts/`.
-Results recorded separately in `docs/planning/specs/SUBPROCESS-IMPORT-SWEEP.md` — check
+Results recorded separately in `docs/planning/specs/archive/SUBPROCESS-IMPORT-SWEEP.md` — check
 that file before re-deriving anything about this bug pattern from scratch here.
 
 **Two Gemini tasks dispatched 2026-08-04 — both RESOLVED and independently

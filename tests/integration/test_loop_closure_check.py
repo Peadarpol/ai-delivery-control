@@ -132,7 +132,7 @@ Then output is valid.
 
 def test_run_stage1_self_test():
     """Verify that mandatory Stage 1 self-test passes against SPEC-loop-closure-verification.md."""
-    spec_path = PROJECT_ROOT / "docs" / "planning" / "specs" / "SPEC-loop-closure-verification.md"
+    spec_path = PROJECT_ROOT / "docs" / "planning" / "specs" / "archive" / "SPEC-loop-closure-verification.md"
     assert spec_path.exists()
     assert run_stage1_self_test(spec_path) is True
 
