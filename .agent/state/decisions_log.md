@@ -1,9 +1,4 @@
 # Decisions Log
-## 2026-06-22: Stashed planning changes restoration and T1-I-05 / HIB-056 status reconciliation
-- **Decision**: Restored stashed changes from `stash@{1}` containing milestone plans, backlog updates (T1-D-07, T2-A-07, T3-C-05), and findings documents. Inspected `.agent/scripts/distill_dream.py` to confirm memory contradiction checking is fully delivered, updated the status of `T1-I-05` to `✅ (integrated into T1-D-03)` in `FRAMEWORK_BACKLOG.md` and `FRAMEWORK_ROADMAP.md`, and resolved `HIB-056` to complete.
-- **Context**: Edits made during a prior session were stashed and lost due to an overwrite. Status-marker drift on T1-I-05 caused inconsistency across references.
-- **Consequence**: All lost planning assets are restored and version controlled. Backlog integrity is restored with agreed status markers.
-
 ## 2026-06-22: Cline + Ollama Compatibility support (feat/framework-cline-compat)
 - **Decision**: Added `CLINE.md` shim template and structured `.clinerules/` rules directory templates covering session startup, workflows, absolute prohibitions, session close outcome overrides, git discipline, and environment details. Implemented `install_clinerules()` dynamic copy and template rendering logic in `install.py` and gitignored local hooks. Created `docs/CLINE_COMPAT.md` detailing the deferred hooks execution scripts.
 - **Context**: Consumer teams utilizing VS Code and Cline need structured instructions and rules loaded automatically, without introducing platform-incompatible hooks on Windows.
@@ -145,3 +140,9 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Context**: Audited all 18 files under .agent/workflows/*.md against eval-pipeline.md's Escalation Triggers convention. Only 1 of 18 (eval-pipeline.md itself) matches. 10 files express comparable escalation/blocking content through 5 different structural patterns (markdown tables, confidence-threshold headings, blockquote annotations, user-approval subheadings, step-by-step remediation procedures). 7 files have no comparable content at all. Full findings in docs/planning/specs/D3-SCOPING-AUDIT.md.
 - **Consequence**: D1 and D2 proceed to commit as genuinely delivered Tier 4 work. D3 itself is not delivered and not attempted -- its deferral is now a documented, evidence-based decision rather than an open scoping question.
 - **Impact**: medium
+
+## 2026-08-07: D4a (orphaned-producer scan) retired after empirical testing
+- **Decision**: Retire D4a as automated tooling. Replace with .agent/workflows/loop-audit.md, a documented manual audit process. D4b is unaffected and remains delivered.
+- **Context**: D4a was built per spec and run against the real LOOP_INVENTORY.md. It flagged 9 of 9 real producer/consumer pairs as ORPHANED-PRODUCER. Direct trace of LOOP-001 confirmed this is a false positive: harness_health.py and distill_dream.py are genuinely wired via shared-file access (Path().glob() on a common directory), with zero Python-level import between them. AST reference search can only detect code-level coupling (imports, function calls) -- and this codebase's real coupling is almost entirely file-based. Every confirmed real defect this spec's audits ever found (HIB-080, LOOP-001, LOOP-004, LOOP-013) was file-based or schema-based drift, not a broken import -- meaning D4a was structurally aimed at a failure mode this codebase does not exhibit.
+- **Consequence**: SPEC-loop-closure-verification.md updated to v1.17 reflecting the retirement across all locations (§2, §5, §5.5, §6, §7, §8, closing paragraph). D4b's own three-case self-test (LOOP-002, LOOP-016, LOOP-017) is unaffected and remains valid evidence for D4b specifically.
+- **Impact**: high

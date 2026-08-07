@@ -269,3 +269,8 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: An overwrite event had stashed workspace state. A complete audit of all remaining stashed entries was required to ensure no planning documents, functions, or logs were lost.
 - **Consequence**: All stashed changes have been successfully analyzed and categorized, and the missing external defect entry has been restored to maintain perfect backlog traceability.
 
+## 2026-06-22: Stashed planning changes restoration and T1-I-05 / HIB-056 status reconciliation
+- **Decision**: Restored stashed changes from `stash@{1}` containing milestone plans, backlog updates (T1-D-07, T2-A-07, T3-C-05), and findings documents. Inspected `.agent/scripts/distill_dream.py` to confirm memory contradiction checking is fully delivered, updated the status of `T1-I-05` to `✅ (integrated into T1-D-03)` in `FRAMEWORK_BACKLOG.md` and `FRAMEWORK_ROADMAP.md`, and resolved `HIB-056` to complete.
+- **Context**: Edits made during a prior session were stashed and lost due to an overwrite. Status-marker drift on T1-I-05 caused inconsistency across references.
+- **Consequence**: All lost planning assets are restored and version controlled. Backlog integrity is restored with agreed status markers.
+

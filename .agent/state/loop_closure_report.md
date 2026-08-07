@@ -464,3 +464,38 @@ Per SPEC-loop-closure-verification A 5, the following 10 scenarios represent raw
 
 ## ⚪ SKIPPED Scenarios (Non-Code / Spec Tags)
 Total skipped scenarios: 51 (all components are spec/backlog tags or non-code text).
+
+---
+
+---
+
+## Phase D: Producer/Consumer Contracts, Tooling Staleness, and Coverage Completeness
+**Run Date**: 2026-08-07
+**Summary**: Parsed 16 loops from LOOP_INVENTORY.md.
+- **PARSE-AMBIGUOUS**: 4
+- **D4a Orphaned-Producer Findings**: 9
+- **D4b Coverage-Completeness Findings**: 3
+
+### ⚠️ PARSE-AMBIGUOUS Inventory Entries
+- **LOOP-005** (`Status: UNVERIFIED`): Unparseable or uninvestigated producer/consumer field
+- **LOOP-007** (`Status: UNVERIFIED`): Unparseable or uninvestigated producer/consumer field
+- **LOOP-008** (`Status: UNVERIFIED`): Unparseable or uninvestigated producer/consumer field
+- **LOOP-009** (`Status: UNVERIFIED`): Unparseable or uninvestigated producer/consumer field
+
+⚠️ D4a RETIRED — DO NOT TREAT AS SIGNAL. The 9 findings below were the empirical evidence that led to D4a's retirement, not confirmed defects. Direct trace confirmed at least LOOP-001 is a false positive — genuinely wired via file-based coupling (Path().glob()) that D4a's AST reference search cannot detect by design. See SPEC-loop-closure-verification.md §7 and v1.17 changelog for the full finding. Retained here as the historical record that motivated retirement, not as a current defect list.
+
+### ❌ D4a Orphaned-Producer Findings
+- **LOOP-001** (Producer: `distill_dream` -> Consumer: `harness_health`): Zero external code references found for consumer 'harness_health'
+- **LOOP-003** (Producer: `harness_health` -> Consumer: none found): Explicit consumer: none found
+- **LOOP-004** (Producer: `incident_to_eval` -> Consumer: `regression_runner`): Zero external code references found for consumer 'regression_runner'
+- **LOOP-006** (Producer: `record_decision` -> Consumer: `AGENTS`): Zero external code references found for consumer 'AGENTS'
+- **LOOP-012** (Producer: `co_change_reconciler` -> Consumer: none found): Explicit consumer: none found
+- **LOOP-013** (Producer: `wiki_lint` -> Consumer: none found): Explicit consumer: none found
+- **LOOP-014** (Producer: `wiki_compile` -> Consumer: `wiki_lint`): Zero external code references found for consumer 'wiki_lint'
+- **LOOP-017** (Producer: `init_session` -> Consumer: `retention_cleanup`): Zero external code references found for consumer 'retention_cleanup'
+- **LOOP-018** (Producer: `check_spec` -> Consumer: none found): Explicit consumer: none found
+
+### 📊 D4b Coverage-Completeness Results (VERIFIED-WORKING Loops)
+- ✅ **LOOP-002** (`capability_calibration` <-> `get_calibrated_weight`): `CO-LOCATED-TEST-FOUND` in `ai_review.py`, `test_capability_calibration.py`
+- ✅ **LOOP-016** (`ai_review` <-> `rebuttal`): `CO-LOCATED-TEST-FOUND` in `test_ai_review.py`, `test_rebuttal.py`
+- ❌ **LOOP-017** (`init_session` <-> `retention_cleanup`): `NO-COLOCATED-TEST-FOUND` — zero co-located tests found

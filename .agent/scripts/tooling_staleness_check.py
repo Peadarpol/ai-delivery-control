@@ -169,6 +169,7 @@ def is_candidate_path_literal(val: str) -> bool:
         phrase in cleaned
         for phrase in [
             "Usage:",
+            "Update ",
             "Failed to",
             "Could not",
             "No ",
