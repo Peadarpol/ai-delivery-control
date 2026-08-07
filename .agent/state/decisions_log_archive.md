@@ -254,3 +254,18 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: A rollup branch `feat/v1.4.4` was needed to cleanly integrate all outstanding branch features and bug fixes. A stale branch detection mechanism was requested to prevent accumulation of orphaned branch work.
 - **Consequence**: All unmerged features are integrated, 372 unit/E2E tests are passing, checksums registry regenerated, and stale branch checks dynamically detect unmerged branches older than a configurable threshold (default 14 days).
 
+## 2026-06-22: Fixed Bootstrap Installer Module Copies
+- **Decision**: Updated `bootstrap/install.py` to copy all framework-owned scripts listed under `manifest.FRAMEWORK_OWNED` in the `src/scripts/` directory to the target project scripts directory on installation and upgrade.
+- **Context**: Consumer projects bootstrapped with the framework would fail at startup with `ModuleNotFoundError: No module named 'harness_utils'` because the installer was only copying `ai_review.py` and `review_context_universal.md` to the target `src/scripts/` directory, leaving out core runtime dependencies like `harness_utils.py` and `state_persistence.py`.
+- **Consequence**: Fresh bootstrap installations run `init_session.py` and review gate execution successfully out-of-the-box with all required modules present.
+
+## 2026-06-22: Resolved distill_dream test date time-bomb
+- **Decision**: Replaced all hardcoded dates (`2026-06-` and `2026-05-`) in `tests/test_distill_dream.py` with dynamic datetimes computed relative to execution time using `_log_time()` and `_ledger_date()` helpers.
+- **Context**: The test `test_hib_dream_03_threshold_redesign_appearance` was failing because the 30-day cutoff logic in `distill_dream.py` dynamically computes the threshold relative to execution time, filtering out May 2026 test ledger records which are now more than 30 days old.
+- **Consequence**: The entire test suite of 358 tests now passes successfully, and the tests are safe against future date-based failures.
+
+## 2026-06-22: Stashes Verification and HIB-ENV-01 Backlog Restoration
+- **Decision**: Audited all remaining git stashes and restored the missing `HIB-ENV-01` external defect backlog item (Antigravity phantom-trajectory defect) from `stash@{2}` into `docs/planning/FRAMEWORK_BACKLOG.md`. Verified that other stashed changes were already fully integrated into HEAD.
+- **Context**: An overwrite event had stashed workspace state. A complete audit of all remaining stashed entries was required to ensure no planning documents, functions, or logs were lost.
+- **Consequence**: All stashed changes have been successfully analyzed and categorized, and the missing external defect entry has been restored to maintain perfect backlog traceability.
+

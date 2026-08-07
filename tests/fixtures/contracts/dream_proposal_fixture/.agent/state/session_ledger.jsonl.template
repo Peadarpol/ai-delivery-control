@@ -1,0 +1,5 @@
+{"session_id": "sess-001", "date": "{NOW_MINUS_25D}T10:00:00Z", "outcome": "success"}
+{"session_id": "sess-002", "date": "{NOW_MINUS_25D}T11:00:00Z", "outcome": "success"}
+{"session_id": "sess-003", "date": "{NOW_MINUS_25D}T12:00:00Z", "outcome": "success"}
+{"session_id": "sess-004", "date": "{NOW_MINUS_25D}T13:00:00Z", "outcome": "success"}
+{"session_id": "sess-005", "date": "{NOW_MINUS_25D}T14:00:00Z", "outcome": "success"}

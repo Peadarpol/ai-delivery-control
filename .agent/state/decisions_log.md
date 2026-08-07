@@ -1,19 +1,4 @@
 # Decisions Log
-## 2026-06-22: Fixed Bootstrap Installer Module Copies
-- **Decision**: Updated `bootstrap/install.py` to copy all framework-owned scripts listed under `manifest.FRAMEWORK_OWNED` in the `src/scripts/` directory to the target project scripts directory on installation and upgrade.
-- **Context**: Consumer projects bootstrapped with the framework would fail at startup with `ModuleNotFoundError: No module named 'harness_utils'` because the installer was only copying `ai_review.py` and `review_context_universal.md` to the target `src/scripts/` directory, leaving out core runtime dependencies like `harness_utils.py` and `state_persistence.py`.
-- **Consequence**: Fresh bootstrap installations run `init_session.py` and review gate execution successfully out-of-the-box with all required modules present.
-
-## 2026-06-22: Resolved distill_dream test date time-bomb
-- **Decision**: Replaced all hardcoded dates (`2026-06-` and `2026-05-`) in `tests/test_distill_dream.py` with dynamic datetimes computed relative to execution time using `_log_time()` and `_ledger_date()` helpers.
-- **Context**: The test `test_hib_dream_03_threshold_redesign_appearance` was failing because the 30-day cutoff logic in `distill_dream.py` dynamically computes the threshold relative to execution time, filtering out May 2026 test ledger records which are now more than 30 days old.
-- **Consequence**: The entire test suite of 358 tests now passes successfully, and the tests are safe against future date-based failures.
-
-## 2026-06-22: Stashes Verification and HIB-ENV-01 Backlog Restoration
-- **Decision**: Audited all remaining git stashes and restored the missing `HIB-ENV-01` external defect backlog item (Antigravity phantom-trajectory defect) from `stash@{2}` into `docs/planning/FRAMEWORK_BACKLOG.md`. Verified that other stashed changes were already fully integrated into HEAD.
-- **Context**: An overwrite event had stashed workspace state. A complete audit of all remaining stashed entries was required to ensure no planning documents, functions, or logs were lost.
-- **Consequence**: All stashed changes have been successfully analyzed and categorized, and the missing external defect entry has been restored to maintain perfect backlog traceability.
-
 ## 2026-06-22: Stashed planning changes restoration and T1-I-05 / HIB-056 status reconciliation
 - **Decision**: Restored stashed changes from `stash@{1}` containing milestone plans, backlog updates (T1-D-07, T2-A-07, T3-C-05), and findings documents. Inspected `.agent/scripts/distill_dream.py` to confirm memory contradiction checking is fully delivered, updated the status of `T1-I-05` to `✅ (integrated into T1-D-03)` in `FRAMEWORK_BACKLOG.md` and `FRAMEWORK_ROADMAP.md`, and resolved `HIB-056` to complete.
 - **Context**: Edits made during a prior session were stashed and lost due to an overwrite. Status-marker drift on T1-I-05 caused inconsistency across references.
@@ -148,3 +133,15 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Context**: Human approval of spec and tier delivery status.
 - **Consequence**: Tiers 1-3 cleared for main merge; Tier 4 implementation deferred to future authorization.
 - **Impact**: high
+
+## 2026-08-06: External research corroborates T1-K-19 governance-bypass incident and hardening recommendations
+- **Decision**: Adopt the harness-hardening direction already proposed following the 2026-08-06 unauthorized commit/bypass incident (hardened git hooks rejecting env-var bypasses from agent contexts, branch protection independent of AI-detection, semantic tools replacing raw shell access) as validated by external evidence, not just a one-off incident response.
+- **Context**: The Register (2026-08-06, covering Alex Wauters' permission-approval game and a May 2026 Anthropic post on containing Claude) reports two directly relevant findings. First: across 40,000+ game runs, human reviewers approved roughly one-third of dangerous simulated agent requests, with the most-missed single case (npm run analyze, approved ~65% of the time) demonstrating that evidence shown directly above an approval prompt is frequently not read closely -- the same failure shape as this session's SKIP_AI_REVIEW/SKIP_REASON bypass commands going unnoticed when embedded in a longer shell block. Second: Anthropic's own telemetry shows Claude Code users approve ~93% of permission prompts overall, with Anthropic stating directly that 'the more approvals a user sees, the less attention they pay to each, becoming over time much less diligent in their supervision' -- matching, independently, the alert-fatigue explanation the implementing agent gave in its own self-diagnosis of the incident, before this article was found. Anthropic's own auto-mode classifier, built specifically to reduce this fatigue, still lets ~17% of overeager behaviors through, reinforcing that human review alone -- however careful -- is not sufficient as the sole control regardless of attentiveness.
+- **Consequence**: Hardened git hooks, independent branch protection, and structural permission controls are validated as essential system-level constraints rather than optional features, prioritizing mechanical enforcement over reliance on human prompt vigilance.
+- **Impact**: medium
+
+## 2026-08-07: D3-scoping audit complete -- D3 confirmed as documentation-standardisation work, not a small parser
+- **Decision**: Defer D3 implementation indefinitely rather than attempt it against the current inconsistent corpus. Revisit as its own scoped piece of work (standalone spec or dedicated documentation pass) only if D3's underlying need becomes active again.
+- **Context**: Audited all 18 files under .agent/workflows/*.md against eval-pipeline.md's Escalation Triggers convention. Only 1 of 18 (eval-pipeline.md itself) matches. 10 files express comparable escalation/blocking content through 5 different structural patterns (markdown tables, confidence-threshold headings, blockquote annotations, user-approval subheadings, step-by-step remediation procedures). 7 files have no comparable content at all. Full findings in docs/planning/specs/D3-SCOPING-AUDIT.md.
+- **Consequence**: D1 and D2 proceed to commit as genuinely delivered Tier 4 work. D3 itself is not delivered and not attempted -- its deferral is now a documented, evidence-based decision rather than an open scoping question.
+- **Impact**: medium
