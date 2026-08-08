@@ -60,7 +60,10 @@ except ImportError:
             return res
         def dict(self) -> Dict[str, Any]:
             return self.model_dump()
-from src.scripts.harness_utils import PROJECT_ROOT
+try:
+    from src.scripts.harness_utils import PROJECT_ROOT
+except ImportError:
+    from harness_utils import PROJECT_ROOT
 
 class ArchViolation(BaseModel):
     file: str
@@ -104,7 +107,10 @@ class GateContext(BaseModel):
     todo_delta: Optional[int] = None
 
 def get_context_path(project_root: Optional[Path] = None) -> Path:
-    from src.scripts.harness_utils import PROJECT_ROOT
+    try:
+        from src.scripts.harness_utils import PROJECT_ROOT
+    except ImportError:
+        from harness_utils import PROJECT_ROOT
     root = project_root or PROJECT_ROOT
     return root / ".agent" / "state" / "gate_context_current.json"
 
