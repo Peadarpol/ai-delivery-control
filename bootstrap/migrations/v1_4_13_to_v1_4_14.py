@@ -15,11 +15,11 @@ class MigrationV1_4_13_to_V1_4_14(VersionRewriteMixin, MigrationProtocol):
 
     def migrate(self, config_path: Path) -> None:
         """Bump framework version from v1.4.13 to v1.4.14 in config.yaml."""
-        self._rewrite_version(config_path, self.from_version, self.to_version)
+        self._rewrite_version(config_path, self.from_version, self.to_version, section="framework")
 
     def downgrade(self, config_path: Path) -> None:
         """Revert framework version from v1.4.14 back to v1.4.13 in config.yaml."""
-        self._rewrite_version(config_path, self.to_version, self.from_version)
+        self._rewrite_version(config_path, self.to_version, self.from_version, section="framework")
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().

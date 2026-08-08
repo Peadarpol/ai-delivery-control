@@ -15,11 +15,11 @@ class MigrationV1_4_1_to_V1_4_2(VersionRewriteMixin, MigrationProtocol):
 
     def migrate(self, config_path: Path) -> None:
         """Bump framework version from v1.4.1 to v1.4.2 in config.yaml."""
-        self._rewrite_version(config_path, self.from_version, self.to_version)
+        self._rewrite_version(config_path, self.from_version, self.to_version, section="framework")
 
     def downgrade(self, config_path: Path) -> None:
         """Revert framework version from v1.4.2 back to v1.4.1 in config.yaml."""
-        self._rewrite_version(config_path, self.to_version, self.from_version)
+        self._rewrite_version(config_path, self.to_version, self.from_version, section="framework")
 
 
 FROM_VERSION = "1.4.1"

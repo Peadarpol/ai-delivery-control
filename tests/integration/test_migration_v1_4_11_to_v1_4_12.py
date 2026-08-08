@@ -9,7 +9,7 @@ from bootstrap.migrations.v1_4_11_to_v1_4_12 import MigrationV1_4_11_to_V1_4_12
 
 def test_migration_v1_4_11_to_v1_4_12_migrate_and_downgrade(tmp_path: Path):
     config_file = tmp_path / "config.yaml"
-    config_file.write_text('version: "1.4.11"\narchitecture:\n  layers:\n    domain: ["src/domain"]\n', encoding="utf-8")
+    config_file.write_text('framework:\n  version: "1.4.11"\narchitecture:\n  layers:\n    domain: ["src/domain"]\n', encoding="utf-8")
 
     migration = MigrationV1_4_11_to_V1_4_12()
     migration.migrate(config_file)

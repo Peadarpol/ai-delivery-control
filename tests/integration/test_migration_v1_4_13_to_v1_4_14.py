@@ -139,23 +139,19 @@ def test_migration_v1_4_13_to_v1_4_14_leaves_project_version_untouched(tmp_path:
     assert '  version: "0.1.0"\n' in content
 
 
-def test_migration_v1_4_13_to_v1_4_14_ambiguous_version_lines_raise(tmp_path: Path):
-    """Regression guard: two lines at from_version are ambiguous and must not be rewritten.
-
-    Before the fix this config had BOTH version lines rewritten to "1.4.14" and
-    migrate() returned normally. The migration now refuses to guess and leaves the
-    file byte-identical.
-    """
+def test_migration_v1_4_13_to_v1_4_14_ambiguous_version_lines_handled(tmp_path: Path):
+    """Coincidental project.version equal to from_version must not block framework version upgrade."""
     config_file = tmp_path / "config.yaml"
     original = (
         'framework:\n  version: "1.4.13"\n\nproject:\n  name: "demo"\n  version: "1.4.13"\n'
     )
     config_file.write_text(original, encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="found 2"):
-        MigrationV1_4_13_to_V1_4_14().migrate(config_file)
+    MigrationV1_4_13_to_V1_4_14().migrate(config_file)
 
-    assert config_file.read_text(encoding="utf-8") == original
+    content = config_file.read_text(encoding="utf-8")
+    assert 'framework:\n  version: "1.4.14"\n' in content
+    assert '  version: "1.4.13"\n' in content
 
 
 def test_migration_v1_4_13_to_v1_4_14_preserves_trailing_comment(tmp_path: Path):

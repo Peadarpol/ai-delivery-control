@@ -77,7 +77,7 @@ def run_standard_migration_suite(migration_obj, from_version: str, to_version: s
     assert f'version: "{to_version}"' in content
     assert 'version: "0.1.0"' in content  # Must NOT be clobbered!
 
-    # 9. Ambiguous version lines error (more than 1 line matching expected version)
+    # 9. Coincidental matching project.version (project.version == framework.version == from_version)
     config_ambiguous = tmp_path / "config_ambiguous.yaml"
     config_ambiguous.write_text(
         f'framework:\n  version: "{from_version}"\n'
@@ -85,8 +85,19 @@ def run_standard_migration_suite(migration_obj, from_version: str, to_version: s
         f'  version: "{from_version}"\n',
         encoding="utf-8"
     )
+    migration_obj.migrate(config_ambiguous)
+    content = config_ambiguous.read_text(encoding="utf-8")
+    assert f'framework:\n  version: "{to_version}"' in content
+    assert f'  version: "{from_version}"' in content  # project.version untouched
+
+    # 10. Truly ambiguous version lines under framework: header
+    config_true_ambiguous = tmp_path / "config_true_ambiguous.yaml"
+    config_true_ambiguous.write_text(
+        f'framework:\n  version: "{to_version}"\n  version: "{to_version}"\n',
+        encoding="utf-8"
+    )
     with pytest.raises(RuntimeError, match="found 2"):
-        migration_obj.migrate(config_ambiguous)
+        migration_obj.downgrade(config_true_ambiguous)
 
     # 10. Trailing comment preservation
     config_tc = tmp_path / "config_tc.yaml"

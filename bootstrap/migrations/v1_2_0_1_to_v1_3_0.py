@@ -57,7 +57,7 @@ acceptance_gate:
             content = content.rstrip() + "\n" + "\n".join(blocks_to_append) + "\n"
 
         config_path.write_text(content, encoding="utf-8")
-        self._rewrite_version(config_path, self.from_version, self.to_version)
+        self._rewrite_version(config_path, self.from_version, self.to_version, section="framework")
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration version from v1.3.0 back to v1.2.0.1 and remove traceability/acceptance gate blocks."""
@@ -84,7 +84,7 @@ acceptance_gate:
         # Let's clean up multiple newlines at end
         content = re.sub(r"\n\n\n+", "\n\n", content)
         config_path.write_text(content, encoding="utf-8")
-        self._rewrite_version(config_path, self.to_version, self.from_version)
+        self._rewrite_version(config_path, self.to_version, self.from_version, section="framework")
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().

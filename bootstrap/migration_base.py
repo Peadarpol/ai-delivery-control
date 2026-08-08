@@ -97,8 +97,17 @@ class VersionRewriteMixin:
     def _validate_config(self, content: str) -> None:
         validate_yaml_config(content)
 
-    def _rewrite_version(self, config_path: Path, expected: str | tuple | list | set, new: str) -> None:
-        """Rewrite the single `version:` line currently holding expected, replacing it with new.
+    def _rewrite_version(
+        self,
+        config_path: Path,
+        expected: str | tuple | list | set,
+        new: str,
+        section: str = "framework",
+    ) -> None:
+        r"""Rewrite the single `version:` line under `section:` currently holding expected, replacing it with new.
+
+        Finds the named section header (`^{section}\s*:` at column 0) and only matches
+        a `version:` line that is an indented child of that section.
 
         Raises instead of reporting silent success when the config is not in the
         expected state: ValueError when a version key exists but holds an unexpected
@@ -111,13 +120,34 @@ class VersionRewriteMixin:
         self._validate_config(content)
         lines = content.splitlines()
 
+        section_pattern = re.compile(rf"^{re.escape(section)}\s*:")
+
         matches = []
+        in_section = False
+        section_indent = -1
+
         for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
                 continue
-            match = VERSION_LINE_RE.match(line)
-            if match:
-                matches.append((idx, match))
+
+            indent = len(line) - len(line.lstrip())
+
+            if not in_section:
+                if section_pattern.match(line):
+                    in_section = True
+                    section_indent = indent
+            else:
+                if indent <= section_indent:
+                    in_section = False
+                    if section_pattern.match(line):
+                        in_section = True
+                        section_indent = indent
+                    continue
+
+                match = VERSION_LINE_RE.match(line)
+                if match:
+                    matches.append((idx, match))
 
         expected_set = {expected} if isinstance(expected, str) else set(expected)
 

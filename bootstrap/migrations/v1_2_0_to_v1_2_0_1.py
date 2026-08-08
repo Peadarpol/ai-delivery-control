@@ -19,7 +19,7 @@ class MigrationV1_2_0_to_V1_2_0_1(VersionRewriteMixin, MigrationProtocol):
 
     def migrate(self, config_path: Path) -> None:
         """Upgrade configuration version from v1.2.0 to v1.2.0.1 and append gitignore exclusions."""
-        self._rewrite_version(config_path, self.from_version, self.to_version)
+        self._rewrite_version(config_path, self.from_version, self.to_version, section="framework")
 
         # Update .gitignore in the target project
         project_root = config_path.parent.parent
@@ -58,7 +58,7 @@ class MigrationV1_2_0_to_V1_2_0_1(VersionRewriteMixin, MigrationProtocol):
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration version from v1.2.0.1 back to v1.2.0 and remove gitignore exclusions."""
-        self._rewrite_version(config_path, self.to_version, self.from_version)
+        self._rewrite_version(config_path, self.to_version, self.from_version, section="framework")
 
         # Downgrade gitignore: scan for the exact header, remove from that line through the next blank line
         project_root = config_path.parent.parent

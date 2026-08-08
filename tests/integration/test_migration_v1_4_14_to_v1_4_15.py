@@ -133,16 +133,19 @@ def test_migration_v1_4_14_to_v1_4_15_leaves_project_version_untouched(tmp_path:
     assert '  version: "0.1.0"\n' in content
 
 
-def test_migration_v1_4_14_to_v1_4_15_ambiguous_version_lines_raise(tmp_path: Path):
-    """More than one line at from_version is ambiguous and must raise."""
+def test_migration_v1_4_14_to_v1_4_15_ambiguous_version_lines_handled(tmp_path: Path):
+    """Coincidental project.version equal to from_version must not block framework version upgrade."""
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         'framework:\n  version: "1.4.14"\n\nproject:\n  version: "1.4.14"\n',
         encoding="utf-8",
     )
 
-    with pytest.raises(RuntimeError, match="found 2"):
-        MigrationV1_4_14_to_V1_4_15().migrate(config_file)
+    MigrationV1_4_14_to_V1_4_15().migrate(config_file)
+
+    content = config_file.read_text(encoding="utf-8")
+    assert 'framework:\n  version: "1.4.15"\n' in content
+    assert '  version: "1.4.14"\n' in content
 
 
 def test_migration_v1_4_14_to_v1_4_15_preserves_trailing_comment(tmp_path: Path):

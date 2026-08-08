@@ -5,7 +5,7 @@
 - **Next Steps**: Execute End-of-Release Tasks (§9) for release `v1.4.15` when instructed by user.
 
 ## Branch
-- `feat/v1.4.15-loop-closure-verification`
+- `main`
 
 ## Current Status
 - **Tier 4 Complete**:

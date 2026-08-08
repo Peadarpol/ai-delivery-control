@@ -54,7 +54,7 @@ class MigrationV1_4_11_to_V1_4_12(VersionRewriteMixin, MigrationProtocol):
             lines = lines[:inject_idx] + enforcement_block + lines[inject_idx:]
 
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        self._rewrite_version(config_path, self.from_version, self.to_version)
+        self._rewrite_version(config_path, self.from_version, self.to_version, section="framework")
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration version from v1.4.12 back to v1.4.11 removing enforcement block."""
@@ -87,7 +87,7 @@ class MigrationV1_4_11_to_V1_4_12(VersionRewriteMixin, MigrationProtocol):
             new_lines.append(line)
 
         config_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-        self._rewrite_version(config_path, self.to_version, self.from_version)
+        self._rewrite_version(config_path, self.to_version, self.from_version, section="framework")
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().

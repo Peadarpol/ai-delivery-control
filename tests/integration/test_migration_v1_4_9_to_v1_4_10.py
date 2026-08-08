@@ -17,7 +17,7 @@ from bootstrap.migrations.v1_4_9_to_v1_4_10 import MigrationV1_4_9_to_V1_4_10
 def test_migration_v1_4_9_to_v1_4_10_migrate_and_downgrade(tmp_path):
     """Verify migrate() bumps 1.4.9 -> 1.4.10 and downgrade() reverts 1.4.10 -> 1.4.9."""
     config_file = tmp_path / "config.yaml"
-    initial_content = 'version: "1.4.9"\nouter_loop:\n  mode: "strict"\n'
+    initial_content = 'framework:\n  version: "1.4.9"\nouter_loop:\n  mode: "strict"\n'
     config_file.write_text(initial_content, encoding="utf-8")
 
     migration = MigrationV1_4_9_to_V1_4_10()

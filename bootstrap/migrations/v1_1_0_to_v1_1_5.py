@@ -92,7 +92,7 @@ class MigrationV1_1_0_to_V1_1_5(VersionRewriteMixin, MigrationProtocol):
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
         # E: Bump Framework Version
-        self._rewrite_version(config_path, self.from_version, self.to_version)
+        self._rewrite_version(config_path, self.from_version, self.to_version, section="framework")
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration from v1.1.5 back to v1.1.0 key format."""
@@ -202,7 +202,7 @@ class MigrationV1_1_0_to_V1_1_5(VersionRewriteMixin, MigrationProtocol):
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
         # 3. Bump version back to v1.1.0
-        self._rewrite_version(config_path, self.to_version, self.from_version)
+        self._rewrite_version(config_path, self.to_version, self.from_version, section="framework")
 
     def _inject_in_section(self, lines: list[str], section_name: str, new_keys: list[str]) -> list[str]:
         """Find index of section_name: and inject new_keys after its last child."""
