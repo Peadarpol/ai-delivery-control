@@ -163,7 +163,8 @@ def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
                     capture_output=True,
                     text=True,
                     encoding="utf-8",
-                    cwd=str(PROJECT_ROOT)
+                    cwd=str(PROJECT_ROOT),
+                    timeout=60
                 )
                 if res.returncode == 0:
                     tests = [line.strip() for line in res.stdout.splitlines() if line.strip() and "::" in line]
@@ -176,6 +177,11 @@ def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
                         "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
                         "error": f"pytest returned {res.returncode}"
                     }
+            except subprocess.TimeoutExpired:
+                evidence[f] = {
+                    "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+                    "error": "pytest collection timed out after 60s"
+                }
             except Exception as e:
                 evidence[f] = {
                     "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
