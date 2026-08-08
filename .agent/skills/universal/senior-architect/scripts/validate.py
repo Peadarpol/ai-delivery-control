@@ -44,7 +44,7 @@ def main() -> int:
     # Check 1: Architecture checks (layer boundaries, coupling thresholds)
     arch_script = SCRIPTS_DIR / "architecture_checks.py"
     exit_code, _ = run_cmd(
-        ["python", str(arch_script)],
+        ["poetry", "run", "python", str(arch_script)],
         "Architecture Checks — Layer Boundaries & Coupling",
     )
     results.append(("Architecture Checks", exit_code == 0))

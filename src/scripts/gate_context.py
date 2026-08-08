@@ -159,7 +159,7 @@ def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
             test_file = found_tests[0]
             try:
                 res = subprocess.run(
-                    ["pytest", "--collect-only", "-q", str(test_file)],
+                    [sys.executable, "-m", "pytest", "--collect-only", "-q", str(test_file)],
                     capture_output=True,
                     text=True,
                     encoding="utf-8",
