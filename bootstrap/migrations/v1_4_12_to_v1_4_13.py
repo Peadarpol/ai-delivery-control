@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Set
 
-from bootstrap.migration_base import MigrationProtocol
+from bootstrap.migration_base import MigrationProtocol, VersionRewriteMixin
 
 
 def extract_set_literal(file_path: Path, variable_name: str) -> Set[str]:
@@ -54,7 +54,7 @@ def extract_set_literal(file_path: Path, variable_name: str) -> Set[str]:
     return set()
 
 
-class MigrationV1_4_12_to_V1_4_13(MigrationProtocol):
+class MigrationV1_4_12_to_V1_4_13(VersionRewriteMixin, MigrationProtocol):
     from_version = "1.4.12"
     to_version = "1.4.13"
 
@@ -126,21 +126,8 @@ class MigrationV1_4_12_to_V1_4_13(MigrationProtocol):
                     break
             lines = lines[:inject_idx] + sh_block + lines[inject_idx:]
 
-        # Update Framework Version
-        replaced = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
-                replaced = True
-                break
-
-        if not replaced:
-            raise ValueError(f"Version key not found in configuration file at {config_path}")
-
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.from_version, self.to_version, section="framework")
 
         # Confirmation Banner
         print("=" * 60)
@@ -158,23 +145,7 @@ class MigrationV1_4_12_to_V1_4_13(MigrationProtocol):
 
         content = config_path.read_text(encoding="utf-8")
         self._validate_config(content)
-        lines = content.splitlines()
-
-        # Update Framework Version back to 1.4.12
-        replaced = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
-                replaced = True
-                break
-
-        if not replaced:
-            raise ValueError(f"Version key not found in configuration file at {config_path}")
-
-        config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.to_version, self.from_version, section="framework")
 
 
 FROM_VERSION = "1.4.12"

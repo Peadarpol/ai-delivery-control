@@ -10,6 +10,34 @@ from bootstrap.migrations.v1_4_12_to_v1_4_13 import (
     MigrationV1_4_12_to_V1_4_13,
     extract_set_literal,
 )
+from tests.integration.migration_test_helper import run_standard_migration_suite
+
+
+def test_migration_v1_4_12_to_v1_4_13_standard_suite(tmp_path: Path):
+    migration = MigrationV1_4_12_to_V1_4_13()
+    run_standard_migration_suite(migration, "1.4.12", "1.4.13", tmp_path)
+
+
+def test_migration_v1_4_12_to_v1_4_13_project_before_framework_order(tmp_path: Path):
+    """Verify that project.version appearing before framework.version does not get corrupted."""
+    agent_dir = tmp_path / ".agent"
+    agent_dir.mkdir(parents=True)
+    config_file = agent_dir / "config.yaml"
+    config_file.write_text(
+        'project:\n'
+        '  name: "GymBase"\n'
+        '  version: "0.5.0"\n'
+        'framework:\n'
+        '  version: "1.4.12"\n',
+        encoding="utf-8",
+    )
+
+    migration = MigrationV1_4_12_to_V1_4_13()
+    migration.migrate(config_file)
+
+    content = config_file.read_text(encoding="utf-8")
+    assert 'framework:\n  version: "1.4.13"' in content
+    assert 'project:\n  name: "GymBase"\n  version: "0.5.0"' in content
 
 
 def test_extract_set_literal_ast_and_regex(tmp_path: Path):
@@ -27,7 +55,7 @@ def test_migration_v1_4_12_to_v1_4_13_migrate_and_downgrade(tmp_path: Path, caps
     agent_dir = tmp_path / ".agent"
     agent_dir.mkdir(parents=True)
     config_file = agent_dir / "config.yaml"
-    config_file.write_text('version: "1.4.12"\n', encoding="utf-8")
+    config_file.write_text('framework:\n  version: "1.4.12"\n', encoding="utf-8")
 
     scripts_dir = agent_dir / "scripts"
     scripts_dir.mkdir(parents=True)
@@ -70,7 +98,8 @@ def test_schema_hardening_config_readers(tmp_path: Path):
     agent_dir.mkdir(parents=True)
     config_file = agent_dir / "config.yaml"
     config_file.write_text(
-        'version: "1.4.13"\n'
+        'framework:\n'
+        '  version: "1.4.13"\n'
         'schema_hardening:\n'
         '  whitelist:\n'
         '    - "src/domain/schemas/custom.py"\n'
@@ -95,4 +124,3 @@ def test_schema_hardening_config_readers(tmp_path: Path):
     exempt = analyze_schema.load_exempt_tables(tmp_path)
     assert "my_custom_table" in exempt
     assert "alembic_version" in exempt
-
