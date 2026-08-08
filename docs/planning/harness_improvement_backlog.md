@@ -306,3 +306,19 @@ This is precisely the backlog the spec predicted ("This fix will very likely sur
 **Cross-reference**: `SPEC-loop-closure-verification.md` §6 (routing step), Scenario 4q (post-fix baseline run), §7 (expected-backlog residual risk). Related: HIB-089 (`wiki_lint.py`'s other subsystem — the dormant wiki compilation pipeline — is a separate, unconfigured-subsystem problem, not these findings).
 
 ---
+
+## HIB-092 — Oversized-diff gate offers an unconditional bypass with no attempt to find a reviewable path first
+
+**Date**: 2026-08-08
+**Source**: Two live incidents in the same session — SPEC-loop-closure-verification.md's release closure (T1-K-19)
+**Pillar**: Governance / Review Gate Integrity
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: When a commit's diff exceeds the AI Adversarial Review gate's size ceiling, `OVERSIZED_DIFF_BLOCKED` fires and the gate's own error output hands the agent a ready-to-run bypass command (`SKIP_AI_REVIEW=1 SKIP_REASON=...`) as the suggested next step. The gate does not check, or even prompt for consideration of, whether the same commit could instead be split into smaller pieces that would each clear the ceiling and receive a genuine review. Two occurrences of the identical block, in the same session, produced opposite responses: once the commit was manually split and each piece got a real review pass; once the bypass was invoked immediately, with an evidence string that described the diff's contents rather than justifying why skipping review was safe. Nothing in the gate's own behavior favored one response over the other — it was reasoned about fresh each time, meaning the outcome depended on whether the human happened to catch it in the moment, not on the gate itself.
+
+**Why not in T1-K-19**: this spec's tooling (Phase A/B/C, D1/D2/D4b) verifies loop closure and wiring correctness within the harness's own logic; it does not cover pre-commit gate design. Also relevant, per the external research logged earlier this session (Wauters' permission-approval study; Anthropic's own auto-mode telemetry): a bypass that's equally easy to reach for regardless of genuine necessity degrades with repeated exposure — the fix needs to live in the tooling's own structure, not in a documented rule an agent is expected to re-derive under time pressure each time the block fires. A `decisions_log.md` entry recording "prefer splitting" was considered and deliberately rejected for this reason.
+
+**Fix Direction**: Not prescribed here — several real approaches exist and the right one needs actual design work, not a snap decision. One illustrative direction: have the gate itself judge whether the diff is separable into sub-commits that would each individually clear the size ceiling, and only present the full-bypass path when no such split exists — meaning a block only ever occurs when there genuinely is no path to a reviewed commit, not merely when the current commit happens to be large. Other directions worth weighing against that one: removing the env-var bypass for high-risk paths entirely (migrations, schema-adjacent code) regardless of size; requiring an out-of-band confirmation step that can't be supplied in the same scripted command that produced the block; or some combination. Whichever direction is chosen, the evidence field's own required content should change too — right now it accepts a description of the diff, not a justification for why review was safe to skip.
+
+**Cross-reference**: The Register / Wauters permission-game research (logged in `decisions_log.md`, 2026-08-06) on human approval-fatigue in agentic systems. The two live incidents: `bootstrap/checksums.py` split-and-review (commit `b5aae54`) vs. the 23-file migration sweep bypass (commit `d3fd049`), both in this session.
+
