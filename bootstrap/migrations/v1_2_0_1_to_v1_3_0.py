@@ -6,10 +6,10 @@ Implements MigrationProtocol for upgrading/downgrading config.yaml key schemas f
 import re
 from pathlib import Path
 
-from bootstrap.migration_base import MigrationProtocol
+from bootstrap.migration_base import MigrationProtocol, VersionRewriteMixin
 
 
-class MigrationV1_2_0_1_to_V1_3_0(MigrationProtocol):
+class MigrationV1_2_0_1_to_V1_3_0(VersionRewriteMixin, MigrationProtocol):
     from_version = "1.2.0.1"
     to_version = "1.3.0"
 
@@ -24,19 +24,6 @@ class MigrationV1_2_0_1_to_V1_3_0(MigrationProtocol):
             
         content = config_path.read_text(encoding="utf-8")
         self._validate_config(content)
-        lines = content.splitlines()
-
-        # Update config.yaml framework version
-        modified = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
-                modified = True
-
-        content = "\n".join(lines) + "\n"
 
         # Check if already has traceability and acceptance_gate blocks
         has_traceability = "traceability:" in content
@@ -70,6 +57,7 @@ acceptance_gate:
             content = content.rstrip() + "\n" + "\n".join(blocks_to_append) + "\n"
 
         config_path.write_text(content, encoding="utf-8")
+        self._rewrite_version(config_path, self.from_version, self.to_version)
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration version from v1.3.0 back to v1.2.0.1 and remove traceability/acceptance gate blocks."""
@@ -78,19 +66,6 @@ acceptance_gate:
             
         content = config_path.read_text(encoding="utf-8")
         self._validate_config(content)
-        lines = content.splitlines()
-
-        # Revert config.yaml framework version
-        modified = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
-                modified = True
-
-        content = "\n".join(lines) + "\n"
 
         # Remove traceability block
         content = re.sub(
@@ -98,9 +73,10 @@ acceptance_gate:
             "",
             content
         )
+
         # Remove acceptance_gate block
         content = re.sub(
-            r"\n*# Acceptance Gate \(T1-L-05\)\nacceptance_gate:\n\s*base_branch:\s*[^\n]+\n\s*migration_paths:\n(\s*-\s*[^\n]+\n?)*",
+            r"\n*# Acceptance Gate \(T1-L-05\)\nacceptance_gate:\n\s*base_branch:\s*[^\n]+\n\s*migration_paths:\n(?:\s*-\s*[^\n]+\n?)+",
             "",
             content
         )
@@ -108,6 +84,7 @@ acceptance_gate:
         # Let's clean up multiple newlines at end
         content = re.sub(r"\n\n\n+", "\n\n", content)
         config_path.write_text(content, encoding="utf-8")
+        self._rewrite_version(config_path, self.to_version, self.from_version)
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().

@@ -87,11 +87,10 @@ def test_migrate_preserves_other_fields(v130_config):
     assert "claude-sonnet" in content
 
 
-def test_migrate_is_idempotent(v130_config):
+def test_migrate_second_call_raises_version_guard(v130_config):
     migration_mod.migrate(v130_config)
-    migration_mod.migrate(v130_config)
-    content = v130_config.read_text(encoding="utf-8")
-    assert content.count('version: "1.3.3"') == 1
+    with pytest.raises(ValueError, match="expected version"):
+        migration_mod.migrate(v130_config)
 
 
 # ── Unit: downgrade ───────────────────────────────────────────────────────────

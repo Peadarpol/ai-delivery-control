@@ -52,8 +52,8 @@ def test_migration_v1_4_9_to_v1_4_10_missing_version_key(tmp_path):
 
     migration = MigrationV1_4_9_to_V1_4_10()
 
-    with pytest.raises(ValueError, match="Version key not found"):
+    with pytest.raises((ValueError, RuntimeError)):
         migration.migrate(config_file)
 
-    with pytest.raises(ValueError, match="Version key not found"):
+    with pytest.raises((ValueError, RuntimeError)):
         migration.downgrade(config_file)

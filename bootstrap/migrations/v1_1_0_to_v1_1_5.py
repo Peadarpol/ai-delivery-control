@@ -6,9 +6,9 @@ Implements MigrationProtocol for upgrading/downgrading config.yaml key schemas.
 import re
 from pathlib import Path
 
-from bootstrap.migration_base import MigrationProtocol
+from bootstrap.migration_base import MigrationProtocol, VersionRewriteMixin
 
-class MigrationV1_1_0_to_V1_1_5(MigrationProtocol):
+class MigrationV1_1_0_to_V1_1_5(VersionRewriteMixin, MigrationProtocol):
     from_version = "1.1.0"
     to_version = "1.1.5"
 
@@ -88,19 +88,11 @@ class MigrationV1_1_0_to_V1_1_5(MigrationProtocol):
         # D: session_token_budget addition
         lines.append("session_token_budget: null  # null = budget enforcement disabled; set an integer to enable")
 
-        # E: Bump Framework Version
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            # Look for version under framework: section
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                # We need to ensure it's under the 'framework:' section
-                # For simplicity, since version is unique in standard templates, we bump it
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
-
         # Write back content
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        # E: Bump Framework Version
+        self._rewrite_version(config_path, self.from_version, self.to_version)
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration from v1.1.5 back to v1.1.0 key format."""
@@ -206,16 +198,11 @@ class MigrationV1_1_0_to_V1_1_5(MigrationProtocol):
             
         lines = filtered_lines
 
-        # 3. Bump version back to v1.1.0
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
-
         # Write back content
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        # 3. Bump version back to v1.1.0
+        self._rewrite_version(config_path, self.to_version, self.from_version)
 
     def _inject_in_section(self, lines: list[str], section_name: str, new_keys: list[str]) -> list[str]:
         """Find index of section_name: and inject new_keys after its last child."""

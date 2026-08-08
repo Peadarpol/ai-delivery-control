@@ -36,11 +36,9 @@ def test_migration_v1_2_0_1_to_v1_3_0_success(temp_config_file):
     assert "acceptance_gate:" in content
     assert "base_branch: main" in content
     
-    # Test Idempotency (run again, should not duplicate)
-    migrator.migrate(temp_config_file)
-    content2 = temp_config_file.read_text(encoding="utf-8")
-    assert content2.count("traceability:") == 1
-    assert content2.count("acceptance_gate:") == 1
+    # A second migrate() call on an already-migrated file triggers the version-match guard
+    with pytest.raises(ValueError, match="expected version"):
+        migrator.migrate(temp_config_file)
     
     # Run downgrade migration
     migrator.downgrade(temp_config_file)

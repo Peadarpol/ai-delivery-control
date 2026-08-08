@@ -7,10 +7,10 @@ Adds enforcement posture configuration block (strict, ratchet, observe), human-o
 import re
 from pathlib import Path
 
-from bootstrap.migration_base import MigrationProtocol
+from bootstrap.migration_base import MigrationProtocol, VersionRewriteMixin
 
 
-class MigrationV1_4_11_to_V1_4_12(MigrationProtocol):
+class MigrationV1_4_11_to_V1_4_12(VersionRewriteMixin, MigrationProtocol):
     from_version = "1.4.11"
     to_version = "1.4.12"
 
@@ -53,21 +53,8 @@ class MigrationV1_4_11_to_V1_4_12(MigrationProtocol):
 
             lines = lines[:inject_idx] + enforcement_block + lines[inject_idx:]
 
-        # Update Framework Version
-        replaced = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
-                replaced = True
-                break
-
-        if not replaced:
-            raise ValueError(f"Version key not found in configuration file at {config_path}")
-
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.from_version, self.to_version)
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration version from v1.4.12 back to v1.4.11 removing enforcement block."""
@@ -99,21 +86,8 @@ class MigrationV1_4_11_to_V1_4_12(MigrationProtocol):
 
             new_lines.append(line)
 
-        # Revert Framework Version
-        replaced = False
-        for idx, line in enumerate(new_lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                new_lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
-                replaced = True
-                break
-
-        if not replaced:
-            raise ValueError(f"Version key not found in configuration file at {config_path}")
-
         config_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.to_version, self.from_version)
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().
