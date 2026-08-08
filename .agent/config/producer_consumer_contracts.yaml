@@ -1,0 +1,13 @@
+contracts:
+  - name: dream_proposal_staleness
+    producer:
+      type: cli
+      command: [python, .agent/scripts/distill_dream.py]
+      cwd: isolated_temp_dir
+    consumer:
+      type: function
+      module: .agent/scripts/harness_health.py
+      call: report_dream_proposal_staleness
+      cwd: isolated_temp_dir
+    fixture_dir: tests/fixtures/contracts/dream_proposal_fixture/
+    assert: consumer_does_not_silently_skip

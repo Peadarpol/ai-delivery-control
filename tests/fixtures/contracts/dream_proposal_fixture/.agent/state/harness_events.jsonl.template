@@ -1,0 +1,3 @@
+{"session_id": "sess-001", "event_type": "INTENT_MISMATCH", "timestamp_utc": "{NOW_MINUS_25D}T10:00:00Z", "severity": "WARNING", "payload": {"msg": "Intent mismatch in spec requirement"}}
+{"session_id": "sess-002", "event_type": "INTENT_MISMATCH", "timestamp_utc": "{NOW_MINUS_25D}T11:00:00Z", "severity": "WARNING", "payload": {"msg": "Intent mismatch in scenario execution"}}
+{"session_id": "sess-003", "event_type": "INTENT_MISMATCH", "timestamp_utc": "{NOW_MINUS_25D}T12:00:00Z", "severity": "WARNING", "payload": {"msg": "Intent mismatch in criterion verification"}}

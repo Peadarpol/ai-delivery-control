@@ -1,0 +1,5 @@
+reports:
+  - script: .agent/scripts/wiki_lint.py
+    report_path: .agent/state/wiki_lint_findings.md
+    clean_markers:
+      - "**Total Issues**: 0"

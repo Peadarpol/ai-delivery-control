@@ -154,17 +154,21 @@ class TestValidateTools:
 
 class TestOverallResult:
     def test_warnings_only_passes(self, validate_mod, tmp_path):
-        """Warnings but no errors → exit 0."""
+        """Warnings but no errors → exit 0 from run_all()."""
+        (tmp_path / ".agent").mkdir()
         v = validate_mod.Validator(tmp_path)
         v.warnings = 3
         v.errors = 0
-        # Validator run() returns exit code
-        assert v.errors == 0
+        with patch.object(v, "run_check"):
+            assert v.run_all() == 0
 
     def test_errors_fail(self, validate_mod, tmp_path):
+        """Errors present → exit non-zero (1) from run_all()."""
+        (tmp_path / ".agent").mkdir()
         v = validate_mod.Validator(tmp_path)
         v.errors = 1
-        assert v.errors > 0
+        with patch.object(v, "run_check"):
+            assert v.run_all() == 1
 
 
 # ── Gitignore state validation ───────────────────────────────────────────────

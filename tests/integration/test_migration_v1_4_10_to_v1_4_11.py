@@ -33,5 +33,5 @@ def test_migration_v1_4_10_to_v1_4_11_missing_version_key(tmp_path: Path):
     config_file = tmp_path / "invalid_config.yaml"
     config_file.write_text('architecture:\n  layers:\n    domain: ["src/domain"]\n', encoding="utf-8")
     migration = MigrationV1_4_10_to_V1_4_11()
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, RuntimeError)):
         migration.migrate(config_file)

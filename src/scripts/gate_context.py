@@ -60,7 +60,10 @@ except ImportError:
             return res
         def dict(self) -> Dict[str, Any]:
             return self.model_dump()
-from harness_utils import PROJECT_ROOT
+try:
+    from src.scripts.harness_utils import PROJECT_ROOT
+except ImportError:
+    from harness_utils import PROJECT_ROOT
 
 class ArchViolation(BaseModel):
     file: str
@@ -104,7 +107,10 @@ class GateContext(BaseModel):
     todo_delta: Optional[int] = None
 
 def get_context_path(project_root: Optional[Path] = None) -> Path:
-    from harness_utils import PROJECT_ROOT
+    try:
+        from src.scripts.harness_utils import PROJECT_ROOT
+    except ImportError:
+        from harness_utils import PROJECT_ROOT
     root = project_root or PROJECT_ROOT
     return root / ".agent" / "state" / "gate_context_current.json"
 
@@ -159,11 +165,12 @@ def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
             test_file = found_tests[0]
             try:
                 res = subprocess.run(
-                    ["pytest", "--collect-only", "-q", str(test_file)],
+                    [sys.executable, "-m", "pytest", "--collect-only", "-q", str(test_file)],
                     capture_output=True,
                     text=True,
                     encoding="utf-8",
-                    cwd=str(PROJECT_ROOT)
+                    cwd=str(PROJECT_ROOT),
+                    timeout=60
                 )
                 if res.returncode == 0:
                     tests = [line.strip() for line in res.stdout.splitlines() if line.strip() and "::" in line]
@@ -176,6 +183,11 @@ def gather_pytest_evidence(changed_files: List[str]) -> Dict[str, Any]:
                         "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
                         "error": f"pytest returned {res.returncode}"
                     }
+            except subprocess.TimeoutExpired:
+                evidence[f] = {
+                    "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+                    "error": "pytest collection timed out after 60s"
+                }
             except Exception as e:
                 evidence[f] = {
                     "test_file": str(test_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),

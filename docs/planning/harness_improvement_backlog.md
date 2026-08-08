@@ -216,3 +216,109 @@ No single canonical implementation exists for any script to import; each was han
 **Fix Direction**: Treat `session_ledger.jsonl` the same way `decisions_log.md` is already treated — commit it periodically (e.g., alongside routine housekeeping/doc commits) so it accumulates real git history and survives an uncommitted-state reset. The file self-regenerates on the next session close (opened in append mode), so no data-recovery action is needed beyond adopting the commit habit going forward. Consider whether `check_state_freshness.py` or an equivalent existing staleness check should also flag when the ledger has diverged significantly from its last committed state, as a low-cost early warning.
 
 ---
+
+## HIB-087 — Session handoff files (`active_context.md`/`last_session_summary.md`) have no mechanical staleness verification
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-008)
+**Pillar**: Session Lifecycle / Verification
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: `AGENTS.md §1` instructs agents to read `active_context.md` at session start and "verify against git log," but this is an agent judgment call, not a code-enforced comparison. If an agent writes a stale or incorrect `active_context.md` at session close, the next session inherits bad assumptions with no mechanical detection. `init_session.py` was not fully audited for an existing mechanism during the LOOP-008 investigation; one may exist but was not confirmed.
+
+**Why not in T1-K-19**: This is a temporal-consistency problem (session-to-session state freshness), not a producer/consumer wiring or spec-to-test traceability problem. Forcing it into T1-K-19's existing phases would dilute that spec's focused scope. Needs its own mechanism design — potentially a lightweight `init_session.py` check comparing `active_context.md`'s claimed branch/task against actual `git branch`/`git log` state.
+
+**Cross-reference**: LOOP-008 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10).
+
+---
+
+## HIB-088 — Gate feedback rules H-06/H-07 have no mechanical compliance verification
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-009)
+**Pillar**: Governance / Gate Integrity
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: H-06 requires a correction summary after any gate FAIL before the next commit attempt. H-07 requires escalation after two identical-class failures. No artifact cross-check was found confirming either rule is actually verified against — both rely entirely on agent self-discipline. The loop's failure mode is an agent committing without the required correction summary, or retrying the same failing approach indefinitely without escalating.
+
+**Why not in T1-K-19**: Mechanically verifying H-06/H-07 requires instrumenting the commit-attempt → gate-result → correction-summary → next-commit chain. This is a non-trivial new mechanism with no existing tooling shape in T1-K-19's phases to attach to. The Loop Inventory itself notes (line 658): "no existing tooling shape fits cleanly; likely need dedicated audit scripts, design not yet started."
+
+**Fix Direction**: A `post-commit` or pre-commit check that reads `gate_context_current.json` (or `.ai-review-log.jsonl`) for the previous commit's verdict, and if it was FAIL, checks whether a correction summary exists in the session notes before allowing the next commit. For H-07, track failure-class counts per session and block at two identical-class failures. Design complexity: distinguishing "same class" failures from unrelated ones.
+
+**Cross-reference**: LOOP-009 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10).
+
+---
+
+## HIB-089 — Wiki compilation pipeline dormant since GymBase extraction — needs retire-or-configure decision
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-014)
+**Pillar**: Tooling Hygiene / Dead Code
+**Status**: 📋 Backlog (Unscheduled — product decision, not a code fix)
+
+**Symptom**: The entire wiki compilation pipeline (`wiki_compile.py`, `wiki_lint.py`'s factual-drift check, the `DOMAIN_REGISTRY` import chain through `context_loader.py` → `architecture_checks.py`) has been dormant since this repo was extracted from GymBase. Four compounding issues confirmed in LOOP-014: (1) no `wiki_domains:` config exists, so the domain registry is empty and nothing compiles; (2) `.agent/wiki/index.md` reads "Last compiled: never / Pages: 0 / 0 ready"; (3) `wiki_lint.py`'s hardcoded `DOMAIN_REGISTRY` still lists 12 GymBase-specific domains referencing ADR files that don't exist in this repo; (4) the `DOMAIN_REGISTRY` import chain from `context_loader.py` → `architecture_checks.py` always falls back to an empty set, structurally preventing wiki content from ever reaching a review prompt.
+
+**Why not in T1-K-19**: LOOP-013 (stale paths in `wiki_lint.py`) is fixed by Tier 1 — that's a broken tool with a clear code fix. LOOP-014 is an unconfigured subsystem requiring a product decision: either populate `wiki_domains:` with domains that actually apply to this repo (the harness's own architecture), or explicitly retire the factual-drift-check subsystem and clean up the dead code. Neither option is a bug fix.
+
+**Fix Direction**: Decision required. Option A: define 3–5 domains relevant to this repo's own architecture (e.g. `governance_gates`, `session_lifecycle`, `bootstrap_install`, `calibration_loop`, `dream_phase`) in `.agent/config.yaml`'s `wiki_domains:`, write corresponding ADR-equivalent docs, and let `wiki_compile.py` produce useful wiki pages. Option B: remove `wiki_domains` references, mark the factual-drift-check as inapplicable to this repo, and document why in a brief ADR-style note. S0-24 (delivered 2026-06-02) partially addressed this by moving `DOMAIN_REGISTRY` to config, but the config was never populated for this repo.
+
+**Cross-reference**: LOOP-014 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10). Related: S0-24 (✅, partial — moved to config but config never populated), T1-H-06 (✅, delivered the compilation mechanism itself).
+
+---
+
+## HIB-090 — Schema-hardening trend consumer exists but no producer was ever built (phantom loop)
+
+**Date**: 2026-08-04
+**Source**: Loop-inventory completeness check against SPEC-loop-closure-verification.md (LOOP-015)
+**Pillar**: Tooling Hygiene / Dead Code
+**Status**: 📋 Backlog (Unscheduled — lowest priority of all loop-inventory findings)
+
+**Symptom**: `harness_health.py`'s `report_schema_hardening()` reads `.agent/state/schema_hardening_trend.csv` and computes a coverage percentage and trend direction. That file does not exist, and no script anywhere in the repo writes to it. `enforce_hardened_schemas.py` (the closest-named script) is a pass/fail pre-commit gate — it prints a verdict and exits but never writes a trend CSV. The consumer degrades gracefully with `Status: DATA SOURCE MISSING`, so nobody is being actively misled.
+
+**Why not in T1-K-19**: D4's orphaned-producer scan targets producers with no consumer. This is the inverse — an orphaned *consumer* with no producer. D4 as scoped would not catch it. Additionally, the graceful degradation means this is not actively misleading anyone, making it lower priority than any gap where false confidence is being reported.
+
+**Fix Direction**: Decision required. Option A: build the missing producer — extend `enforce_hardened_schemas.py` (or a new companion script) to append coverage stats to `schema_hardening_trend.csv` on each run, giving `report_schema_hardening()` data to work with. Option B: remove the dead consumer code from `harness_health.py` and the references to this metric elsewhere, acknowledging the trend-tracking concept was designed but never built.
+
+**Cross-reference**: LOOP-015 in `docs/planning/LOOP_INVENTORY.md`. Deferred explicitly in `SPEC-loop-closure-verification.md` §8 (v1.10).
+
+---
+
+## HIB-091 — `wiki_lint.py`'s post-fix findings were never routed to this backlog for triage
+
+**Date**: 2026-08-07
+**Source**: Pre-merge verification pass on `SPEC-loop-closure-verification.md` (T1-K-19, Tier 1 / Scenario 4q)
+**Pillar**: Tooling Hygiene / Loop Closure
+**Status**: 📋 Backlog (Unscheduled — triage required, 8 confirmed findings)
+
+**Symptom**: `SPEC-loop-closure-verification.md` §6's Implementation Map carries an explicit operational step: "Run `wiki_lint.py` once post-fix and route resulting findings, if any, to the harness improvement backlog for triage," matching Scenario 4q's requirement that surfaced findings "are logged as new backlog items rather than silently absorbed into this spec's delivery." The run happened — `.agent/state/wiki_lint_findings.md` was regenerated and committed in `b6bc5d4` — but the routing half never did. No entry in this file referenced those findings until this one.
+
+The report ([`.agent/state/wiki_lint_findings.md`](file:///c:/projects/ai-delivery-control/.agent/state/wiki_lint_findings.md), run 2026-08-04) contains **8 issues, 5 High / 3 Medium**, all against `src/scripts/review_context_universal.md`:
+
+- **High — orphaned rules** (documented but with no executable implementation in `architecture_checks.py`): `RULE:SECRETS`, `RULE:TDD-LAW`, `RULE:DATABASE-BYPASS`, `RULE:CLEAN-CODE`, `RULE:DEPENDENCIES`.
+- **Medium — stale identifiers** (referenced in review context but absent from `src/`): `requests`, `httpx`, `exc_info=True`.
+
+This is precisely the backlog the spec predicted ("This fix will very likely surface a backlog of real orphaned-rule and stale-identifier findings that have been invisible for an unknown period... Do not treat a non-zero post-fix findings count as a regression" — §7). The findings are the fix working as designed; the gap is that they were left sitting in a state file nobody triages, which is the same silent-non-closure shape T1-K-19 exists to detect. Worth noting the report is self-evidently under-read: its `**Run Date**` field is a raw float epoch (`1785849028.3115053`) rather than a formatted date.
+
+**Why not in T1-K-19**: T1-K-19 delivered the detection mechanism; §2's Out-of-Scope explicitly defers closing the instances it surfaces ("Retroactively writing missing tests for every gap Phase A/B surfaces... triaged and closed as separate, normal work"). Filing them here is the routing step the spec required, not a reopening of its scope. Triaging each finding — deciding whether a rule genuinely warrants an `architecture_checks.py` implementation or should be documented as advisory-only, and whether the three stale identifiers should be removed from the review context or are legitimately forward-looking — is the separate work this entry tracks.
+
+**Fix Direction**: Triage the 8 findings as two independent batches. (1) The five orphaned rules: for each, decide implement-in-`architecture_checks.py` vs. mark-advisory; several (`RULE:SECRETS`, `RULE:DATABASE-BYPASS`) look structurally checkable, while `RULE:CLEAN-CODE` likely does not and may warrant an explicit "prose-guidance, not mechanically enforceable" annotation so it stops being re-flagged every run. (2) The three stale identifiers: `requests`/`httpx`/`exc_info=True` appear in review-context guidance for a codebase that does not use them — either the guidance is inherited boilerplate to remove, or it is deliberately forward-looking and needs an exemption mechanism. Note that whichever way (1) resolves, a permanently-nonzero findings report re-creates the "gate cries wolf" dynamic §7 already names as a known failure mode.
+
+**Cross-reference**: `SPEC-loop-closure-verification.md` §6 (routing step), Scenario 4q (post-fix baseline run), §7 (expected-backlog residual risk). Related: HIB-089 (`wiki_lint.py`'s other subsystem — the dormant wiki compilation pipeline — is a separate, unconfigured-subsystem problem, not these findings).
+
+---
+
+## HIB-092 — Oversized-diff gate offers an unconditional bypass with no attempt to find a reviewable path first
+
+**Date**: 2026-08-08
+**Source**: Two live incidents in the same session — SPEC-loop-closure-verification.md's release closure (T1-K-19)
+**Pillar**: Governance / Review Gate Integrity
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: When a commit's diff exceeds the AI Adversarial Review gate's size ceiling, `OVERSIZED_DIFF_BLOCKED` fires and the gate's own error output hands the agent a ready-to-run bypass command (`SKIP_AI_REVIEW=1 SKIP_REASON=...`) as the suggested next step. The gate does not check, or even prompt for consideration of, whether the same commit could instead be split into smaller pieces that would each clear the ceiling and receive a genuine review. Two occurrences of the identical block, in the same session, produced opposite responses: once the commit was manually split and each piece got a real review pass; once the bypass was invoked immediately, with an evidence string that described the diff's contents rather than justifying why skipping review was safe. Nothing in the gate's own behavior favored one response over the other — it was reasoned about fresh each time, meaning the outcome depended on whether the human happened to catch it in the moment, not on the gate itself.
+
+**Why not in T1-K-19**: this spec's tooling (Phase A/B/C, D1/D2/D4b) verifies loop closure and wiring correctness within the harness's own logic; it does not cover pre-commit gate design. Also relevant, per the external research logged earlier this session (Wauters' permission-approval study; Anthropic's own auto-mode telemetry): a bypass that's equally easy to reach for regardless of genuine necessity degrades with repeated exposure — the fix needs to live in the tooling's own structure, not in a documented rule an agent is expected to re-derive under time pressure each time the block fires. A `decisions_log.md` entry recording "prefer splitting" was considered and deliberately rejected for this reason.
+
+**Fix Direction**: Not prescribed here — several real approaches exist and the right one needs actual design work, not a snap decision. One illustrative direction: have the gate itself judge whether the diff is separable into sub-commits that would each individually clear the size ceiling, and only present the full-bypass path when no such split exists — meaning a block only ever occurs when there genuinely is no path to a reviewed commit, not merely when the current commit happens to be large. Other directions worth weighing against that one: removing the env-var bypass for high-risk paths entirely (migrations, schema-adjacent code) regardless of size; requiring an out-of-band confirmation step that can't be supplied in the same scripted command that produced the block; or some combination. Whichever direction is chosen, the evidence field's own required content should change too — right now it accepts a description of the diff, not a justification for why review was safe to skip.
+
+**Cross-reference**: The Register / Wauters permission-game research (logged in `decisions_log.md`, 2026-08-06) on human approval-fatigue in agentic systems. The two live incidents: `bootstrap/checksums.py` split-and-review (commit `b5aae54`) vs. the 23-file migration sweep bypass (commit `d3fd049`), both in this session.
+

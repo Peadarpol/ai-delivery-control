@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.4.15 — 2026-08-07
+
+### Loop-Closure Verification & Cross-Gate Verification (SPEC-loop-closure-verification)
+
+- **Tier 1 — Diagnosed Bug Fixes**:
+  - `distill_dream.py`: Added missing `Generated:` header timestamp to proposal template so `harness_health.py`'s staleness parser recognizes generated proposals (Scenarios 4h–4j).
+  - `regression_runner.py`: Reconciled empty golden dataset behavior to exit non-zero and trigger human escalation per `.agent/workflows/eval-pipeline.md` specification (Scenarios 4k–4m).
+  - `wiki_lint.py`: Replaced hardcoded path constants with dynamic project root and review context resolution matching `context_loader.py`, eliminating silent no-ops in installed projects like Gym_App and flagging legacy un-loaded context files (Scenarios 4n–4s). Fixed unimported `subprocess` reference masked by bare `except`.
+- **Tier 2 — Decisions Log Impact-Weighted Retention**:
+  - `harness_utils.py` & `log_decision.py`: Added mandatory `--impact` rating (`high` | `medium` | `low`) to `record_decision()` and `log_decision.py` CLI. Implemented impact-weighted retention logic in `archive_old_decisions()` to preserve critical architectural decisions over routine entries (Scenarios 4d–4g).
+- **Tier 3 — Core Verification Tooling (Phases A, B, C)**:
+  - Phase A (`.agent/scripts/loop_closure_check.py`): Built Gherkin scenario parser, AST component/keyword matcher, and loop-closure verification report generator.
+  - Phase B (`.agent/scripts/wiring_audit_core.py`): Implemented AST-based static wiring auditor covering `GateContext`, `.agent/baseline.json`, `session.json`, `capability_calibration.json`, and `decisions_log.md` to detect vacuous argument passing and un-wired consumers (HIB-080 resolution verified).
+  - Phase C (`tests/e2e/run_e2e_verification.py`): Classified all 29 E2E scenarios into single-gate (12) vs cross-gate (17) scopes. Strengthened 5 cross-gate scenarios (Scenarios 2, 7, 9, 21, 23) with byte-for-byte outcome equivalence assertions and control comparisons.
+  - Phase C Scenario 6 (`tests/helpers/outcome_equivalence.py`, `tests/data/schema_hardening_fixture/`, `tests/integration/test_outcome_equivalence.py`): Delivered the reusable outcome-equivalence test pattern -- found missing from an otherwise-complete Tier 3 by a pre-merge verification pass. Retroactive-plus-forward: a buggy refactor reproducing the founding schema-hardening data-loss incident correctly fails with the specific dropped values named; a correct refactor relocating the same values intact correctly passes.
+- **Tier 4 — Contract Testing, Staleness Checks & Coverage Completeness**:
+  - Tier 4 D1 (`.agent/scripts/contract_test_runner.py`): Built producer/consumer contract test runner with fixture-based schema validation (Scenarios 7 & 12 passing).
+  - Tier 4 D2 (`.agent/scripts/tooling_staleness_check.py`): Implemented static path-staleness scanner across `.agent/scripts/` with report clean-marker cross-checking (Scenario 8 passing).
+  - Tier 4 D3-Scoping ([D3-SCOPING-AUDIT.md](file:///c:/projects/ai-delivery-control/docs/planning/specs/archive/D3-SCOPING-AUDIT.md)): Audited all 18 workflow files; established evidence-based rationale to defer D3 implementation (documentation-standardisation work across 17 non-conforming files, not a small parser).
+  - Tier 4 D4b (`.agent/scripts/coverage_completeness_check.py`): Delivered coverage-completeness check verifying co-located tests for `VERIFIED-WORKING` loops (Scenario 10 passing, surfacing true negative on `LOOP-017`).
+  - Tier 4 D4a Retirement & Workflow ([.agent/workflows/loop-audit.md](file:///c:/projects/ai-delivery-control/.agent/workflows/loop-audit.md)): Built and tested D4a AST orphaned-producer scan against `LOOP_INVENTORY.md`. Retired D4a after empirical testing proved static AST reference search is structurally blind to file-based `Path().glob()` coupling. Replaced with `.agent/workflows/loop-audit.md` manual audit procedure.
+- **Bookkeeping & Release Closure**:
+  - Archived companion documents (`D3-SCOPING-AUDIT.md`, `SUBPROCESS-IMPORT-SWEEP.md`, `TEST-SUITE-INTEGRITY-AUDIT.md`) to `docs/planning/specs/archive/` and `LOOP_INVENTORY_GEMINI.md` to `docs/planning/archive/`.
+  - Archived `SPEC-loop-closure-verification.md` to `docs/planning/specs/archive/` with `Status: DELIVERED`.
+  - Confirmed HIB-087 through HIB-090 remain open and deferred per §8.
+  - Bumped `harness_version.txt` to `1.4.15`.
+  - Added `v1_4_14_to_v1_4_15.py` migration module (version bump; no config.yaml schema changes).
+  - Regenerated `bootstrap/checksums.py` (661 framework files hashed, zero mismatches on `--verify`).
+- **Post-Closure Hardening & Multi-Pass Sweep (2026-08-08)**:
+  - **Migration Clobber-Bug Sweep**: Discovered and fixed an unbroken loop defect across 23 historical migration modules (`v1_1_0_to_v1_1_5.py` through `v1_4_14_to_v1_4_15.py`) where version-rewrite logic in `migrate()` and `downgrade()` silently overwritten `project.version` when both `framework.version` and `project.version` keys were present. Consolidated rewrite logic into a shared `VersionRewriteMixin` in `bootstrap/migration_base.py`. Reverted an unvetted idempotency check that introduced a silent-failure regression, and corrected 1 misclassified file (`v1_4_8_to_v1_4_9.py`).
+  - **`_find_project_root()` Consolidation**: Replaced 20 diverged implementations (Git-first vs. CWD-first) with a canonical Git-first `_find_project_root()` in `src/scripts/harness_utils.py` with `HARNESS_PROJECT_ROOT` environment override. Resolved the CWD-first bug where nested test fixture directories containing `.agent/config.yaml` were misidentified as project root, and closed HIB-084.
+  - **Encoding-Guard Fixes**: Audited harness scripts under Windows CP1252 consoles and isolated real crash risk to 4 portable skill scripts (`analyze_queries.py`, `profile_api.py`, `coverage_analyzer.py`, `security_scan.py`). Added self-contained UTF-8 stdout/stderr guards to all 4 files.
+  - **Import-Context Audit & Dual-Mode Fallbacks**: Fixed `senior-architect/scripts/validate.py` Check 1 (`sys.executable`). Added `timeout=60` and explicit `TimeoutExpired` error formatting to `gate_context.py`'s pytest collection subprocess call. Implemented a dual-context import fallback pattern (`try: from src.scripts.harness_utils ... except ImportError: from harness_utils ...`) in `gate_context.py` and `route_decision.py` after an initial single-mode fix broke the review gate's pre-commit execution context (`No module named 'src'`).
+
 ## v1.4.14 — 2026-08-02
 
 ### Punchcard Preparation & Code Hardening (SPEC-v1.4.14)

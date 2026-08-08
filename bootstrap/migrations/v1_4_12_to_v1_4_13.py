@@ -144,7 +144,7 @@ class MigrationV1_4_12_to_V1_4_13(MigrationProtocol):
 
         # Confirmation Banner
         print("=" * 60)
-        print("SCHEMA HARDENING AUTO-MIGRATION (v1.4.12 ➔ v1.4.13)")
+        print("SCHEMA HARDENING AUTO-MIGRATION (v1.4.12 -> v1.4.13)")
         print("=" * 60)
         print(f"  Extracted Whitelisted Schemas : {len(extracted_whitelist)} item(s)")
         print(f"  Extracted Exempt Tables       : {len(extracted_exempt_tables)} item(s)")

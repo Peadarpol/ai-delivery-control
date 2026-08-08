@@ -6,10 +6,10 @@ Implements MigrationProtocol for upgrading/downgrading config.yaml key schemas.
 import re
 from pathlib import Path
 
-from bootstrap.migration_base import MigrationProtocol
+from bootstrap.migration_base import MigrationProtocol, VersionRewriteMixin
 
 
-class MigrationV1_1_5_to_V1_2_0(MigrationProtocol):
+class MigrationV1_1_5_to_V1_2_0(VersionRewriteMixin, MigrationProtocol):
     from_version = "1.1.5.2"
     to_version = "1.2.0"
 
@@ -50,17 +50,8 @@ class MigrationV1_1_5_to_V1_2_0(MigrationProtocol):
             
             lines = lines[:inject_idx] + spec_gate_block + lines[inject_idx:]
 
-        # Update Framework Version
-        modified = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
-                modified = True
-
         config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, ("1.1.5", "1.1.5.1", "1.1.5.2"), self.to_version)
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration version from v1.2.0 back to v1.1.5.2 removing spec_gate block."""
@@ -95,17 +86,8 @@ class MigrationV1_1_5_to_V1_2_0(MigrationProtocol):
                     
             new_lines.append(line)
 
-        # Revert Framework Version
-        modified = False
-        for idx, line in enumerate(new_lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                new_lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
-                modified = True
-
         config_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.to_version, self.from_version)
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().

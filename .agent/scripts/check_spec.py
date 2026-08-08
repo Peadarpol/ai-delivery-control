@@ -19,18 +19,20 @@ from typing import Any, Dict, List, Literal, Optional
 from dataclasses import dataclass, field
 
 # Bootstrap: depth-agnostic root discovery before harness_utils import
-def _find_project_root() -> Path:
-    try:
-        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
-        if res.returncode == 0 and res.stdout.strip():
-            return Path(res.stdout.strip())
-    except Exception:
-        pass
-    p = Path(__file__).resolve()
-    for parent in p.parents:
-        if (parent / ".git").exists() or (parent / ".agent").exists():
-            return parent
-    return p.parents[2] if len(p.parents) > 2 else p.parent
+# Ensure src/scripts is in sys.path for harness_utils
+_bootstrap_path = Path(__file__).resolve()
+_bootstrap_root = None
+for _p in [_bootstrap_path] + list(_bootstrap_path.parents):
+    if (_p / ".git").exists() or (_p / ".agent").exists():
+        _bootstrap_root = _p
+        break
+if _bootstrap_root and str(_bootstrap_root / "src" / "scripts") not in sys.path:
+    sys.path.insert(0, str(_bootstrap_root / "src" / "scripts"))
+
+try:
+    from src.scripts.harness_utils import _find_project_root
+except ImportError:
+    from harness_utils import _find_project_root
 
 _src_scripts = _find_project_root() / "src" / "scripts"
 if _src_scripts.exists() and str(_src_scripts) not in sys.path:

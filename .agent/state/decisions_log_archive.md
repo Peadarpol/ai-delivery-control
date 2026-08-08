@@ -219,3 +219,63 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: Duplicating identity and rules across three separate files caused configuration mismatches and high maintenance overhead.
 - **Consequence**: Single source of truth for agent system context, leaving shim files clean and minimal.
 
+## 2026-06-03: 3-Tier Memory Tiering (T1-I-01)
+- **Decision**: Implemented `memory_manager.py` to parse memory into Hot (always loaded), Warm (keyword-matched), and Cold (historical files older than 90 days), with automatic archiving.
+- **Context**: Storing large historic logs in primary agent context causes token blowups, while missing historical context blocks long-term capability retrieval.
+- **Consequence**: Dynamic context indexing keeps agent sessions lightweight while retaining retrieveability.
+
+## 2026-06-04: MIT + Commons Clause License Selection
+- **Decision**: Adopted the combined MIT License + Commons Clause License Condition v1.0, updated the root LICENSE file, and removed the outdated README_draft.md.
+- **Context**: Preventing commercial exploitation and consulting wraps of the framework without restricting open developer use.
+- **Consequence**: Users can use, modify, and distribute the framework freely except for commercial resale or hosted services whose value is derived directly from the framework.
+
+## 2026-06-08: Scope-and-Boundaries as Public Honest-Limits Documentation
+- **Decision**: Created `docs/wiki/Scope-and-Boundaries.md` explicitly naming the three structural boundaries of the framework: (1) the gate governs commits, not in-session tool calls; (2) the gate checks individual commits, not accumulated architectural drift; (3) the self-improvement loop can only improve what the gate already notices.
+- **Context**: These gaps were discovered through real use and flagged in rebuttal discussions.
+- **Consequence**: Public documentation sets honest expectations.
+
+## 2026-06-14: Universal review-context RULE sections selection/injection & trigger-gate AT/FM vocabulary (HIB-055, T1-L-13a)
+- **Decision**: In `ai_review.py`, always load and inject the core universal RULE sections into the LLM context to ensure enforcement of TDD law, database bypass, and dependency rules. Gated the heavy AT/FM vocabulary section to only inject when an ADR or decision block is detected in the diff, preventing token budget collisions. Wired the LLM-side ADVISORY rule for ADR decision-block review (T1-L-13a).
+- **Context**: Universal context rules were silently dropped because their IDs were missing from `active_sections` at review time, while always-injecting all rules would violate the 2,000-token limit.
+- **Consequence**: Full rules are now actively reviewed by the gate with budget safety.
+
+## 2026-06-14: Cap spec-mtime commitless work at partial using git status (HIB-053b)
+- **Decision**: Replaced the unreliable filesystem mtime scanning in `init_session.py` with `git status --porcelain` to check for spec changes, and capped the retrospective outcome for sessions with uncommitted spec changes (and no commits) at `partial` (downgrading from false-successes).
+- **Context**: Session close inference previously marked spec-only sessions as success even when files were uncommitted and mtime was modified by unrelated git checkouts or stash operations.
+- **Consequence**: Session outcomes are now determined reliably from git status, enforcing that work is committed to count as a success.
+
+## 2026-06-22: CodeQL Scoping and Checksums Registry Upgrades
+- **Decision**: Added CodeQL configuration `.github/codeql/codeql-config.yml` to restrict scanning to Python, and generated/regenerated checksums registry for version 1.4.3 and 1.4.4 in `bootstrap/checksums.py` to ensure migration verification runs cleanly.
+- **Context**: The user requested explicit scoping of CodeQL scans. Additionally, migration testing required that version 1.4.3 registry exist in the checksums database to support contiguous traversal checks.
+- **Consequence**: All checksum checks and 372 unit/E2E tests pass successfully, CodeQL analysis is cleanly scoped, and the rollup branch is pushed remotely.
+
+## 2026-06-22: Rollup Version 1.4.4 and Stale Branch Check
+- **Decision**: Rolled up all 5 unmerged branches (`feat/v1.4.1-security`, `fix/bug-04-05-gate-logging-and-routing`, `feat/v1.4.1-bugfixes`, `feat/v1.4.2-session-close`, `feat/v1.4.1-outer-loop`) into `feat/v1.4.4` (bumped harness version to 1.4.4) and implemented a new stale unmerged branch check in `harness_health.py` (`T1-K-11`).
+- **Context**: A rollup branch `feat/v1.4.4` was needed to cleanly integrate all outstanding branch features and bug fixes. A stale branch detection mechanism was requested to prevent accumulation of orphaned branch work.
+- **Consequence**: All unmerged features are integrated, 372 unit/E2E tests are passing, checksums registry regenerated, and stale branch checks dynamically detect unmerged branches older than a configurable threshold (default 14 days).
+
+## 2026-06-22: Fixed Bootstrap Installer Module Copies
+- **Decision**: Updated `bootstrap/install.py` to copy all framework-owned scripts listed under `manifest.FRAMEWORK_OWNED` in the `src/scripts/` directory to the target project scripts directory on installation and upgrade.
+- **Context**: Consumer projects bootstrapped with the framework would fail at startup with `ModuleNotFoundError: No module named 'harness_utils'` because the installer was only copying `ai_review.py` and `review_context_universal.md` to the target `src/scripts/` directory, leaving out core runtime dependencies like `harness_utils.py` and `state_persistence.py`.
+- **Consequence**: Fresh bootstrap installations run `init_session.py` and review gate execution successfully out-of-the-box with all required modules present.
+
+## 2026-06-22: Resolved distill_dream test date time-bomb
+- **Decision**: Replaced all hardcoded dates (`2026-06-` and `2026-05-`) in `tests/test_distill_dream.py` with dynamic datetimes computed relative to execution time using `_log_time()` and `_ledger_date()` helpers.
+- **Context**: The test `test_hib_dream_03_threshold_redesign_appearance` was failing because the 30-day cutoff logic in `distill_dream.py` dynamically computes the threshold relative to execution time, filtering out May 2026 test ledger records which are now more than 30 days old.
+- **Consequence**: The entire test suite of 358 tests now passes successfully, and the tests are safe against future date-based failures.
+
+## 2026-06-22: Stashes Verification and HIB-ENV-01 Backlog Restoration
+- **Decision**: Audited all remaining git stashes and restored the missing `HIB-ENV-01` external defect backlog item (Antigravity phantom-trajectory defect) from `stash@{2}` into `docs/planning/FRAMEWORK_BACKLOG.md`. Verified that other stashed changes were already fully integrated into HEAD.
+- **Context**: An overwrite event had stashed workspace state. A complete audit of all remaining stashed entries was required to ensure no planning documents, functions, or logs were lost.
+- **Consequence**: All stashed changes have been successfully analyzed and categorized, and the missing external defect entry has been restored to maintain perfect backlog traceability.
+
+## 2026-06-22: Stashed planning changes restoration and T1-I-05 / HIB-056 status reconciliation
+- **Decision**: Restored stashed changes from `stash@{1}` containing milestone plans, backlog updates (T1-D-07, T2-A-07, T3-C-05), and findings documents. Inspected `.agent/scripts/distill_dream.py` to confirm memory contradiction checking is fully delivered, updated the status of `T1-I-05` to `✅ (integrated into T1-D-03)` in `FRAMEWORK_BACKLOG.md` and `FRAMEWORK_ROADMAP.md`, and resolved `HIB-056` to complete.
+- **Context**: Edits made during a prior session were stashed and lost due to an overwrite. Status-marker drift on T1-I-05 caused inconsistency across references.
+- **Consequence**: All lost planning assets are restored and version controlled. Backlog integrity is restored with agreed status markers.
+
+## 2026-06-22: Cline + Ollama Compatibility support (feat/framework-cline-compat)
+- **Decision**: Added `CLINE.md` shim template and structured `.clinerules/` rules directory templates covering session startup, workflows, absolute prohibitions, session close outcome overrides, git discipline, and environment details. Implemented `install_clinerules()` dynamic copy and template rendering logic in `install.py` and gitignored local hooks. Created `docs/CLINE_COMPAT.md` detailing the deferred hooks execution scripts.
+- **Context**: Consumer teams utilizing VS Code and Cline need structured instructions and rules loaded automatically, without introducing platform-incompatible hooks on Windows.
+- **Consequence**: Delivers robust out-of-the-box support for Cline CLI / local Ollama models on consumer projects, matching the close-out outcome override flow of Gemini CLI.
+

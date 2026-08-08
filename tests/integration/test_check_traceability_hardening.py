@@ -198,6 +198,7 @@ def test_merge_trace_gate_passes_with_ack():
 
 def test_merge_trace_gate_ledger_fallback_attribution(tmp_path):
     """Verify _get_session_ledger_attribution resolves session_id and agent from session_ledger.jsonl."""
+    ct = sys.modules["check_traceability"]
     state_dir = tmp_path / ".agent" / "state"
     state_dir.mkdir(parents=True)
     ledger = state_dir / "session_ledger.jsonl"
@@ -208,19 +209,20 @@ def test_merge_trace_gate_ledger_fallback_attribution(tmp_path):
     }
     ledger.write_text(json.dumps(entry) + "\n", encoding="utf-8")
 
-    with unittest.mock.patch("check_traceability.Path", side_effect=lambda p: tmp_path / p if p == ".agent/state/session_ledger.jsonl" else Path(p)):
-        res = check_traceability._get_session_ledger_attribution("a1b2c3d4e5f6")
+    with unittest.mock.patch.object(ct, "Path", side_effect=lambda p: tmp_path / p if p == ".agent/state/session_ledger.jsonl" else Path(p)):
+        res = ct._get_session_ledger_attribution("a1b2c3d4e5f6")
         assert res.get("session_id") == "sess-uuid-9999"
         assert res.get("agent") == "HarnessAgent"
 
 
 def test_per_commit_merge_commit_exemption_regression():
     """Verify per-commit path exits 0 cleanly for merge commit messages (starting with 'Merge ')."""
+    ct = sys.modules["check_traceability"]
     msg = "Merge branch 'feature/v1.4.10' into main"
-    with unittest.mock.patch("check_traceability.is_root_commit", return_value=False), \
-         unittest.mock.patch("check_traceability.get_commit_message", return_value=msg), \
+    with unittest.mock.patch.object(ct, "is_root_commit", return_value=False), \
+         unittest.mock.patch.object(ct, "get_commit_message", return_value=msg), \
          unittest.mock.patch("sys.argv", ["check_traceability.py", "COMMIT_EDITMSG"]):
         try:
-            check_traceability.main()
+            ct.main()
         except SystemExit as e:
             assert e.code == 0

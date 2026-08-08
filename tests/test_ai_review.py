@@ -1701,11 +1701,9 @@ class TestTokenBudgetEnforcement:
             # The gate should still succeed (continue gracefully)
             assert exit_code == 0
             
-            # Stderr should receive a warning warning of the lock failure
-            # Wait, in the code:
-            # except Exception: pass
-            # We want to print a WARNING to stderr on Lock Failure!
-            # Let's verify if our code prints a WARNING to stderr on Exception in the update block.
+            # Verify that stderr received the explicit warning for lock failure during session update
+            err_output = "".join(call.args[0] for call in mock_stderr_write.call_args_list)
+            assert "Failed to lock session file for update: Lock timeout" in err_output
 
     def test_token_usage_graceful_when_session_absent(self, ai_review, tmp_path):
         """If session.json is absent, skip write, gate does not fail."""
@@ -2063,6 +2061,10 @@ class TestPhase0OversizedDiffRegression:
 
     def test_scenario_40_amend_oversized(self, ai_review, tmp_path):
         """Scenario 40: Oversized amend commit measures HEAD~1..HEAD and routes properly."""
+        mock_provider = MagicMock()
+        mock_provider.name = "anthropic"
+        mock_provider.model = "claude-sonnet-4-6"
+        mock_provider.review.return_value = {"verdict": "PASS", "summary": "OK", "issues": []}
         with patch.dict(os.environ, {"PRE_COMMIT_HOOK_STAGE": "commit-msg"}), \
              patch("ai_review._resolve_git_target", return_value=["HEAD~1", "HEAD"]), \
              patch("ai_review._streaming_size_precheck", return_value=(7000, 300000, True)) as mock_precheck, \
@@ -2074,6 +2076,7 @@ class TestPhase0OversizedDiffRegression:
              patch("repo_map.generate_repo_map", return_value=""), \
              patch("ai_review.get_adr_context", return_value=("", [], [])), \
              patch("ai_review.PROJECT_ROOT", tmp_path), \
+             patch("ai_review.get_provider", return_value=mock_provider), \
              patch("ai_review.log_harness_event"):
 
             # Ensure get_staged_diff is NEVER called during oversized path

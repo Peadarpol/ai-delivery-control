@@ -1,70 +1,39 @@
 """
 AI Delivery Control — Configuration Migration (v1.4.9 ➔ v1.4.10)
-Upgrade to v1.4.10 version-of-record.
-Enables governance hardening: unified config loader, root commit exemption, merge-gate --no-trace aggregator pre-push check, SQLite schema drift migration, interactive session checkpoint prompt, and session live log snapshot archiving.
+Script and documentation-only release; no config.yaml schema changes.
+Updates the framework version field in config.yaml only.
+
+Framework-owned file copy list:
+  - src/scripts/ai_review.py
+  - src/scripts/providers.py
+  - src/scripts/roster_builder.py
+  - src/scripts/review_context_universal.md
+  - src/scripts/harness_utils.py
+  - src/scripts/gate_context.py
+  - src/scripts/capability_calibration.py
+  - src/scripts/state_persistence.py
+  - src/scripts/acceptance_hook.py
+  - src/scripts/context_loader.py
+  - src/scripts/route_decision.py
+  - src/scripts/rebuttal.py
 """
 
-import re
 from pathlib import Path
 
-from bootstrap.migration_base import MigrationProtocol
+from bootstrap.migration_base import MigrationProtocol, VersionRewriteMixin
 
 
-class MigrationV1_4_9_to_V1_4_10(MigrationProtocol):
+class MigrationV1_4_9_to_V1_4_10(VersionRewriteMixin, MigrationProtocol):
     from_version = "1.4.9"
     to_version = "1.4.10"
 
-    def _validate_config(self, content: str):
-        from bootstrap.migration_base import validate_yaml_config
-        validate_yaml_config(content)
-
     def migrate(self, config_path: Path) -> None:
         """Bump framework version from v1.4.9 to v1.4.10 in config.yaml."""
-        if not config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found at {config_path}")
-
-        content = config_path.read_text(encoding="utf-8")
-        self._validate_config(content)
-        lines = content.splitlines()
-
-        replaced = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
-                replaced = True
-                break
-
-        if not replaced:
-            raise ValueError(f"Version key not found in configuration file at {config_path}")
-
-        config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.from_version, self.to_version)
 
     def downgrade(self, config_path: Path) -> None:
         """Revert framework version from v1.4.10 back to v1.4.9 in config.yaml."""
-        if not config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found at {config_path}")
-
-        content = config_path.read_text(encoding="utf-8")
-        self._validate_config(content)
-        lines = content.splitlines()
-
-        replaced = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
-                replaced = True
-                break
-
-        if not replaced:
-            raise ValueError(f"Version key not found in configuration file at {config_path}")
-
-        config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.to_version, self.from_version)
 
 
 # Chain-discovery constants used by _assert_chain_contiguous().

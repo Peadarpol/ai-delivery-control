@@ -5,15 +5,20 @@ import os
 import sys
 from pathlib import Path
 
-def _find_project_root() -> Path:
-    cwd = Path.cwd().resolve()
-    if (cwd / ".agent" / "config.yaml").exists() or (cwd / ".git").exists():
-        return cwd
-    current = Path(__file__).resolve()
-    for parent in [current] + list(current.parents):
-        if (parent / ".agent" / "config.yaml").exists() or (parent / ".git").exists():
-            return parent
-    return cwd
+# Ensure src/scripts is in sys.path for harness_utils
+_bootstrap_path = Path(__file__).resolve()
+_bootstrap_root = None
+for _p in [_bootstrap_path] + list(_bootstrap_path.parents):
+    if (_p / ".git").exists() or (_p / ".agent").exists():
+        _bootstrap_root = _p
+        break
+if _bootstrap_root and str(_bootstrap_root / "src" / "scripts") not in sys.path:
+    sys.path.insert(0, str(_bootstrap_root / "src" / "scripts"))
+
+try:
+    from src.scripts.harness_utils import _find_project_root
+except ImportError:
+    from harness_utils import _find_project_root
 
 
 PROJECT_ROOT = _find_project_root()

@@ -10,7 +10,10 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from harness_utils import get_harness_config
+try:
+    from src.scripts.harness_utils import get_harness_config
+except ImportError:
+    from harness_utils import get_harness_config
 
 try:
     from pydantic import BaseModel, Field

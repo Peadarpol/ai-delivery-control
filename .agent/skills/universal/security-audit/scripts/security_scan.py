@@ -13,7 +13,20 @@ Usage:
 
 import json
 import subprocess
+import sys
 from pathlib import Path
+
+# Ensure UTF-8 stdout/stderr on Windows to prevent UnicodeEncodeError when this
+# script (portable to any installed project) prints non-ASCII status symbols.
+if sys.platform == "win32":
+    import io
+    try:
+        if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 def run_bandit():

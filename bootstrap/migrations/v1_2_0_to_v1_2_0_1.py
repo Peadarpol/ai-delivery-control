@@ -6,10 +6,10 @@ Implements MigrationProtocol for upgrading/downgrading config.yaml key schemas a
 import re
 from pathlib import Path
 
-from bootstrap.migration_base import MigrationProtocol
+from bootstrap.migration_base import MigrationProtocol, VersionRewriteMixin
 
 
-class MigrationV1_2_0_to_V1_2_0_1(MigrationProtocol):
+class MigrationV1_2_0_to_V1_2_0_1(VersionRewriteMixin, MigrationProtocol):
     from_version = "1.2.0"
     to_version = "1.2.0.1"
 
@@ -19,24 +19,7 @@ class MigrationV1_2_0_to_V1_2_0_1(MigrationProtocol):
 
     def migrate(self, config_path: Path) -> None:
         """Upgrade configuration version from v1.2.0 to v1.2.0.1 and append gitignore exclusions."""
-        if not config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found at {config_path}")
-            
-        content = config_path.read_text(encoding="utf-8")
-        self._validate_config(content)
-        lines = content.splitlines()
-
-        # Update config.yaml framework version
-        modified = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.to_version}"{match.group(5)}'
-                modified = True
-
-        config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.from_version, self.to_version)
 
         # Update .gitignore in the target project
         project_root = config_path.parent.parent
@@ -75,24 +58,7 @@ class MigrationV1_2_0_to_V1_2_0_1(MigrationProtocol):
 
     def downgrade(self, config_path: Path) -> None:
         """Revert configuration version from v1.2.0.1 back to v1.2.0 and remove gitignore exclusions."""
-        if not config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found at {config_path}")
-            
-        content = config_path.read_text(encoding="utf-8")
-        self._validate_config(content)
-        lines = content.splitlines()
-
-        # Revert config.yaml framework version
-        modified = False
-        for idx, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                continue
-            match = re.match(r'^(\s*)(version)(\s*:\s*)"([^"]+)"(.*)', line)
-            if match:
-                lines[idx] = f'{match.group(1)}{match.group(2)}{match.group(3)}"{self.from_version}"{match.group(5)}'
-                modified = True
-
-        config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._rewrite_version(config_path, self.to_version, self.from_version)
 
         # Downgrade gitignore: scan for the exact header, remove from that line through the next blank line
         project_root = config_path.parent.parent
