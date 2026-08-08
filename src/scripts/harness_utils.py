@@ -48,13 +48,18 @@ contextlib = __import__("contextlib")
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 def _find_project_root() -> Path:
-    """Find the git repository root (works regardless of where script lives)."""
-    try:
-        cwd = Path.cwd()
-        if (cwd / ".agent").exists() or (cwd / ".git").exists():
-            return cwd
-    except Exception:
-        pass
+    """Locate the canonical workspace root.
+
+    Order of operations:
+    1. Environment variable override `HARNESS_PROJECT_ROOT` (if set, e.g., during isolated tests).
+    2. Git top-level root via `git rev-parse --show-toplevel` (authoritative for git repositories).
+    3. Fallback: Walk up from `__file__` searching for `.git` or `.agent`.
+    4. Fallback: `Path.cwd().resolve()`.
+    """
+    env_override = os.environ.get("HARNESS_PROJECT_ROOT")
+    if env_override and Path(env_override).exists():
+        return Path(env_override).resolve()
+
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -66,8 +71,16 @@ def _find_project_root() -> Path:
             return Path(result.stdout.strip())
     except Exception:
         pass
-    # Fallback: assume src/scripts/../../ = repo root
-    return SCRIPT_DIR.parent.parent
+
+    try:
+        p = Path(__file__).resolve()
+        for parent in p.parents:
+            if (parent / ".git").exists() or (parent / ".agent").exists():
+                return parent
+    except Exception:
+        pass
+
+    return Path.cwd().resolve()
 
 PROJECT_ROOT = _find_project_root()
 

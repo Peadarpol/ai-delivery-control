@@ -38,6 +38,7 @@ def test_log_decision_cli_standalone_invocation(tmp_path: Path):
     env = os.environ.copy()
     src_scripts = str(PROJECT_ROOT / "src" / "scripts")
     env["PYTHONPATH"] = f"{src_scripts};{env.get('PYTHONPATH', '')}" if "PYTHONPATH" in env else src_scripts
+    env["HARNESS_PROJECT_ROOT"] = str(tmp_path)
 
     res = subprocess.run(cmd, cwd=str(tmp_path), env=env, capture_output=True, text=True)
     assert res.returncode == 0

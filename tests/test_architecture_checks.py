@@ -48,13 +48,19 @@ from architecture_checks import main as arch_main
 def _run_main_in(tmp_path):
     """Change to tmp_path, call arch_main(), restore cwd.  Returns the SystemExit code."""
     old_cwd = os.getcwd()
+    old_env = os.environ.get("HARNESS_PROJECT_ROOT")
     os.chdir(tmp_path)
+    os.environ["HARNESS_PROJECT_ROOT"] = str(tmp_path)
     try:
         with pytest.raises(SystemExit) as exc_info:
             arch_main()
         return exc_info.value.code
     finally:
         os.chdir(old_cwd)
+        if old_env is not None:
+            os.environ["HARNESS_PROJECT_ROOT"] = old_env
+        else:
+            os.environ.pop("HARNESS_PROJECT_ROOT", None)
 
 
 def test_main_fails_loud_when_no_config(tmp_path):
