@@ -28,6 +28,11 @@
   - Bumped `harness_version.txt` to `1.4.15`.
   - Added `v1_4_14_to_v1_4_15.py` migration module (version bump; no config.yaml schema changes).
   - Regenerated `bootstrap/checksums.py` (661 framework files hashed, zero mismatches on `--verify`).
+- **Post-Closure Hardening & Multi-Pass Sweep (2026-08-08)**:
+  - **Migration Clobber-Bug Sweep**: Discovered and fixed an unbroken loop defect across 23 historical migration modules (`v1_1_0_to_v1_1_5.py` through `v1_4_14_to_v1_4_15.py`) where version-rewrite logic in `migrate()` and `downgrade()` silently overwritten `project.version` when both `framework.version` and `project.version` keys were present. Consolidated rewrite logic into a shared `VersionRewriteMixin` in `bootstrap/migration_base.py`. Reverted an unvetted idempotency check that introduced a silent-failure regression, and corrected 1 misclassified file (`v1_4_8_to_v1_4_9.py`).
+  - **`_find_project_root()` Consolidation**: Replaced 20 diverged implementations (Git-first vs. CWD-first) with a canonical Git-first `_find_project_root()` in `src/scripts/harness_utils.py` with `HARNESS_PROJECT_ROOT` environment override. Resolved the CWD-first bug where nested test fixture directories containing `.agent/config.yaml` were misidentified as project root, and closed HIB-084.
+  - **Encoding-Guard Fixes**: Audited harness scripts under Windows CP1252 consoles and isolated real crash risk to 4 portable skill scripts (`analyze_queries.py`, `profile_api.py`, `coverage_analyzer.py`, `security_scan.py`). Added self-contained UTF-8 stdout/stderr guards to all 4 files.
+  - **Import-Context Audit & Dual-Mode Fallbacks**: Fixed `senior-architect/scripts/validate.py` Check 1 (`sys.executable`). Added `timeout=60` and explicit `TimeoutExpired` error formatting to `gate_context.py`'s pytest collection subprocess call. Implemented a dual-context import fallback pattern (`try: from src.scripts.harness_utils ... except ImportError: from harness_utils ...`) in `gate_context.py` and `route_decision.py` after an initial single-mode fix broke the review gate's pre-commit execution context (`No module named 'src'`).
 
 ## v1.4.14 — 2026-08-02
 

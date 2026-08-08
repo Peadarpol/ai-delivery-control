@@ -1,9 +1,4 @@
 # Decisions Log
-## 2026-06-22: Cline + Ollama Compatibility support (feat/framework-cline-compat)
-- **Decision**: Added `CLINE.md` shim template and structured `.clinerules/` rules directory templates covering session startup, workflows, absolute prohibitions, session close outcome overrides, git discipline, and environment details. Implemented `install_clinerules()` dynamic copy and template rendering logic in `install.py` and gitignored local hooks. Created `docs/CLINE_COMPAT.md` detailing the deferred hooks execution scripts.
-- **Context**: Consumer teams utilizing VS Code and Cline need structured instructions and rules loaded automatically, without introducing platform-incompatible hooks on Windows.
-- **Consequence**: Delivers robust out-of-the-box support for Cline CLI / local Ollama models on consumer projects, matching the close-out outcome override flow of Gemini CLI.
-
 ## 2026-06-23: Roadmap Update for Version 1.5.x Milestones
 - **Decision**: Updated `docs/planning/FRAMEWORK_ROADMAP.md` to reflect the completed v1.5.x milestone plans (v1.5.0 Quality Signal Maturity, v1.5.1 Tool ABC Foundation, v1.5.2 Skill Chain & Gate Intelligence Completion), bumped current version to 1.4.4, updated active milestone records, and added v1.4.3 and v1.4.4 to the historical release family.
 - **Context**: Backlog items (T1-G-15, T1-D-08, T1-L-15, T1-B-06a, T1-L-16, T1-D-09) were accepted and added to the backlog. The roadmap updates were required to reflect the strategic decisions made for planning the upcoming releases.
@@ -145,4 +140,10 @@ Review of record: Manual adversarial review (Claude, Cowork session 2026-07-08/0
 - **Decision**: Retire D4a as automated tooling. Replace with .agent/workflows/loop-audit.md, a documented manual audit process. D4b is unaffected and remains delivered.
 - **Context**: D4a was built per spec and run against the real LOOP_INVENTORY.md. It flagged 9 of 9 real producer/consumer pairs as ORPHANED-PRODUCER. Direct trace of LOOP-001 confirmed this is a false positive: harness_health.py and distill_dream.py are genuinely wired via shared-file access (Path().glob() on a common directory), with zero Python-level import between them. AST reference search can only detect code-level coupling (imports, function calls) -- and this codebase's real coupling is almost entirely file-based. Every confirmed real defect this spec's audits ever found (HIB-080, LOOP-001, LOOP-004, LOOP-013) was file-based or schema-based drift, not a broken import -- meaning D4a was structurally aimed at a failure mode this codebase does not exhibit.
 - **Consequence**: SPEC-loop-closure-verification.md updated to v1.17 reflecting the retirement across all locations (§2, §5, §5.5, §6, §7, §8, closing paragraph). D4b's own three-case self-test (LOOP-002, LOOP-016, LOOP-017) is unaffected and remains valid evidence for D4b specifically.
+- **Impact**: high
+
+## 2026-08-08: Systemic Migration Module Version-Rewrite Clobber Bug Fix
+- **Decision**: Consolidate all historical and future migration version-rewrite logic into a canonical VersionRewriteMixin in bootstrap/migration_base.py and fix the unbroken loop defect across 23 migration modules.
+- **Context**: During SPEC-loop-closure-verification release closure, manual inspection revealed an unbroken loop defect where migrate() and downgrade() iteratively overwrote project.version with framework.version when both keys were present in config.yaml. A full sweep revealed the defect was copy-pasted across 23 migration modules since v1_1_0_to_v1_1_5.py. Two secondary defects were caught: an unvetted idempotency check introducing a silent failure was reverted, and v1_4_8_to_v1_4_9.py was corrected.
+- **Consequence**: All migration modules inherit safe, idempotent version-rewrite mechanics from VersionRewriteMixin. Both framework.version and project.version updates are preserved accurately.
 - **Impact**: high

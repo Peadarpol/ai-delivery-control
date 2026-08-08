@@ -274,3 +274,8 @@ eview_context_project.md that call sites must not pass default= for keys existin
 - **Context**: Edits made during a prior session were stashed and lost due to an overwrite. Status-marker drift on T1-I-05 caused inconsistency across references.
 - **Consequence**: All lost planning assets are restored and version controlled. Backlog integrity is restored with agreed status markers.
 
+## 2026-06-22: Cline + Ollama Compatibility support (feat/framework-cline-compat)
+- **Decision**: Added `CLINE.md` shim template and structured `.clinerules/` rules directory templates covering session startup, workflows, absolute prohibitions, session close outcome overrides, git discipline, and environment details. Implemented `install_clinerules()` dynamic copy and template rendering logic in `install.py` and gitignored local hooks. Created `docs/CLINE_COMPAT.md` detailing the deferred hooks execution scripts.
+- **Context**: Consumer teams utilizing VS Code and Cline need structured instructions and rules loaded automatically, without introducing platform-incompatible hooks on Windows.
+- **Consequence**: Delivers robust out-of-the-box support for Cline CLI / local Ollama models on consumer projects, matching the close-out outcome override flow of Gemini CLI.
+
