@@ -322,3 +322,36 @@ This is precisely the backlog the spec predicted ("This fix will very likely sur
 
 **Cross-reference**: The Register / Wauters permission-game research (logged in `decisions_log.md`, 2026-08-06) on human approval-fatigue in agentic systems. The two live incidents: `bootstrap/checksums.py` split-and-review (commit `b5aae54`) vs. the 23-file migration sweep bypass (commit `d3fd049`), both in this session.
 
+---
+
+## HIB-093 — upgrade.py's sidecar conflict resolution offers no triage, forcing manual review of every conflict regardless of actual risk
+
+**Date**: 2026-08-09
+**Source**: Real-world multi-version upgrade of GymBase (Gym_App) from v1.4.7 to v1.4.15
+**Pillar**: Tooling Ergonomics / Installer & Upgrade Path
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: When `upgrade.py` detects a framework file differs from what it expects to overwrite, it writes a `*.framework-vX.X.X` sidecar and reports the file as a generic conflict, with identical treatment regardless of *why* the file differs. This GymBase upgrade produced 45 such sidecars. Direct review of the first two revealed the tool's single "conflict" signal is masking at least three genuinely different situations: (1) the local file is byte-for-byte identical to the shipped version, and the conflict fired only because it wasn't in GymBase's original install-time baseline — `wiring_consumers.yaml`, confirmed via direct diff; (2) the local file is stale, running older framework logic with no project-specific content, where the shipped version is strictly better and safe to adopt wholesale — `architecture_checks.py`, confirmed to be *missing* the Posture Engine/HIB-080 integration entirely, meaning GymBase's own `enforcement.posture: strict` setting was silently inert for architecture checks; (3) genuine project-specific customization that must be preserved or merged deliberately. All three currently require the same manual, one-by-one human review, with no computed diff surfaced and no distinction offered up front.
+
+**Why not in T1-K-19**: this spec's tooling verifies loop closure and wiring correctness within the harness's own logic once installed; it does not cover the installer/upgrade UX for target projects. This is a distinct problem in a related but separate part of the harness (`bootstrap/upgrade.py`).
+
+**Fix Direction**: `upgrade.py` should perform the same three-way categorization a human currently has to do manually, before ever prompting: (1) byte-identical files auto-resolve with zero sidecar and zero prompt; (2) files that differ should have their diff computed and shown at conflict time, not left for the operator to go find and read separately; (3) a heuristic (or explicit confidence signal) distinguishing "this looks like drift from an older shipped version" from "this looks like real local customization" would let the tool recommend a default action rather than presenting all conflicts as equally undifferentiated. This does not need to be fully automated — even just *showing the diff inline in the conflict report*, rather than requiring the operator to locate and open each sidecar manually, would meaningfully reduce the toil observed here (45 files, each requiring a separate manual file-open-and-compare step).
+
+**Cross-reference**: `SPEC-loop-closure-verification.md`'s broader theme of not trusting a mechanism's own "it worked" signal without checking what actually happened — the same principle applies here: `upgrade.py` reporting "conflict" is not itself informative about what a human should actually do next.
+
+---
+
+## HIB-094 — upgrade.py never re-seeds EXPECTED_REPO in check_repo.py, silently reintroducing a known-fixed placeholder on every upgrade
+
+**Date**: 2026-08-09
+**Source**: Real-world upgrade of GymBase (Gym_App) from v1.4.7 to v1.4.15
+**Pillar**: Installer & Upgrade Path / Silent Regression
+**Status**: 📋 Backlog (Unscheduled)
+
+**Symptom**: `install.py`'s `Installer.copy_framework_files()` contains a one-time seeding step that replaces the literal placeholder `EXPECTED_REPO = "ai-delivery-control"` in `check_repo.py` with the target project's actual, auto-detected repo name (via `git remote get-url origin`). This seeding logic exists only in `install.py`'s class and is never called by `upgrade.py`. Confirmed directly in GymBase: after tonight's upgrade adopted the shipped `check_repo.py`, `EXPECTED_REPO` reverted to the literal `"ai-delivery-control"` placeholder — meaning the script would report a `[REPO MISMATCH]` and exit 1 on every invocation inside GymBase, despite having been correctly seeded at original install time. This is not GymBase-specific: any project whose upgrade touches `check_repo.py` will have this same value silently reset, with no error or warning at upgrade time — the script still runs, it just checks against the wrong name.
+
+**Why not in T1-K-19**: this spec's tooling verifies loop closure and wiring correctness within the harness's own logic once installed; this is a gap in the installer/upgrade tooling itself, the same category as `HIB-093`.
+
+**Fix Direction**: `upgrade.py` needs the equivalent of `install.py`'s seeding step — either (a) detect and re-apply the target project's repo name to `check_repo.py` whenever that file is part of an upgrade's file set, using the same `git remote get-url origin` detection `install.py` already uses correctly, or (b) treat `EXPECTED_REPO` as a genuinely project-local value that upgrade's file-copy logic should never overwrite at all — closer to how `blocked_commands.md` is already handled idempotently (`install.py` skips copying it if it already exists, to preserve customization). Option (b) is likely more robust and generalizes better: this is really an instance of a broader pattern — any value that's correctly install-time-seeded but has no equivalent upgrade-time re-seeding is at risk of the same silent regression, and `check_repo.py` may not be the only file with this exact shape.
+
+**Cross-reference**: `HIB-093` (same session, same root category — upgrade conflict handling offering no meaningful signal to the operator). This is a more specific, confirmed instance: not just "conflicts aren't triaged," but "some resolutions are silently and specifically wrong, not merely undifferentiated."
